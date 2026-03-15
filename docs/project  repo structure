@@ -1,0 +1,23 @@
+polycircle/
+│
+├─ docs/
+│   ├─ codex-prompts.md
+│   ├─ firestore-schema.md
+│   ├─ screen-map.md
+│   └─ onboarding-flow.md
+│
+├─ app/
+│   ├─ components/
+│   ├─ screens/
+│   ├─ services/
+│   ├─ models/
+│   └─ utils/
+│
+├─ firebase/
+│   ├─ firestore.rules
+│   └─ indexes.json
+│
+├─ scripts/
+│   └─ seedData.js
+│
+├─ README.md
