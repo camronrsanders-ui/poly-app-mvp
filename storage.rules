@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function validProfileImage() {
+      return request.resource != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // User-owned profile media. Public download is intentionally NOT enabled here.
+    // The app should use authenticated access and profile visibility logic.
+    match /users/{uid}/profile/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validProfileImage();
+      allow delete: if isOwner(uid);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
