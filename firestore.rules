@@ -11,6 +11,10 @@ service cloud.firestore {
         && conversationExists(conversationId)
         && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
     }
+    function reciprocalLikesExist(a, b) {
+      return exists(/databases/$(database)/documents/likes/$(a + '_' + b))
+        && exists(/databases/$(database)/documents/likes/$(b + '_' + a));
+    }
 
     match /users/{uid} {
       allow read, create, update: if isSelf(uid);
@@ -52,6 +56,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.userAUid != request.resource.data.userBUid
         && (request.resource.data.userAUid == request.auth.uid || request.resource.data.userBUid == request.auth.uid)
+        && reciprocalLikesExist(request.resource.data.userAUid, request.resource.data.userBUid)
         && request.resource.data.active == true;
       allow update, delete: if false;
     }
