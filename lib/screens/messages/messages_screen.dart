@@ -15,7 +15,7 @@ class MessagesScreen extends StatelessWidget {
     final service = MessagingService();
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: service.watchConversations(uid),
+      stream: service.watchConversations(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
