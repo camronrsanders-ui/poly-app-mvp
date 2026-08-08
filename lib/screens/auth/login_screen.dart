@@ -28,7 +28,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       await _auth.signIn(email: _email.text, password: _password.text);
     } on FirebaseAuthException catch (e) {
@@ -49,9 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     try {
       await _auth.sendPasswordReset(_email.text);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password reset email sent.')),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? 'Could not send reset email.');
     }
@@ -88,10 +93,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ]),
             ),
-            if (_error != null) Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
             const SizedBox(height: 20),
             FilledButton(onPressed: _busy ? null : _login, child: Text(_busy ? 'Signing in…' : 'Sign in')),
             TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Forgot password?')),
