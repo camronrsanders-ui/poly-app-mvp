@@ -156,7 +156,6 @@ service cloud.firestore {
       );
     }
 
-    // Likes and matches are created only by trusted Cloud Functions/Admin SDK.
     match /likes/{likeId} {
       allow create, update: if false;
       allow read: if signedIn() && (
@@ -172,7 +171,6 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Conversation creation is also a trusted backend transition.
     match /conversations/{conversationId} {
       allow read: if signedIn()
         && request.auth.uid in resource.data.participantUids
@@ -245,7 +243,18 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Internal abuse-control state is Admin SDK only.
+    // Sensitive-media metadata and grants are trusted-backend only. The mobile
+    // client receives only explicitly authorized, minimal responses from callable functions.
+    match /private_media/{mediaId} {
+      allow read, write: if false;
+    }
+    match /private_media_grants/{grantId} {
+      allow read, write: if false;
+    }
+    match /private_media_requests/{requestId} {
+      allow read, write: if false;
+    }
+
     match /_rate_limits/{docId} {
       allow read, write: if false;
     }
