@@ -56,15 +56,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _finish() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    if (_name.text.trim().isEmpty || int.tryParse(_age.text) == null || _structure == null || _intentions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please complete your name, age, relationship structure, and at least one intention.')));
+
+    final age = int.tryParse(_age.text.trim());
+    if (_name.text.trim().isEmpty || age == null || _structure == null || _intentions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please complete your name, age, relationship structure, and at least one intention.'),
+      ));
       return;
     }
+    if (age < 18) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Polycircle is for adults age 18 and older.'),
+      ));
+      return;
+    }
+    if (age > 120) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please enter a valid age.'),
+      ));
+      return;
+    }
+
     setState(() => _busy = true);
     try {
       await _profileService.saveProfile(uid, {
         'displayName': _name.text.trim(),
-        'age': int.parse(_age.text),
+        'age': age,
         'city': _city.text.trim(),
         'region': _region.text.trim(),
         'bio': _bio.text.trim(),
@@ -97,19 +114,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Widget _field(TextEditingController c, String label, {TextInputType? keyboard}) => Padding(
+  Widget _field(
+    TextEditingController c,
+    String label, {
+    TextInputType? keyboard,
+    int? maxLength,
+  }) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
-    child: TextField(controller: c, keyboardType: keyboard, decoration: InputDecoration(labelText: label)),
+    child: TextField(
+      controller: c,
+      keyboardType: keyboard,
+      maxLength: maxLength,
+      decoration: InputDecoration(labelText: label),
+    ),
   );
 
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
       _OnboardingPage(title: 'Start with you', subtitle: 'Use the name you want people in your circle to know you by.', children: [
-        _field(_name, 'Display name'), _field(_age, 'Age', keyboard: TextInputType.number), _field(_city, 'City'), _field(_region, 'State / region'),
+        _field(_name, 'Display name', maxLength: 80),
+        _field(_age, 'Age (18+)', keyboard: TextInputType.number, maxLength: 3),
+        _field(_city, 'City', maxLength: 100),
+        _field(_region, 'State / region', maxLength: 100),
       ]),
       _OnboardingPage(title: 'How do you identify?', subtitle: 'Your identity belongs to you. Self-described answers are welcome.', children: [
-        _field(_gender, 'Gender identity'), _field(_pronouns, 'Pronouns'), _field(_orientation, 'Orientation'),
+        _field(_gender, 'Gender identity', maxLength: 100),
+        _field(_pronouns, 'Pronouns', maxLength: 100),
+        _field(_orientation, 'Orientation', maxLength: 100),
       ]),
       _OnboardingPage(title: 'How do you connect?', subtitle: 'Choose the relationship structure that best describes you right now. You can change this later.', children: [
         ...structures.map((s) => RadioListTile<String>(value: s, groupValue: _structure, title: Text(s), onChanged: (v) => setState(() => _structure = v))),
@@ -120,7 +152,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         )).toList()),
       ]),
       _OnboardingPage(title: 'Tell your circle a little more', subtitle: 'Keep it genuine. You can always edit this later.', children: [
-        _field(_bio, 'About me'), _field(_lookingFor, 'What are you looking for?'),
+        _field(_bio, 'About me', maxLength: 1500),
+        _field(_lookingFor, 'What are you looking for?', maxLength: 1200),
         const ListTile(title: Text('Relationship cards come next'), subtitle: Text('After onboarding, Circle lets you represent important relationships with individual privacy controls.')),
       ]),
     ];
