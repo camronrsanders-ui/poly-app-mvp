@@ -94,6 +94,38 @@ test('unrelated user cannot update another profile', async () => {
   await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {bio: 'forged'}));
 });
 
+test('user cannot promote or alter their own moderation status', async () => {
+  await adminSeed([
+    ['users', 'alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      accountStatus: 'active',
+      createdAt: new Date(),
+      onboardingComplete: true,
+      lastActiveAt: new Date(),
+    }],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {accountStatus: 'banned'}));
+});
+
+test('client cannot create an underage profile', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(doc(db, 'profiles', 'alice'), {
+    ...baseProfile('alice'),
+    age: 17,
+  }));
+});
+
+test('profile owner cannot change uid ownership field', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['profiles', 'alice', baseProfile('alice')],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {uid: 'bob'}));
+});
+
 test('blocked user cannot directly read an otherwise public profile', async () => {
   await adminSeed([
     ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
@@ -146,6 +178,56 @@ test('client cannot create a conversation directly', async () => {
   }));
 });
 
+test('client cannot forge another users block', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(doc(db, 'blocks', 'bob_charlie'), {
+    blockerUid: 'bob',
+    blockedUid: 'charlie',
+    createdAt: new Date(),
+  }));
+});
+
+test('user can create only their own deterministic block', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertSucceeds(setDoc(doc(db, 'blocks', 'alice_bob'), {
+    blockerUid: 'alice',
+    blockedUid: 'bob',
+    createdAt: new Date(),
+  }));
+  await assertFails(setDoc(doc(db, 'blocks', 'random-id'), {
+    blockerUid: 'alice',
+    blockedUid: 'bob',
+    createdAt: new Date(),
+  }));
+});
+
+test('reporter cannot create a report with resolved moderation status', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(doc(db, 'reports', 'r1'), {
+    reporterUid: 'alice',
+    reportedUid: 'bob',
+    reason: 'harassment',
+    details: 'test',
+    status: 'resolved',
+    createdAt: new Date(),
+  }));
+});
+
+test('reporter cannot change report status after creation', async () => {
+  await adminSeed([
+    ['reports', 'r1', {
+      reporterUid: 'alice',
+      reportedUid: 'bob',
+      reason: 'harassment',
+      details: 'test',
+      status: 'open',
+      createdAt: new Date(),
+    }],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(updateDoc(doc(db, 'reports', 'r1'), {status: 'resolved'}));
+});
+
 test('client cannot read private-media metadata even when authenticated', async () => {
   await adminSeed([
     ['private_media', 'media1', {ownerUid: 'alice', status: 'active'}],
@@ -180,4 +262,54 @@ test('blocked pair cannot read an existing conversation or messages', async () =
   const db = env.authenticatedContext('bob').firestore();
   await assertFails(getDoc(doc(db, 'conversations', 'alice_bob')));
   await assertFails(getDoc(doc(db, 'messages', 'm1')));
+});
+
+test('nonparticipant cannot read an unblocked conversation or its messages', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'charlie', {uid: 'charlie', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      participantUids: ['alice', 'bob'],
+      active: true,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+    }],
+    ['messages', 'm1', {
+      conversationId: 'alice_bob',
+      senderUid: 'alice',
+      text: 'hello',
+      createdAt: new Date(),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['alice'],
+    }],
+  ]);
+  const db = env.authenticatedContext('charlie').firestore();
+  await assertFails(getDoc(doc(db, 'conversations', 'alice_bob')));
+  await assertFails(getDoc(doc(db, 'messages', 'm1')));
+});
+
+test('participant cannot rewrite another users message content', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      participantUids: ['alice', 'bob'],
+      active: true,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+    }],
+    ['messages', 'm1', {
+      conversationId: 'alice_bob',
+      senderUid: 'alice',
+      text: 'hello',
+      createdAt: new Date(),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['alice'],
+    }],
+  ]);
+  const db = env.authenticatedContext('bob').firestore();
+  await assertFails(updateDoc(doc(db, 'messages', 'm1'), {text: 'tampered'}));
 });
