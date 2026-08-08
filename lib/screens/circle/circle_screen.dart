@@ -54,7 +54,7 @@ class _CircleScreenState extends State<CircleScreen> {
               child: Row(
                 children: [
                   const Expanded(
-                    child: Text('Your relationship cards can be public, match-only, unnamed, or private.'),
+                    child: Text('Your relationship cards can be public, connection-only, unnamed, or private.'),
                   ),
                   FilledButton.icon(
                     onPressed: () => _openEditor(uid: uid, sortOrder: cards.length),
@@ -65,16 +65,9 @@ class _CircleScreenState extends State<CircleScreen> {
               ),
             ),
             Expanded(
-              child: ReorderableListView.builder(
+              child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 itemCount: cards.length,
-                onReorder: (oldIndex, newIndex) async {
-                  if (newIndex > oldIndex) newIndex--;
-                  final reordered = [...cards];
-                  final item = reordered.removeAt(oldIndex);
-                  reordered.insert(newIndex, item);
-                  await _service.reorderCards(reordered);
-                },
                 itemBuilder: (context, index) {
                   final card = cards[index];
                   return Card(
@@ -83,21 +76,38 @@ class _CircleScreenState extends State<CircleScreen> {
                       leading: CircleAvatar(child: Text('${card['label'] ?? '?'}'.characters.first.toUpperCase())),
                       title: Text('${card['label'] ?? 'Relationship'}'),
                       subtitle: Text(_subtitle(card)),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          if (value == 'edit') {
-                            await _openEditor(uid: uid, existing: card, sortOrder: index);
-                          } else if (value == 'hide') {
-                            await _service.deactivateCard(card['id'] as String);
-                          } else if (value == 'delete') {
-                            final confirmed = await _confirmDelete();
-                            if (confirmed == true) await _service.deleteCard(card['id'] as String);
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Edit')),
-                          PopupMenuItem(value: 'hide', child: Text('Deactivate')),
-                          PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Move up',
+                            onPressed: index == 0 ? null : () => _moveCard(cards, index, index - 1),
+                            icon: const Icon(Icons.arrow_upward),
+                          ),
+                          IconButton(
+                            tooltip: 'Move down',
+                            onPressed: index == cards.length - 1 ? null : () => _moveCard(cards, index, index + 1),
+                            icon: const Icon(Icons.arrow_downward),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'edit') {
+                                await _openEditor(uid: uid, existing: card, sortOrder: index);
+                              } else if (value == 'hide') {
+                                await _service.deactivateCard(card['id'] as String);
+                              } else if (value == 'delete') {
+                                final confirmed = await _confirmDelete();
+                                if (confirmed == true) {
+                                  await _service.deleteCard(card['id'] as String);
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              PopupMenuItem(value: 'hide', child: Text('Deactivate')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete')),
+                            ],
+                          ),
                         ],
                       ),
                       onTap: () => _openEditor(uid: uid, existing: card, sortOrder: index),
@@ -110,6 +120,13 @@ class _CircleScreenState extends State<CircleScreen> {
         );
       },
     );
+  }
+
+  Future<void> _moveCard(List<Map<String, dynamic>> cards, int oldIndex, int newIndex) async {
+    final reordered = [...cards];
+    final item = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, item);
+    await _service.reorderCards(reordered);
   }
 
   String _subtitle(Map<String, dynamic> card) {
@@ -144,12 +161,12 @@ class _CircleScreenState extends State<CircleScreen> {
               children: [
                 Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 16),
-                TextField(controller: label, decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner')),
+                TextField(controller: label, maxLength: 100, decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner')),
                 const SizedBox(height: 12),
-                TextField(controller: displayName, decoration: const InputDecoration(labelText: 'Display name (optional)')),
+                TextField(controller: displayName, maxLength: 100, decoration: const InputDecoration(labelText: 'Display name (optional)')),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   decoration: const InputDecoration(labelText: 'Connection type'),
                   items: const [
                     'nesting_partner','anchor_partner','primary_partner','secondary_partner','romantic_partner','sexual_partner','queerplatonic_partner','comet_partner','platonic_life_partner','important_connection','custom'
@@ -158,20 +175,20 @@ class _CircleScreenState extends State<CircleScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   decoration: const InputDecoration(labelText: 'Status'),
                   items: const ['active','past','complicated'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
                   onChanged: (v) => setModalState(() => status = v ?? status),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: visibility,
+                  initialValue: visibility,
                   decoration: const InputDecoration(labelText: 'Who can see this?'),
                   items: const ['public','matches_only','private','unnamed_public'].map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
                   onChanged: (v) => setModalState(() => visibility = v ?? visibility),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
+                TextField(controller: note, maxLength: 1000, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: () async {
