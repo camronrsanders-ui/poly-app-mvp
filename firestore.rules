@@ -235,16 +235,10 @@ service cloud.firestore {
     }
 
     match /blocks/{blockId} {
-      allow create: if signedIn()
-        && blockId == request.auth.uid + '_' + request.resource.data.blockedUid
-        && request.resource.data.blockerUid == request.auth.uid
-        && request.resource.data.blockedUid != request.auth.uid;
-      allow read, delete: if signedIn() && resource.data.blockerUid == request.auth.uid;
-      allow update: if false;
+      allow read: if signedIn() && resource.data.blockerUid == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
-    // Sensitive-media metadata and grants are trusted-backend only. The mobile
-    // client receives only explicitly authorized, minimal responses from callable functions.
     match /private_media/{mediaId} {
       allow read, write: if false;
     }
