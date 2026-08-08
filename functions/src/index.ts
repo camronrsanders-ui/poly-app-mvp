@@ -354,3 +354,8 @@ export const deleteMyAccount = onCall(
 );
 
 export {blockUser, unblockUser} from './safety';
+export {
+  grantPrivateMedia,
+  revokePrivateMedia,
+  getPrivateMediaAccess,
+} from './private_vault';
