@@ -34,17 +34,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _send() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || _controller.text.trim().isEmpty) return;
+    if (_controller.text.trim().isEmpty) return;
     setState(() => _sending = true);
     try {
       final text = _controller.text;
       _controller.clear();
-      await _messages.sendMessage(
-        conversationId: widget.conversationId,
-        senderUid: uid,
-        text: text,
-      );
+      await _messages.sendMessage(conversationId: widget.conversationId, text: text);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -57,8 +52,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _block() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -71,13 +64,19 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _safety.blockUser(blockerUid: uid, blockedUid: widget.otherUid);
-    if (mounted) Navigator.of(context).pop();
+    try {
+      await _safety.blockUser(widget.otherUid);
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not block this user right now.')),
+        );
+      }
+    }
   }
 
   Future<void> _report() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
     const reasons = [
       'harassment',
       'fake_profile',
@@ -97,7 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<String>(
-                value: reason,
+                initialValue: reason,
                 items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r.replaceAll('_', ' ')))).toList(),
                 onChanged: (v) => setLocalState(() => reason = v ?? reason),
                 decoration: const InputDecoration(labelText: 'Reason'),
@@ -106,6 +105,7 @@ class _ChatScreenState extends State<ChatScreen> {
               TextField(
                 controller: details,
                 maxLines: 4,
+                maxLength: 2000,
                 decoration: const InputDecoration(labelText: 'Details (optional)'),
               ),
             ]),
@@ -118,16 +118,23 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
     if (submitted == true) {
-      await _safety.reportUser(
-        reporterUid: uid,
-        reportedUid: widget.otherUid,
-        reason: reason,
-        details: details.text,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report submitted. Thank you for helping protect the community.')),
+      try {
+        await _safety.reportUser(
+          reportedUid: widget.otherUid,
+          reason: reason,
+          details: details.text,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Report submitted. Thank you for helping protect the community.')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not submit the report right now.')),
+          );
+        }
       }
     }
     details.dispose();
@@ -186,7 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (!isMine) {
                         final readBy = List<String>.from(data['readBy'] ?? const []);
                         if (!readBy.contains(uid)) {
-                          _messages.markRead(doc.id, uid);
+                          _messages.markRead(doc.id);
                         }
                       }
                       return Align(
@@ -217,8 +224,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _controller,
                     minLines: 1,
                     maxLines: 5,
+                    maxLength: 2000,
                     textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(hintText: 'Message…'),
+                    decoration: const InputDecoration(hintText: 'Message…', counterText: ''),
                   ),
                 ),
                 const SizedBox(width: 8),
