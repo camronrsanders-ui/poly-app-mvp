@@ -1,0 +1,49 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+
+# IDE
+.idea/
+.vscode/*.log
+*.iml
+
+# iOS / macOS generated
+Pods/
+.symlinks/
+DerivedData/
+
+# Android generated
+.gradle/
+local.properties
+
+# Node / Firebase Functions
+functions/node_modules/
+functions/lib/
+tests/security/node_modules/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.p8
+*.jks
+*.keystore
+service-account*.json
+serviceAccount*.json
+*service-account-key*.json
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
