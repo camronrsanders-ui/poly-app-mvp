@@ -1,5 +1,5 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_functions/firebase_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/account_service.dart';
@@ -86,9 +86,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'mapVisibility': _mapVisibility,
         'intentionTags': _intentions,
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated.')),
+        );
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save your profile. Please try again.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save your profile. Please try again.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -137,7 +145,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : 'Account deletion could not be completed. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account deletion could not be completed.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account deletion could not be completed.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -150,8 +162,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    _name.dispose(); _bio.dispose(); _headline.dispose(); _gender.dispose(); _pronouns.dispose();
-    _orientation.dispose(); _relationship.dispose(); _lookingFor.dispose(); super.dispose();
+    _name.dispose();
+    _bio.dispose();
+    _headline.dispose();
+    _gender.dispose();
+    _pronouns.dispose();
+    _orientation.dispose();
+    _relationship.dispose();
+    _lookingFor.dispose();
+    super.dispose();
   }
 
   @override
@@ -193,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _profileVisibility,
+          initialValue: _profileVisibility,
           decoration: const InputDecoration(labelText: 'Profile visibility'),
           items: const [
             DropdownMenuItem(value: 'public', child: Text('Public to signed-in members')),
@@ -204,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 14),
         DropdownButtonFormField<String>(
-          value: _mapVisibility,
+          initialValue: _mapVisibility,
           decoration: const InputDecoration(labelText: 'Circle visibility'),
           items: const [
             DropdownMenuItem(value: 'public', child: Text('Public')),
@@ -218,7 +237,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: (_saving || _deleting) ? null : _authService.signOut,
-          icon: const Icon(Icons.logout), label: const Text('Log out'),
+          icon: const Icon(Icons.logout),
+          label: const Text('Log out'),
         ),
         const SizedBox(height: 28),
         const Divider(),
