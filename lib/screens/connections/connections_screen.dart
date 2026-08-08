@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/messaging_service.dart';
+import '../messages/chat_screen.dart';
+
 class ConnectionsScreen extends StatelessWidget {
   const ConnectionsScreen({super.key});
 
@@ -21,6 +24,30 @@ class ConnectionsScreen extends StatelessWidget {
       result.add({...?profile.data(), 'uid': otherUid, 'matchId': match.id});
     }
     return result;
+  }
+
+  Future<void> _openChat(BuildContext context, Map<String, dynamic> person) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final otherUid = person['uid'] as String?;
+    if (uid == null || otherUid == null) return;
+    try {
+      final service = MessagingService();
+      final conversationId = await service.ensureConversation(uid, otherUid);
+      if (!context.mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          conversationId: conversationId,
+          otherUid: otherUid,
+          otherDisplayName: person['displayName']?.toString() ?? 'Connection',
+        ),
+      ));
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this conversation right now.')),
+        );
+      }
+    }
   }
 
   @override
@@ -61,8 +88,8 @@ class ConnectionsScreen extends StatelessWidget {
               leading: const CircleAvatar(child: Icon(Icons.person)),
               title: Text(p['displayName']?.toString() ?? 'Connection'),
               subtitle: Text(p['relationshipStructure']?.toString() ?? ''),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
+              trailing: const Icon(Icons.chat_bubble_outline),
+              onTap: () => _openChat(context, p),
             );
           },
         );
