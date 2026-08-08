@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'circle/circle_screen.dart';
+import 'connections/connections_screen.dart';
+import 'discover/discover_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -27,16 +29,8 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(
         index: _index,
         children: const [
-          _PlaceholderPage(
-            icon: Icons.explore_outlined,
-            title: 'Discover',
-            text: 'Browse people by relationship structure, intentions, identity preferences, age, and distance.',
-          ),
-          _PlaceholderPage(
-            icon: Icons.people_alt_outlined,
-            title: 'Connections',
-            text: 'Mutual connections and matches will appear here.',
-          ),
+          DiscoverScreen(),
+          ConnectionsScreen(),
           CircleScreen(),
           _PlaceholderPage(
             icon: Icons.chat_bubble_outline,
