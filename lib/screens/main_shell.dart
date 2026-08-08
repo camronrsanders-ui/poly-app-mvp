@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'circle/circle_screen.dart';
 import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
+import 'messages/messages_screen.dart';
+import 'profile/profile_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -32,16 +34,8 @@ class _MainShellState extends State<MainShell> {
           DiscoverScreen(),
           ConnectionsScreen(),
           CircleScreen(),
-          _PlaceholderPage(
-            icon: Icons.chat_bubble_outline,
-            title: 'Messages',
-            text: 'Matched users will be able to exchange messages here.',
-          ),
-          _PlaceholderPage(
-            icon: Icons.person_outline,
-            title: 'Profile',
-            text: 'View and edit identity, intentions, relationship structure, interests, and privacy settings.',
-          ),
+          MessagesScreen(),
+          ProfileScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -54,36 +48,6 @@ class _MainShellState extends State<MainShell> {
           NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Messages'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.icon, required this.title, required this.text});
-
-  final IconData icon;
-  final String title;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 64),
-              const SizedBox(height: 20),
-              Text(title, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 12),
-              Text(text, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
-            ],
-          ),
-        ),
       ),
     );
   }
