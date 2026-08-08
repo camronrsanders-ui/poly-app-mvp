@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   flutter:
-    name: Flutter analyze
+    name: Flutter analyze and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,8 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze
+      - name: Run Flutter tests
+        run: flutter test
 
   functions:
     name: Functions build
