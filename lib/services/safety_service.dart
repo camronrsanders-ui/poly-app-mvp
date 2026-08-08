@@ -1,13 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class SafetyService {
-  SafetyService({FirebaseFirestore? firestore, FirebaseAuth? auth})
-      : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  SafetyService({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance,
+        _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  final FirebaseFunctions _functions;
 
   String blockId(String blockerUid, String blockedUid) => '${blockerUid}_$blockedUid';
 
@@ -20,21 +26,17 @@ class SafetyService {
   Future<void> blockUser(String blockedUid) async {
     final blockerUid = _requireUid();
     if (blockerUid == blockedUid) throw ArgumentError('You cannot block yourself.');
-    await _firestore.collection('blocks').doc(blockId(blockerUid, blockedUid)).set({
-      'blockerUid': blockerUid,
-      'blockedUid': blockedUid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
 
-    // Remove the current user's outgoing like so the client does not retain an
-    // interaction it owns after blocking. Reciprocal data remains protected by
-    // Firestore block rules and can be cleaned up by trusted backend logic later.
-    await _firestore.collection('likes').doc('${blockerUid}_$blockedUid').delete().catchError((_) {});
+    final callable = _functions.httpsCallable('blockUser');
+    await callable.call(<String, dynamic>{'blockedUid': blockedUid});
   }
 
   Future<void> unblockUser(String blockedUid) async {
     final blockerUid = _requireUid();
-    await _firestore.collection('blocks').doc(blockId(blockerUid, blockedUid)).delete();
+    if (blockerUid == blockedUid) throw ArgumentError('You cannot unblock yourself.');
+
+    final callable = _functions.httpsCallable('unblockUser');
+    await callable.call(<String, dynamic>{'blockedUid': blockedUid});
   }
 
   Future<void> reportUser({
