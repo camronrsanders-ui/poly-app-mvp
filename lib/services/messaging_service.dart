@@ -1,13 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class MessagingService {
-  MessagingService({FirebaseFirestore? firestore, FirebaseAuth? auth})
-      : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  MessagingService({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance,
+        _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  final FirebaseFunctions _functions;
 
   String _requireUid() {
     final uid = _auth.currentUser?.uid;
@@ -15,25 +21,13 @@ class MessagingService {
     return uid;
   }
 
-  String canonicalConversationId(String a, String b) {
-    final ids = [a, b]..sort();
-    return '${ids[0]}_${ids[1]}';
-  }
-
   Future<String> ensureConversation(String otherUid) async {
     final currentUid = _requireUid();
     if (currentUid == otherUid) throw ArgumentError('Cannot create a conversation with yourself.');
-    final id = canonicalConversationId(currentUid, otherUid);
-    final ref = _firestore.collection('conversations').doc(id);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      await ref.set({
-        'participantUids': [currentUid, otherUid]..sort(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'active': true,
-      });
-    }
+    final callable = _functions.httpsCallable('ensureConversation');
+    final result = await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
+    final id = result.data['conversationId'] as String?;
+    if (id == null || id.isEmpty) throw StateError('Conversation was not created.');
     return id;
   }
 
