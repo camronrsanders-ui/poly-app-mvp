@@ -26,11 +26,6 @@ class DiscoveryService {
       if (doc.id == uid || blocked.contains(doc.id) || alreadyLiked.contains(doc.id)) continue;
       final data = doc.data();
       if (data['openToConnections'] == false) continue;
-
-      // Never rely only on public profile data for account moderation state.
-      final account = await _firestore.collection('users').doc(doc.id).get();
-      if (account.data()?['accountStatus'] != 'active') continue;
-
       candidates.add({...data, 'uid': doc.id});
     }
     return candidates;
