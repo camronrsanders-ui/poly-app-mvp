@@ -39,8 +39,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-    _page.dispose(); _name.dispose(); _age.dispose(); _city.dispose(); _region.dispose();
-    _gender.dispose(); _pronouns.dispose(); _orientation.dispose(); _bio.dispose(); _lookingFor.dispose();
+    _page.dispose();
+    _name.dispose();
+    _age.dispose();
+    _city.dispose();
+    _region.dispose();
+    _gender.dispose();
+    _pronouns.dispose();
+    _orientation.dispose();
+    _bio.dispose();
+    _lookingFor.dispose();
     super.dispose();
   }
 
@@ -110,7 +118,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await _profileService.completeOnboarding(uid);
       widget.onComplete();
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -144,7 +154,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _field(_orientation, 'Orientation', maxLength: 100),
       ]),
       _OnboardingPage(title: 'How do you connect?', subtitle: 'Choose the relationship structure that best describes you right now. You can change this later.', children: [
-        ...structures.map((s) => RadioListTile<String>(value: s, groupValue: _structure, title: Text(s), onChanged: (v) => setState(() => _structure = v))),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: structures.map((s) => ChoiceChip(
+            label: Text(s),
+            selected: _structure == s,
+            onSelected: (_) => setState(() => _structure = s),
+          )).toList(),
+        ),
       ]),
       _OnboardingPage(title: 'What are you hoping to find?', subtitle: 'Choose as many as feel right.', children: [
         Wrap(spacing: 8, runSpacing: 8, children: intentions.map((i) => FilterChip(
@@ -166,7 +184,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
-            if (_step > 0) TextButton(onPressed: () { setState(() => _step--); _page.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut); }, child: const Text('Back')),
+            if (_step > 0)
+              TextButton(
+                onPressed: () {
+                  setState(() => _step--);
+                  _page.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                },
+                child: const Text('Back'),
+              ),
             const Spacer(),
             FilledButton(onPressed: _busy ? null : _next, child: Text(_busy ? 'Saving…' : (_step == pages.length - 1 ? 'Enter Polycircle' : 'Continue'))),
           ]),
@@ -187,7 +212,10 @@ class _OnboardingPage extends StatelessWidget {
     padding: const EdgeInsets.all(24),
     children: [
       Text(title, style: Theme.of(context).textTheme.headlineMedium),
-      const SizedBox(height: 8), Text(subtitle), const SizedBox(height: 24), ...children,
+      const SizedBox(height: 8),
+      Text(subtitle),
+      const SizedBox(height: 24),
+      ...children,
     ],
   );
 }
