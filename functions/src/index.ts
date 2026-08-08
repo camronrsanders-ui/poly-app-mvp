@@ -352,3 +352,5 @@ export const deleteMyAccount = onCall(
     return {deleted: true};
   },
 );
+
+export {blockUser, unblockUser} from './safety';
