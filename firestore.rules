@@ -19,18 +19,14 @@ service cloud.firestore {
     }
 
     function activeMatchBetween(a, b) {
-      return (
-        exists(/databases/$(database)/documents/matches/$(a + '_' + b))
-        && get(/databases/$(database)/documents/matches/$(a + '_' + b)).data.active == true
-      ) || (
-        exists(/databases/$(database)/documents/matches/$(b + '_' + a))
-        && get(/databases/$(database)/documents/matches/$(b + '_' + a)).data.active == true
-      );
+      return (exists(/databases/$(database)/documents/matches/$(a + '_' + b))
+        && get(/databases/$(database)/documents/matches/$(a + '_' + b)).data.active == true)
+        || (exists(/databases/$(database)/documents/matches/$(b + '_' + a))
+        && get(/databases/$(database)/documents/matches/$(b + '_' + a)).data.active == true);
     }
 
     function isConversationParticipant(conversationId) {
-      return signedIn()
-        && conversationExists(conversationId)
+      return signedIn() && conversationExists(conversationId)
         && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
     }
 
@@ -38,8 +34,7 @@ service cloud.firestore {
       return conversationExists(conversationId)
         && !blockedEitherWay(
           get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids[0],
-          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids[1]
-        );
+          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids[1]);
     }
 
     function conversationParticipants(conversationId) {
@@ -48,70 +43,41 @@ service cloud.firestore {
 
     function validProfile(data, uid) {
       return data.uid == uid
-        && data.displayName is string
-        && data.displayName.size() >= 1
-        && data.displayName.size() <= 80
-        && data.age is int
-        && data.age >= 18
-        && data.age <= 120
-        && data.city is string
-        && data.city.size() <= 100
-        && data.region is string
-        && data.region.size() <= 100
-        && data.bio is string
-        && data.bio.size() <= 1500
-        && data.headline is string
-        && data.headline.size() <= 160
-        && data.genderIdentity is string
-        && data.genderIdentity.size() <= 100
-        && data.pronouns is string
-        && data.pronouns.size() <= 100
-        && data.orientation is string
-        && data.orientation.size() <= 100
-        && data.relationshipStructure is string
-        && data.relationshipStructure.size() <= 120
-        && data.relationshipStatus is string
-        && data.relationshipStatus.size() <= 120
-        && data.lookingForNote is string
-        && data.lookingForNote.size() <= 1200
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.age is int && data.age >= 18 && data.age <= 120
+        && data.city is string && data.city.size() <= 100
+        && data.region is string && data.region.size() <= 100
+        && data.bio is string && data.bio.size() <= 1500
+        && data.headline is string && data.headline.size() <= 160
+        && data.genderIdentity is string && data.genderIdentity.size() <= 100
+        && data.pronouns is string && data.pronouns.size() <= 100
+        && data.orientation is string && data.orientation.size() <= 100
+        && data.relationshipStructure is string && data.relationshipStructure.size() <= 120
+        && data.relationshipStatus is string && data.relationshipStatus.size() <= 120
+        && data.lookingForNote is string && data.lookingForNote.size() <= 1200
         && data.profileVisibility in ['public', 'hidden', 'matches_only']
         && data.mapVisibility in ['public', 'matches_only', 'private']
-        && data.photoUrls is list
-        && data.photoUrls.size() <= 6
-        && data.intentionTags is list
-        && data.intentionTags.size() <= 12
-        && data.interests is list
-        && data.interests.size() <= 20;
+        && data.photoUrls is list && data.photoUrls.size() <= 6
+        && data.intentionTags is list && data.intentionTags.size() <= 12
+        && data.interests is list && data.interests.size() <= 20;
     }
 
     function validRelationshipCard(data, ownerUid) {
       return data.ownerUid == ownerUid
-        && data.label is string
-        && data.label.size() >= 1
-        && data.label.size() <= 100
-        && data.connectionType is string
-        && data.connectionType.size() >= 1
-        && data.connectionType.size() <= 100
-        && data.displayNameOptional is string
-        && data.displayNameOptional.size() <= 100
-        && data.status is string
-        && data.status.size() <= 80
-        && data.note is string
-        && data.note.size() <= 1000
+        && data.label is string && data.label.size() >= 1 && data.label.size() <= 100
+        && data.connectionType is string && data.connectionType.size() >= 1 && data.connectionType.size() <= 100
+        && data.displayNameOptional is string && data.displayNameOptional.size() <= 100
+        && data.status is string && data.status.size() <= 80
+        && data.note is string && data.note.size() <= 1000
         && data.visibility in ['public', 'matches_only', 'private', 'unnamed_public']
-        && data.sortOrder is int
-        && data.sortOrder >= 0
-        && data.sortOrder <= 10000
+        && data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 10000
         && data.isActive is bool;
     }
 
     match /users/{uid} {
-      allow create: if isSelf(uid)
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.accountStatus == 'active';
+      allow create: if isSelf(uid) && request.resource.data.uid == request.auth.uid && request.resource.data.accountStatus == 'active';
       allow read: if isSelf(uid);
-      allow update: if isSelf(uid)
-        && request.resource.data.uid == resource.data.uid
+      allow update: if isSelf(uid) && request.resource.data.uid == resource.data.uid
         && request.resource.data.accountStatus == resource.data.accountStatus
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
@@ -119,95 +85,65 @@ service cloud.firestore {
 
     match /profiles/{uid} {
       allow create: if isSelf(uid) && validProfile(request.resource.data, uid);
-      allow update: if isSelf(uid)
-        && validProfile(request.resource.data, uid)
+      allow update: if isSelf(uid) && validProfile(request.resource.data, uid)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isSelf(uid);
-      allow read: if signedIn() && (
-        isSelf(uid) || (
-          userIsActive(uid)
-          && !blockedEitherWay(request.auth.uid, uid)
-          && (
-            resource.data.profileVisibility == 'public'
-            || (resource.data.profileVisibility == 'matches_only' && activeMatchBetween(request.auth.uid, uid))
-          )
-        )
-      );
+      allow read: if signedIn() && (isSelf(uid) || (userIsActive(uid)
+        && !blockedEitherWay(request.auth.uid, uid)
+        && (resource.data.profileVisibility == 'public'
+        || (resource.data.profileVisibility == 'matches_only' && activeMatchBetween(request.auth.uid, uid)))));
     }
 
     match /relationship_cards/{cardId} {
-      allow create: if signedIn()
-        && validRelationshipCard(request.resource.data, request.auth.uid);
-      allow update: if signedIn()
-        && resource.data.ownerUid == request.auth.uid
+      allow create: if signedIn() && validRelationshipCard(request.resource.data, request.auth.uid);
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
         && validRelationshipCard(request.resource.data, request.auth.uid)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow read: if signedIn() && (
-        resource.data.ownerUid == request.auth.uid || (
-          userIsActive(resource.data.ownerUid)
-          && !blockedEitherWay(request.auth.uid, resource.data.ownerUid)
-          && (
-            resource.data.visibility == 'public'
-            || resource.data.visibility == 'unnamed_public'
-            || (resource.data.visibility == 'matches_only' && activeMatchBetween(request.auth.uid, resource.data.ownerUid))
-          )
-        )
-      );
+      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || (userIsActive(resource.data.ownerUid)
+        && !blockedEitherWay(request.auth.uid, resource.data.ownerUid)
+        && (resource.data.visibility == 'public' || resource.data.visibility == 'unnamed_public'
+        || (resource.data.visibility == 'matches_only' && activeMatchBetween(request.auth.uid, resource.data.ownerUid)))));
     }
 
     match /likes/{likeId} {
       allow create, update: if false;
-      allow read: if signedIn() && (
-        resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid
-      );
+      allow read: if signedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
       allow delete: if signedIn() && resource.data.fromUid == request.auth.uid;
     }
 
     match /matches/{matchId} {
-      allow read: if signedIn()
-        && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
+      allow read: if signedIn() && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
         && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
     match /conversations/{conversationId} {
-      allow read: if signedIn()
-        && request.auth.uid in resource.data.participantUids
-        && userIsActive(resource.data.participantUids[0])
-        && userIsActive(resource.data.participantUids[1])
+      allow read: if signedIn() && request.auth.uid in resource.data.participantUids
+        && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
-      allow update: if signedIn()
-        && request.auth.uid in resource.data.participantUids
+      allow update: if signedIn() && request.auth.uid in resource.data.participantUids
         && request.resource.data.participantUids == resource.data.participantUids
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'active'])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
     }
 
     match /messages/{messageId} {
-      allow create: if signedIn()
-        && request.resource.data.senderUid == request.auth.uid
-        && request.resource.data.messageType == 'text'
-        && request.resource.data.isDeleted == false
-        && request.resource.data.text is string
-        && request.resource.data.text.size() > 0
-        && request.resource.data.text.size() <= 2000
-        && request.resource.data.readBy is list
-        && request.resource.data.readBy.size() == 1
+      allow create: if signedIn() && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.messageType == 'text' && request.resource.data.isDeleted == false
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.readBy is list && request.resource.data.readBy.size() == 1
         && request.resource.data.readBy[0] == request.auth.uid
         && isConversationParticipant(request.resource.data.conversationId)
         && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
         && conversationIsUnblocked(request.resource.data.conversationId);
-      allow read: if signedIn()
-        && isConversationParticipant(resource.data.conversationId)
+      allow read: if signedIn() && isConversationParticipant(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId);
-      allow update: if signedIn()
-        && isConversationParticipant(resource.data.conversationId)
+      allow update: if signedIn() && isConversationParticipant(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
-        && request.resource.data.readBy is list
-        && request.resource.data.readBy.size() <= 2
+        && request.resource.data.readBy is list && request.resource.data.readBy.size() <= 2
         && request.resource.data.readBy.hasAll(resource.data.readBy)
         && request.resource.data.readBy.hasOnly(conversationParticipants(resource.data.conversationId))
         && request.auth.uid in request.resource.data.readBy;
@@ -215,21 +151,10 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow create: if signedIn()
-        && request.resource.data.reporterUid == request.auth.uid
-        && request.resource.data.reportedUid != request.auth.uid
-        && request.resource.data.status == 'open'
-        && request.resource.data.reason in [
-          'harassment',
-          'fake_profile',
-          'hate_speech',
-          'misrepresentation',
-          'spam',
-          'nonconsensual_content',
-          'other'
-        ]
-        && request.resource.data.details is string
-        && request.resource.data.details.size() <= 2000;
+      allow create: if signedIn() && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reportedUid != request.auth.uid && request.resource.data.status == 'open'
+        && request.resource.data.reason in ['harassment','fake_profile','hate_speech','misrepresentation','spam','nonconsensual_content','other']
+        && request.resource.data.details is string && request.resource.data.details.size() <= 2000;
       allow read: if signedIn() && resource.data.reporterUid == request.auth.uid;
       allow update, delete: if false;
     }
@@ -239,18 +164,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    match /private_media/{mediaId} {
-      allow read, write: if false;
-    }
-    match /private_media_grants/{grantId} {
-      allow read, write: if false;
-    }
-    match /private_media_requests/{requestId} {
-      allow read, write: if false;
-    }
-
-    match /_rate_limits/{docId} {
-      allow read, write: if false;
-    }
+    // Media metadata is backend-only. Clients receive only minimal authorized responses.
+    match /profile_media/{photoId} { allow read, write: if false; }
+    match /private_media/{mediaId} { allow read, write: if false; }
+    match /private_media_grants/{grantId} { allow read, write: if false; }
+    match /private_media_requests/{requestId} { allow read, write: if false; }
+    match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }
