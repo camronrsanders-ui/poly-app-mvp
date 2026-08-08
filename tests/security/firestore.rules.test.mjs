@@ -187,18 +187,24 @@ test('client cannot forge another users block', async () => {
   }));
 });
 
-test('user can create only their own deterministic block', async () => {
+test('client cannot create or delete block state directly', async () => {
   const db = env.authenticatedContext('alice').firestore();
-  await assertSucceeds(setDoc(doc(db, 'blocks', 'alice_bob'), {
+  await assertFails(setDoc(doc(db, 'blocks', 'alice_bob'), {
     blockerUid: 'alice',
     blockedUid: 'bob',
     createdAt: new Date(),
   }));
-  await assertFails(setDoc(doc(db, 'blocks', 'random-id'), {
-    blockerUid: 'alice',
-    blockedUid: 'bob',
-    createdAt: new Date(),
-  }));
+  await adminSeed([
+    ['blocks', 'alice_bob', {
+      blockerUid: 'alice',
+      blockedUid: 'bob',
+      createdAt: new Date(),
+    }],
+  ]);
+  const existing = await assertSucceeds(getDoc(doc(db, 'blocks', 'alice_bob')));
+  if (!existing.exists()) throw new Error('Expected trusted backend block seed.');
+  const {deleteDoc} = await import('firebase/firestore');
+  await assertFails(deleteDoc(doc(db, 'blocks', 'alice_bob')));
 });
 
 test('reporter cannot create a report with resolved moderation status', async () => {
