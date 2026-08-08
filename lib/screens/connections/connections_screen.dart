@@ -21,18 +21,18 @@ class ConnectionsScreen extends StatelessWidget {
       final otherUid = data['userAUid'] == uid ? data['userBUid'] as String? : data['userAUid'] as String?;
       if (otherUid == null) continue;
       final profile = await db.collection('profiles').doc(otherUid).get();
+      if (!profile.exists) continue;
       result.add({...?profile.data(), 'uid': otherUid, 'matchId': match.id});
     }
     return result;
   }
 
   Future<void> _openChat(BuildContext context, Map<String, dynamic> person) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
     final otherUid = person['uid'] as String?;
-    if (uid == null || otherUid == null) return;
+    if (otherUid == null) return;
     try {
       final service = MessagingService();
-      final conversationId = await service.ensureConversation(uid, otherUid);
+      final conversationId = await service.ensureConversation(otherUid);
       if (!context.mounted) return;
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ChatScreen(
