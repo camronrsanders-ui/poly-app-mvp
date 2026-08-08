@@ -1,5 +1,7 @@
 import {initializeApp} from 'firebase-admin/app';
+import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, Timestamp, getFirestore} from 'firebase-admin/firestore';
+import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 initializeApp();
@@ -98,7 +100,6 @@ export const listDiscoveryCandidates = onCall(
     incomingBlocks.forEach((d) => excluded.add(String(d.get('blockerUid') ?? '')));
     outgoingLikes.forEach((d) => excluded.add(String(d.get('toUid') ?? '')));
 
-    // Fetch a bounded candidate pool and filter privately on the trusted backend.
     const profilePool = await db.collection('profiles')
       .where('profileVisibility', '==', 'public')
       .where('openToConnections', '==', true)
@@ -120,7 +121,6 @@ export const listDiscoveryCandidates = onCall(
       if (!activeIds.has(doc.id)) continue;
 
       const data = doc.data();
-      // Return only public discovery fields. Never return private preference data.
       candidates.push({
         uid: doc.id,
         displayName: data.displayName ?? '',
@@ -238,5 +238,117 @@ export const ensureConversation = onCall(
     });
 
     return {conversationId: pair.id};
+  },
+);
+
+export const deleteMyAccount = onCall(
+  {enforceAppCheck: true, maxInstances: 5},
+  async (request) => {
+    const uid = requireUid(request.auth);
+    if (String(request.data?.confirmation ?? '') !== 'DELETE') {
+      throw new HttpsError('invalid-argument', 'Explicit deletion confirmation is required.');
+    }
+
+    const authTime = Number(request.auth?.token?.auth_time ?? 0) * 1000;
+    if (!authTime || Date.now() - authTime > 10 * 60_000) {
+      throw new HttpsError('failed-precondition', 'Please sign in again before deleting your account.');
+    }
+
+    await consumeRateLimit(uid, 'delete_account', 2, 24 * 60 * 60_000);
+
+    const userRef = db.collection('users').doc(uid);
+    await userRef.set({
+      accountStatus: 'paused',
+      deletionRequestedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const [
+      cards,
+      outgoingLikes,
+      incomingLikes,
+      matchesA,
+      matchesB,
+      conversations,
+      sentMessages,
+      outgoingBlocks,
+      incomingBlocks,
+      privateMedia,
+      grantsOwned,
+      grantsReceived,
+      requestsFrom,
+      requestsTo,
+      reportsFrom,
+      reportsAgainst,
+    ] = await Promise.all([
+      db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
+      db.collection('likes').where('fromUid', '==', uid).get(),
+      db.collection('likes').where('toUid', '==', uid).get(),
+      db.collection('matches').where('userAUid', '==', uid).get(),
+      db.collection('matches').where('userBUid', '==', uid).get(),
+      db.collection('conversations').where('participantUids', 'array-contains', uid).get(),
+      db.collection('messages').where('senderUid', '==', uid).get(),
+      db.collection('blocks').where('blockerUid', '==', uid).get(),
+      db.collection('blocks').where('blockedUid', '==', uid).get(),
+      db.collection('private_media').where('ownerUid', '==', uid).get(),
+      db.collection('private_media_grants').where('ownerUid', '==', uid).get(),
+      db.collection('private_media_grants').where('recipientUid', '==', uid).get(),
+      db.collection('private_media_requests').where('requesterUid', '==', uid).get(),
+      db.collection('private_media_requests').where('recipientUid', '==', uid).get(),
+      db.collection('reports').where('reporterUid', '==', uid).get(),
+      db.collection('reports').where('reportedUid', '==', uid).get(),
+    ]);
+
+    const writer = db.bulkWriter();
+    const seenDeletePaths = new Set<string>();
+    const deleteDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
+      for (const doc of docs) {
+        if (seenDeletePaths.has(doc.ref.path)) continue;
+        seenDeletePaths.add(doc.ref.path);
+        writer.delete(doc.ref);
+      }
+    };
+
+    deleteDocs(cards.docs);
+    deleteDocs(outgoingLikes.docs);
+    deleteDocs(incomingLikes.docs);
+    deleteDocs(sentMessages.docs);
+    deleteDocs(outgoingBlocks.docs);
+    deleteDocs(incomingBlocks.docs);
+    deleteDocs(privateMedia.docs);
+    deleteDocs(grantsOwned.docs);
+    deleteDocs(grantsReceived.docs);
+    deleteDocs(requestsFrom.docs);
+    deleteDocs(requestsTo.docs);
+
+    for (const doc of [...matchesA.docs, ...matchesB.docs]) {
+      writer.set(doc.ref, {active: false, endedAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+    for (const doc of conversations.docs) {
+      writer.set(doc.ref, {active: false, lastMessageAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+
+    for (const doc of reportsFrom.docs) {
+      writer.set(doc.ref, {reporterUid: '[deleted]'}, {merge: true});
+    }
+    for (const doc of reportsAgainst.docs) {
+      writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
+    }
+
+    writer.delete(db.collection('profiles').doc(uid));
+    writer.delete(db.collection('_rate_limits').doc(`discover_${uid}`));
+    writer.delete(db.collection('_rate_limits').doc(`like_${uid}`));
+    writer.delete(db.collection('_rate_limits').doc(`conversation_${uid}`));
+    await writer.close();
+
+    const bucket = getStorage().bucket();
+    await Promise.all([
+      bucket.deleteFiles({prefix: `users/${uid}/profile/`}).catch(() => undefined),
+      bucket.deleteFiles({prefix: `private_media/${uid}/`}).catch(() => undefined),
+    ]);
+
+    await userRef.delete();
+    await getAuth().deleteUser(uid);
+
+    return {deleted: true};
   },
 );
