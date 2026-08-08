@@ -36,7 +36,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
