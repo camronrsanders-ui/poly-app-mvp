@@ -9,8 +9,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await FirebaseAppCheck.instance.activate(
-    androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-    appleProvider: kDebugMode
+    providerAndroid: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+    providerApple: kDebugMode
         ? AppleProvider.debug
         : AppleProvider.appAttestWithDeviceCheckFallback,
   );
