@@ -359,3 +359,7 @@ export {
   revokePrivateMedia,
   getPrivateMediaAccess,
 } from './private_vault';
+export {
+  beginProfilePhotoUpload,
+  confirmProfilePhotoUpload,
+} from './profile_media';
