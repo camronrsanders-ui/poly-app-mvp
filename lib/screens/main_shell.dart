@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'circle/circle_screen.dart';
+
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -35,11 +37,7 @@ class _MainShellState extends State<MainShell> {
             title: 'Connections',
             text: 'Mutual connections and matches will appear here.',
           ),
-          _PlaceholderPage(
-            icon: Icons.hub_outlined,
-            title: 'Circle',
-            text: 'Relationship cards live here and will become the foundation of visual polycule mapping.',
-          ),
+          CircleScreen(),
           _PlaceholderPage(
             icon: Icons.chat_bubble_outline,
             title: 'Messages',
