@@ -26,6 +26,14 @@ function requireContentType(raw: unknown): string {
   return value;
 }
 
+function requirePhotoId(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value || value.length > 80 || !/^[A-Za-z0-9-]+$/.test(value)) {
+    throw new HttpsError('invalid-argument', 'Invalid photoId.');
+  }
+  return value;
+}
+
 export const beginProfilePhotoUpload = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
@@ -71,11 +79,7 @@ export const confirmProfilePhotoUpload = onCall(
     const uid = requireUid(request.auth);
     await assertActive(uid);
 
-    const photoId = String(request.data?.photoId ?? '').trim();
-    if (!photoId || photoId.length > 80 || !/^[A-Za-z0-9-]+$/.test(photoId)) {
-      throw new HttpsError('invalid-argument', 'Invalid photoId.');
-    }
-
+    const photoId = requirePhotoId(request.data?.photoId);
     const ref = db.collection('profile_media').doc(photoId);
     const photo = await ref.get();
     if (!photo.exists || photo.get('ownerUid') !== uid) {
@@ -111,5 +115,31 @@ export const confirmProfilePhotoUpload = onCall(
     }, {merge: true});
 
     return {photoId, status: 'pending_processing'};
+  },
+);
+
+export const deleteProfilePhoto = onCall(
+  {enforceAppCheck: true, maxInstances: 15},
+  async (request) => {
+    const uid = requireUid(request.auth);
+    await assertActive(uid);
+
+    const photoId = requirePhotoId(request.data?.photoId);
+    const ref = db.collection('profile_media').doc(photoId);
+    const photo = await ref.get();
+    if (!photo.exists || photo.get('ownerUid') !== uid) {
+      throw new HttpsError('not-found', 'Profile photo not found.');
+    }
+
+    const storagePath = String(photo.get('storagePath') ?? '');
+    const expectedPrefix = `users/${uid}/`;
+    if (!storagePath.startsWith(expectedPrefix)) {
+      throw new HttpsError('failed-precondition', 'Invalid profile media path.');
+    }
+
+    await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+    await ref.delete();
+
+    return {deleted: true};
   },
 );
