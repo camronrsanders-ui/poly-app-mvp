@@ -1,5 +1,5 @@
 import {initializeApp} from 'firebase-admin/app';
-import {FieldValue, getFirestore} from 'firebase-admin/firestore';
+import {FieldValue, Timestamp, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 initializeApp();
@@ -13,6 +13,14 @@ function requireUid(auth: {uid: string} | undefined): string {
 function pairIds(a: string, b: string) {
   const pair = [a, b].sort();
   return {a: pair[0], b: pair[1], id: `${pair[0]}_${pair[1]}`};
+}
+
+function requireTargetUid(raw: unknown, currentUid: string): string {
+  const uid = String(raw ?? '').trim();
+  if (!uid || uid.length > 128 || uid === currentUid) {
+    throw new HttpsError('invalid-argument', 'Invalid target user.');
+  }
+  return uid;
 }
 
 async function assertActive(uid: string) {
@@ -30,11 +38,51 @@ async function blockedEitherWay(a: string, b: string): Promise<boolean> {
   return ab.exists || ba.exists;
 }
 
+async function consumeRateLimit(
+  uid: string,
+  action: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<void> {
+  const now = Date.now();
+  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const currentStart = snap.exists ? snap.get('windowStart') : null;
+    const startMs = currentStart instanceof Timestamp ? currentStart.toMillis() : 0;
+    const currentCount = snap.exists ? Number(snap.get('count') ?? 0) : 0;
+
+    if (!snap.exists || now - startMs >= windowMs) {
+      tx.set(ref, {
+        uid,
+        action,
+        count: 1,
+        windowStart: Timestamp.fromMillis(now),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    if (currentCount >= maxRequests) {
+      throw new HttpsError('resource-exhausted', 'Please wait a moment and try again.');
+    }
+
+    tx.update(ref, {
+      count: currentCount + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 export const listDiscoveryCandidates = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await Promise.all([
+      assertActive(uid),
+      consumeRateLimit(uid, 'discover', 60, 60_000),
+    ]);
 
     const limitRaw = Number(request.data?.limit ?? 20);
     const limit = Math.max(1, Math.min(50, Number.isFinite(limitRaw) ? limitRaw : 20));
@@ -57,16 +105,22 @@ export const listDiscoveryCandidates = onCall(
       .limit(Math.min(150, limit * 5))
       .get();
 
-    const candidates: Record<string, unknown>[] = [];
-    for (const doc of profilePool.docs) {
-      if (candidates.length >= limit) break;
-      if (excluded.has(doc.id)) continue;
+    const eligibleProfiles = profilePool.docs.filter((doc) => !excluded.has(doc.id));
+    const accountRefs = eligibleProfiles.map((doc) => db.collection('users').doc(doc.id));
+    const accountSnaps = accountRefs.length > 0 ? await db.getAll(...accountRefs) : [];
+    const activeIds = new Set(
+      accountSnaps
+        .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
+        .map((snap) => snap.id),
+    );
 
-      const account = await db.collection('users').doc(doc.id).get();
-      if (!account.exists || account.get('accountStatus') !== 'active') continue;
+    const candidates: Record<string, unknown>[] = [];
+    for (const doc of eligibleProfiles) {
+      if (candidates.length >= limit) break;
+      if (!activeIds.has(doc.id)) continue;
 
       const data = doc.data();
-      // Return only public discovery fields. Do not return private preference data.
+      // Return only public discovery fields. Never return private preference data.
       candidates.push({
         uid: doc.id,
         displayName: data.displayName ?? '',
@@ -83,8 +137,8 @@ export const listDiscoveryCandidates = onCall(
         relationshipStructure: data.relationshipStructure ?? '',
         relationshipStatus: data.relationshipStatus ?? '',
         partnered: data.partnered === true,
-        intentionTags: Array.isArray(data.intentionTags) ? data.intentionTags : [],
-        interests: Array.isArray(data.interests) ? data.interests : [],
+        intentionTags: Array.isArray(data.intentionTags) ? data.intentionTags.slice(0, 12) : [],
+        interests: Array.isArray(data.interests) ? data.interests.slice(0, 20) : [],
         lookingForNote: data.lookingForNote ?? '',
       });
     }
@@ -97,12 +151,13 @@ export const likeUser = onCall(
   {enforceAppCheck: true, maxInstances: 30},
   async (request) => {
     const fromUid = requireUid(request.auth);
-    const toUid = String(request.data?.toUid ?? '').trim();
-    if (!toUid || toUid === fromUid) {
-      throw new HttpsError('invalid-argument', 'Invalid target user.');
-    }
+    const toUid = requireTargetUid(request.data?.toUid, fromUid);
 
-    await Promise.all([assertActive(fromUid), assertActive(toUid)]);
+    await Promise.all([
+      assertActive(fromUid),
+      assertActive(toUid),
+      consumeRateLimit(fromUid, 'like', 30, 60_000),
+    ]);
     if (await blockedEitherWay(fromUid, toUid)) {
       throw new HttpsError('permission-denied', 'Interaction is unavailable.');
     }
@@ -147,12 +202,13 @@ export const ensureConversation = onCall(
   {enforceAppCheck: true, maxInstances: 30},
   async (request) => {
     const currentUid = requireUid(request.auth);
-    const otherUid = String(request.data?.otherUid ?? '').trim();
-    if (!otherUid || otherUid === currentUid) {
-      throw new HttpsError('invalid-argument', 'Invalid participant.');
-    }
+    const otherUid = requireTargetUid(request.data?.otherUid, currentUid);
 
-    await Promise.all([assertActive(currentUid), assertActive(otherUid)]);
+    await Promise.all([
+      assertActive(currentUid),
+      assertActive(otherUid),
+      consumeRateLimit(currentUid, 'conversation', 20, 60_000),
+    ]);
     if (await blockedEitherWay(currentUid, otherUid)) {
       throw new HttpsError('permission-denied', 'Conversation is unavailable.');
     }
