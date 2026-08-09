@@ -13,9 +13,9 @@ class DiscoveryService {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return [];
 
-    final callable = _functions.httpsCallable('listDiscoveryCandidates');
+    final callable = _functions.httpsCallable('getDiscoverCandidates');
     final result = await callable.call<Map<String, dynamic>>({'limit': limit});
-    final raw = result.data['candidates'];
+    final raw = result.data['profiles'];
     if (raw is! List) return [];
     return raw
         .whereType<Map>()
