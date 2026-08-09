@@ -1,6 +1,7 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertPrivateVaultEnabled} from './private_vault_gate';
 
 const db = getFirestore();
 const privateMediaReportReasons = new Set([
@@ -13,6 +14,7 @@ const privateMediaReportReasons = new Set([
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  assertPrivateVaultEnabled();
   return auth.uid;
 }
 
