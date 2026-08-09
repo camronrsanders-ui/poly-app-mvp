@@ -20,4 +20,16 @@ class ConnectionService {
     final result = await callable.call<Map<String, dynamic>>({'toUid': toUid});
     return result.data['matched'] == true;
   }
+
+  Future<void> endConnection(String otherUid) async {
+    final currentUid = _auth.currentUser?.uid;
+    if (currentUid == null) throw StateError('No signed-in user.');
+    if (currentUid == otherUid) throw ArgumentError('Invalid connection.');
+
+    final callable = _functions.httpsCallable('endConnection');
+    final result = await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
+    if (result.data['ended'] != true) {
+      throw StateError('Connection was not ended.');
+    }
+  }
 }
