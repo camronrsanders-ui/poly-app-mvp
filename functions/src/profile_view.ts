@@ -1,4 +1,4 @@
-import {getFirestore} from 'firebase-admin/firestore';
+import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {toProfileView} from './profile_view_fields';
 
@@ -16,6 +16,31 @@ async function assertActive(uid: string): Promise<void> {
   }
 }
 
+async function consumeRateLimit(uid: string, max: number, windowMs: number): Promise<void> {
+  const action = 'connections_list';
+  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const start = Number(snap.get('windowStartMs') ?? 0);
+    const count = Number(snap.get('count') ?? 0);
+    if (!snap.exists || now - start >= windowMs) {
+      tx.set(ref, {
+        uid,
+        action,
+        windowStartMs: now,
+        count: 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (count >= max) {
+      throw new HttpsError('resource-exhausted', 'Too many requests. Try again later.');
+    }
+    tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  });
+}
+
 async function isBlocked(a: string, b: string): Promise<boolean> {
   const [ab, ba] = await Promise.all([
     db.collection('blocks').doc(`${a}_${b}`).get(),
@@ -29,6 +54,7 @@ export const listMyConnections = onCall(
   async (request) => {
     const uid = requireUid(request.auth);
     await assertActive(uid);
+    await consumeRateLimit(uid, 60, 60_000);
 
     // Query each participant field separately and filter active state in trusted
     // code. This avoids requiring a composite index just to list connections.
