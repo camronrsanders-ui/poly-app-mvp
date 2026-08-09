@@ -1,0 +1,91 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:cloud_functions/cloud_functions.dart';
+
+class ProfileMediaUpload {
+  const ProfileMediaUpload({
+    required this.photoId,
+    required this.uploadUrl,
+    required this.requiredContentType,
+  });
+
+  final String photoId;
+  final Uri uploadUrl;
+  final String requiredContentType;
+}
+
+class ProfileMediaService {
+  ProfileMediaService({FirebaseFunctions? functions})
+      : _functions = functions ?? FirebaseFunctions.instance;
+
+  final FirebaseFunctions _functions;
+
+  Future<ProfileMediaUpload> beginUpload(String contentType) async {
+    final callable = _functions.httpsCallable('beginProfilePhotoUpload');
+    final result = await callable.call<Map<String, dynamic>>({
+      'contentType': contentType,
+    });
+    final data = result.data;
+    final photoId = data['photoId'] as String?;
+    final uploadUrl = data['uploadUrl'] as String?;
+    final requiredContentType = data['requiredContentType'] as String?;
+    if (photoId == null || uploadUrl == null || requiredContentType == null) {
+      throw StateError('Profile photo upload authorization was incomplete.');
+    }
+    return ProfileMediaUpload(
+      photoId: photoId,
+      uploadUrl: Uri.parse(uploadUrl),
+      requiredContentType: requiredContentType,
+    );
+  }
+
+  Future<void> uploadBytes({
+    required ProfileMediaUpload authorization,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.isEmpty) throw ArgumentError('Photo is empty.');
+    if (bytes.length > 10 * 1024 * 1024) {
+      throw ArgumentError('Photo must be 10 MB or smaller.');
+    }
+
+    final client = HttpClient();
+    try {
+      final request = await client.putUrl(authorization.uploadUrl);
+      request.headers.contentType = ContentType.parse(authorization.requiredContentType);
+      request.contentLength = bytes.length;
+      request.add(bytes);
+      final response = await request.close();
+      await response.drain<void>();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('Profile photo upload failed (${response.statusCode}).');
+      }
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<String> confirmUpload(String photoId) async {
+    final callable = _functions.httpsCallable('confirmProfilePhotoUpload');
+    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    return result.data['status'] as String? ?? 'pending_processing';
+  }
+
+  Future<Uri> getAccessUrl(String photoId) async {
+    final callable = _functions.httpsCallable('getProfilePhotoAccess');
+    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    final url = result.data['url'] as String?;
+    if (url == null || url.isEmpty) {
+      throw StateError('Profile photo access response was incomplete.');
+    }
+    return Uri.parse(url);
+  }
+
+  Future<void> deletePhoto(String photoId) async {
+    final callable = _functions.httpsCallable('deleteProfilePhoto');
+    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    if (result.data['deleted'] != true) {
+      throw StateError('Profile photo was not deleted.');
+    }
+  }
+}
