@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../config/discovery_options.dart';
 import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
@@ -42,29 +43,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final Set<String> _preferredIntentions = {};
   RangeValues _ageRange = const RangeValues(18, 99);
   double _distanceRadius = 50;
-
-  static const _intentionOptions = [
-    'Friendship',
-    'Community',
-    'Dating',
-    'Long-term relationship',
-    'Casual connection',
-    'Join a polycule',
-    'Build / grow a polycule',
-    'Exploring / learning',
-  ];
-
-  static const _structureOptions = [
-    'Solo poly',
-    'Hierarchical poly',
-    'Non-hierarchical poly',
-    'Open relationship',
-    'Polyfidelity',
-    'Relationship anarchy',
-    'Monogamish',
-    'Exploring',
-    'Custom / self-described',
-  ];
 
   @override
   void initState() {
@@ -297,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _intentionOptions.map((item) => FilterChip(
+          children: connectionIntentionOptions.map((item) => FilterChip(
             label: Text(item),
             selected: _intentions.contains(item),
             onSelected: (selected) => setState(() => selected ? _intentions.add(item) : _intentions.remove(item)),
@@ -360,7 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _structureOptions.map((item) => FilterChip(
+          children: relationshipStructureOptions.map((item) => FilterChip(
             label: Text(item),
             selected: _preferredStructures.contains(item),
             onSelected: (selected) => setState(() =>
@@ -373,7 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _intentionOptions.map((item) => FilterChip(
+          children: connectionIntentionOptions.map((item) => FilterChip(
             label: Text(item),
             selected: _preferredIntentions.contains(item),
             onSelected: (selected) => setState(() =>
@@ -384,9 +362,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Text('Distance preference: ${_distanceRadius.round()} miles'),
         Slider(
           value: _distanceRadius,
-          min: 5,
+          min: 1,
           max: 500,
-          divisions: 99,
+          divisions: 499,
           label: '${_distanceRadius.round()} mi',
           onChanged: (value) => setState(() => _distanceRadius = value),
         ),
