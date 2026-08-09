@@ -50,10 +50,20 @@ test('another user cannot access owner profile media path', async () => {
 
 test('private-media path is denied to client even for owner', async () => {
   const storage = env.authenticatedContext('alice').storage();
-  const target = ref(storage, 'private_media/alice/media1/original.jpg');
+  const target = ref(storage, 'private_media/alice/media1.jpg');
   const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]);
   await assertFails(uploadBytes(target, bytes, {contentType: 'image/jpeg'}));
   await assertFails(getBytes(target));
+  await assertFails(deleteObject(target));
+});
+
+test('private-media quarantine is inaccessible through Firebase Storage SDK', async () => {
+  const storage = env.authenticatedContext('alice').storage();
+  const target = ref(storage, 'private_media_quarantine/alice/media1.jpg');
+  const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]);
+  await assertFails(uploadBytes(target, bytes, {contentType: 'image/jpeg'}));
+  await assertFails(getBytes(target));
+  await assertFails(deleteObject(target));
 });
 
 test('unauthenticated client cannot access any media path', async () => {
