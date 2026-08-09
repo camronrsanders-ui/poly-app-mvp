@@ -27,7 +27,7 @@ jobs:
         run: flutter test
 
   functions:
-    name: Functions build
+    name: Functions build and load
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,6 +41,8 @@ jobs:
         run: npm install
       - name: TypeScript build
         run: npm run build
+      - name: Load compiled Functions module
+        run: node -e "require('./lib/index.js'); console.log('Functions module loaded successfully')"
 
   contracts:
     name: Client/backend callable contracts
