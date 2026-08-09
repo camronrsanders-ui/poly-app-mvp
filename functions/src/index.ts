@@ -226,7 +226,7 @@ export const deleteMyAccount = onCall(
 
     writer.delete(db.collection('profiles').doc(uid));
     for (const action of [
-      'discover', 'like', 'conversation', 'connections_list', 'delete_account',
+      'discover', 'like', 'conversation', 'connections_list', 'circle_view', 'delete_account',
       'block', 'unblock', 'unmatch', 'report',
       'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
       'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
@@ -254,6 +254,7 @@ export const deleteMyAccount = onCall(
 );
 
 export {blockUser, unblockUser, endConnection, submitReport} from './safety';
+export {getCircleForProfile} from './circle_view';
 export {
   requestPrivateMedia,
   respondToPrivateMediaRequest,
