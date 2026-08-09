@@ -20,7 +20,7 @@ class ConnectionService {
     if (fromUid == null) throw StateError('No signed-in user.');
     if (fromUid == toUid) throw ArgumentError('You cannot like yourself.');
 
-    final callable = _functions.httpsCallable('likeUser');
+    final callable = _functions.httpsCallable('likeProfile');
     final result = await callable.call<Map<String, dynamic>>({'toUid': toUid});
     return result.data['matched'] == true;
   }
