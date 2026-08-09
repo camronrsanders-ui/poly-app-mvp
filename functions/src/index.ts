@@ -3,7 +3,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
-import {toProfileView} from './profile_view';
+import {toProfileView} from './profile_view_fields';
 
 initializeApp();
 
