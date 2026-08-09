@@ -205,7 +205,11 @@ export const deleteMyAccount = onCall(
     for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
 
     writer.delete(db.collection('profiles').doc(uid));
-    for (const action of ['discover', 'like', 'conversation', 'delete_account', 'block', 'unblock', 'unmatch', 'report', 'private_media_grant', 'private_media_access', 'profile_photo_upload']) {
+    for (const action of [
+      'discover', 'like', 'conversation', 'delete_account', 'block', 'unblock',
+      'unmatch', 'report', 'private_media_grant', 'private_media_revoke',
+      'private_media_access', 'profile_photo_upload',
+    ]) {
       writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
     }
     await writer.close();
