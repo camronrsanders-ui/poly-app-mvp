@@ -14,16 +14,19 @@ const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
+const profileView = read('functions/src/profile_view.ts');
 const discoveryService = read('lib/services/discovery_service.dart');
 const connectionService = read('lib/services/connection_service.dart');
 const messagingService = read('lib/services/messaging_service.dart');
 const safetyService = read('lib/services/safety_service.dart');
 const profileMediaService = read('lib/services/profile_media_service.dart');
 const accountService = read('lib/services/account_service.dart');
+const connectionsScreen = read('lib/screens/connections/connections_screen.dart');
 
 const callableContracts = [
   {name: 'getDiscoverCandidates', client: discoveryService, backend: index},
   {name: 'likeProfile', client: connectionService, backend: index},
+  {name: 'listMyConnections', client: connectionService, backend: `${index}\n${profileView}`},
   {name: 'createConversation', client: messagingService, backend: index},
   {name: 'deleteMyAccount', client: accountService, backend: index},
   {name: 'blockUser', client: safetyService, backend: `${index}\n${safety}`},
@@ -87,4 +90,29 @@ test('Public profile model never stores permanent media URLs', () => {
   const onboarding = read('lib/screens/onboarding/onboarding_screen.dart');
   assert.doesNotMatch(profileModel, /photoUrls|avatarUrl/);
   assert.doesNotMatch(onboarding, /photoUrls|avatarUrl/);
+});
+
+test('Discovery and connection profile views do not expose private preference fields', () => {
+  for (const privateKey of [
+    'ageMin',
+    'ageMax',
+    'distanceRadius',
+    'preferredStructures',
+    'preferredIntentions',
+    'mapVisibility',
+    'profileVisibility',
+    'createdAt',
+    'updatedAt',
+  ]) {
+    assert.doesNotMatch(
+      profileView,
+      new RegExp(`['\"]${privateKey}['\"]`),
+      `${privateKey} must not be included in trusted public profile views`,
+    );
+  }
+});
+
+test('Connections screen does not bypass trusted profile views with direct Firestore profile reads', () => {
+  assert.doesNotMatch(connectionsScreen, /cloud_firestore/);
+  assert.doesNotMatch(connectionsScreen, /collection\(['"]profiles['"]\)/);
 });
