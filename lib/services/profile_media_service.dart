@@ -15,6 +15,44 @@ class ProfileMediaUpload {
   final String requiredContentType;
 }
 
+class ProfileMediaStatus {
+  const ProfileMediaStatus({
+    required this.photoId,
+    required this.status,
+    required this.contentType,
+    this.createdAt,
+    this.processedAt,
+    this.reviewedAt,
+  });
+
+  final String photoId;
+  final String status;
+  final String contentType;
+  final DateTime? createdAt;
+  final DateTime? processedAt;
+  final DateTime? reviewedAt;
+
+  factory ProfileMediaStatus.fromMap(Map<String, dynamic> data) {
+    DateTime? dateFromMillis(Object? raw) {
+      final value = raw is num ? raw.toInt() : null;
+      return value == null ? null : DateTime.fromMillisecondsSinceEpoch(value);
+    }
+
+    final photoId = data['photoId'] as String?;
+    if (photoId == null || photoId.isEmpty) {
+      throw StateError('Profile photo status was missing its photoId.');
+    }
+    return ProfileMediaStatus(
+      photoId: photoId,
+      status: data['status'] as String? ?? 'unknown',
+      contentType: data['contentType'] as String? ?? '',
+      createdAt: dateFromMillis(data['createdAtMs']),
+      processedAt: dateFromMillis(data['processedAtMs']),
+      reviewedAt: dateFromMillis(data['reviewedAtMs']),
+    );
+  }
+}
+
 class ProfileMediaService {
   ProfileMediaService({FirebaseFunctions? functions})
       : _functions = functions ?? FirebaseFunctions.instance;
@@ -69,6 +107,17 @@ class ProfileMediaService {
     final callable = _functions.httpsCallable('confirmProfilePhotoUpload');
     final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
     return result.data['status'] as String? ?? 'pending_processing';
+  }
+
+  Future<List<ProfileMediaStatus>> listMyPhotos() async {
+    final callable = _functions.httpsCallable('listMyProfilePhotos');
+    final result = await callable.call<Map<String, dynamic>>();
+    final raw = result.data['photos'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => ProfileMediaStatus.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
   }
 
   Future<Uri> getAccessUrl(String photoId) async {
