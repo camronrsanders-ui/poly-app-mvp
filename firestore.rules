@@ -175,6 +175,7 @@ service cloud.firestore {
     match /private_media/{mediaId} { allow read, write: if false; }
     match /private_media_grants/{grantId} { allow read, write: if false; }
     match /private_media_requests/{requestId} { allow read, write: if false; }
+    match /private_media_request_preferences/{preferenceId} { allow read, write: if false; }
     match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }
