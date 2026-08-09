@@ -124,7 +124,8 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.participantUids
+      allow read: if signedIn() && resource.data.active == true
+        && request.auth.uid in resource.data.participantUids
         && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
@@ -147,8 +148,10 @@ service cloud.firestore {
         && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
         && conversationIsUnblocked(request.resource.data.conversationId);
       allow read: if signedIn() && isConversationParticipant(resource.data.conversationId)
+        && conversationIsActive(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId);
       allow update: if signedIn() && isConversationParticipant(resource.data.conversationId)
+        && conversationIsActive(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
         && request.resource.data.readBy is list && request.resource.data.readBy.size() <= 2
@@ -158,8 +161,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Report creation and moderation are backend-only so rate limits and
-    // server-owned status fields cannot be bypassed by a modified client.
     match /reports/{reportId} {
       allow read: if signedIn() && resource.data.reporterUid == request.auth.uid;
       allow create, update, delete: if false;
