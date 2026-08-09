@@ -37,6 +37,11 @@ service cloud.firestore {
           get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids[1]);
     }
 
+    function conversationIsActive(conversationId) {
+      return conversationExists(conversationId)
+        && get(/databases/$(database)/documents/conversations/$(conversationId)).data.active == true;
+    }
+
     function conversationParticipants(conversationId) {
       return get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
     }
@@ -123,9 +128,11 @@ service cloud.firestore {
         && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
-      allow update: if signedIn() && request.auth.uid in resource.data.participantUids
+      allow update: if signedIn() && resource.data.active == true
+        && request.auth.uid in resource.data.participantUids
         && request.resource.data.participantUids == resource.data.participantUids
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'active'])
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
     }
 
@@ -136,6 +143,7 @@ service cloud.firestore {
         && request.resource.data.readBy is list && request.resource.data.readBy.size() == 1
         && request.resource.data.readBy[0] == request.auth.uid
         && isConversationParticipant(request.resource.data.conversationId)
+        && conversationIsActive(request.resource.data.conversationId)
         && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
         && conversationIsUnblocked(request.resource.data.conversationId);
       allow read: if signedIn() && isConversationParticipant(resource.data.conversationId)
@@ -164,7 +172,6 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Media metadata is backend-only. Clients receive only minimal authorized responses.
     match /profile_media/{photoId} { allow read, write: if false; }
     match /private_media/{mediaId} { allow read, write: if false; }
     match /private_media_grants/{grantId} { allow read, write: if false; }
