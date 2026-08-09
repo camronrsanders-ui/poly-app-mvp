@@ -48,15 +48,15 @@ jobs:
         run: node -e "require('./lib/index.js'); console.log('Functions module loaded successfully')"
 
   contracts:
-    name: Client/backend callable contracts
+    name: Client/backend security contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run callable contract tests
-        run: node --test tests/contracts/callable_contracts.test.mjs
+      - name: Run static contract tests
+        run: node --test tests/contracts/*.test.mjs
 
   security-rules:
     name: Firebase security rules
