@@ -59,20 +59,20 @@ export const listMyConnections = onCall(
     const uid = requireUid(request.auth);
     await assertActive(uid);
 
+    // Query each participant field separately and filter active state in trusted
+    // code. This avoids requiring a composite index just to list connections.
     const [asA, asB] = await Promise.all([
       db.collection('matches')
         .where('userAUid', '==', uid)
-        .where('active', '==', true)
-        .limit(100)
+        .limit(150)
         .get(),
       db.collection('matches')
         .where('userBUid', '==', uid)
-        .where('active', '==', true)
-        .limit(100)
+        .limit(150)
         .get(),
     ]);
 
-    const matches = [...asA.docs, ...asB.docs];
+    const matches = [...asA.docs, ...asB.docs].filter((match) => match.get('active') === true);
     const seen = new Set<string>();
     const output: FirebaseFirestore.DocumentData[] = [];
 
