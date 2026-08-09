@@ -3,6 +3,13 @@ import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 const db = getFirestore();
+const privateMediaReportReasons = new Set([
+  'nonconsensual_content',
+  'harassment',
+  'misrepresentation',
+  'illegal_content',
+  'other',
+]);
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -72,6 +79,106 @@ function requireOwnerStoragePath(ownerUid: string, storagePath: string) {
     throw new HttpsError('failed-precondition', 'Invalid private media storage path.');
   }
 }
+
+function requestPreferenceId(recipientUid: string, requesterUid: string) {
+  return `${recipientUid}_${requesterUid}`;
+}
+
+export const requestPrivateMedia = onCall(
+  {enforceAppCheck: true, maxInstances: 15},
+  async (request) => {
+    const requesterUid = requireUid(request.auth);
+    const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
+    await Promise.all([
+      assertEligiblePair(requesterUid, recipientUid),
+      consumeRateLimit(requesterUid, 'private_media_request', 8, 24 * 60 * 60_000),
+    ]);
+
+    const preference = await db.collection('private_media_request_preferences')
+      .doc(requestPreferenceId(recipientUid, requesterUid))
+      .get();
+    if (preference.exists && preference.get('doNotAskAgain') === true) {
+      throw new HttpsError('permission-denied', 'This person is not accepting private-media requests from you.');
+    }
+
+    const requestId = `${requesterUid}_${recipientUid}`;
+    const ref = db.collection('private_media_requests').doc(requestId);
+    const existing = await ref.get();
+    if (existing.exists && existing.get('status') === 'pending') {
+      throw new HttpsError('already-exists', 'A private-media request is already pending.');
+    }
+
+    await ref.set({
+      requestId,
+      requesterUid,
+      recipientUid,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {requestId, status: 'pending'};
+  },
+);
+
+export const respondToPrivateMediaRequest = onCall(
+  {enforceAppCheck: true, maxInstances: 15},
+  async (request) => {
+    const recipientUid = requireUid(request.auth);
+    const requestId = requireId(request.data?.requestId, 'requestId');
+    const decision = String(request.data?.decision ?? '').trim();
+    const doNotAskAgain = request.data?.doNotAskAgain === true;
+    if (!['accepted', 'declined'].includes(decision)) {
+      throw new HttpsError('invalid-argument', 'Invalid request decision.');
+    }
+    await consumeRateLimit(recipientUid, 'private_media_request_response', 30, 60 * 60_000);
+
+    const ref = db.collection('private_media_requests').doc(requestId);
+    const snap = await ref.get();
+    if (!snap.exists || snap.get('recipientUid') !== recipientUid) {
+      throw new HttpsError('not-found', 'Private-media request not found.');
+    }
+    if (snap.get('status') !== 'pending') {
+      throw new HttpsError('failed-precondition', 'This request is no longer pending.');
+    }
+
+    const requesterUid = String(snap.get('requesterUid') ?? '');
+    if (!requesterUid) throw new HttpsError('failed-precondition', 'Invalid request state.');
+
+    await ref.set({
+      status: decision,
+      respondedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    if (doNotAskAgain) {
+      await db.collection('private_media_request_preferences')
+        .doc(requestPreferenceId(recipientUid, requesterUid))
+        .set({
+          recipientUid,
+          requesterUid,
+          doNotAskAgain: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+    }
+
+    // Accepting a request only grants permission to offer/share media later.
+    // It never automatically grants access to any existing or future media.
+    return {status: decision, doNotAskAgain};
+  },
+);
+
+export const clearPrivateMediaRequestPreference = onCall(
+  {enforceAppCheck: true, maxInstances: 10},
+  async (request) => {
+    const recipientUid = requireUid(request.auth);
+    const requesterUid = requireId(request.data?.requesterUid, 'requesterUid');
+    await assertActive(recipientUid);
+    await db.collection('private_media_request_preferences')
+      .doc(requestPreferenceId(recipientUid, requesterUid))
+      .delete();
+    return {cleared: true};
+  },
+);
 
 export const grantPrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 15},
@@ -166,5 +273,61 @@ export const getPrivateMediaAccess = onCall(
     });
 
     return {url: signedUrl, expiresInSeconds: 120};
+  },
+);
+
+export const reportPrivateMedia = onCall(
+  {enforceAppCheck: true, maxInstances: 15},
+  async (request) => {
+    const reporterUid = requireUid(request.auth);
+    const mediaId = requireId(request.data?.mediaId, 'mediaId');
+    const reason = String(request.data?.reason ?? '').trim();
+    const details = String(request.data?.details ?? '').trim();
+    if (!privateMediaReportReasons.has(reason)) {
+      throw new HttpsError('invalid-argument', 'Invalid private-media report reason.');
+    }
+    if (details.length > 2000) {
+      throw new HttpsError('invalid-argument', 'Report details are too long.');
+    }
+    await Promise.all([
+      assertActive(reporterUid),
+      consumeRateLimit(reporterUid, 'private_media_report', 8, 24 * 60 * 60_000),
+    ]);
+
+    const media = await db.collection('private_media').doc(mediaId).get();
+    if (!media.exists) throw new HttpsError('not-found', 'Private media not found.');
+    const ownerUid = String(media.get('ownerUid') ?? '');
+    if (!ownerUid || ownerUid === reporterUid) {
+      throw new HttpsError('invalid-argument', 'Invalid private-media report target.');
+    }
+
+    // Only someone who was explicitly granted this item may report it through
+    // this endpoint. Moderators can access preserved evidence separately.
+    const grant = await db.collection('private_media_grants')
+      .doc(`${mediaId}_${reporterUid}`)
+      .get();
+    if (!grant.exists || grant.get('recipientUid') !== reporterUid || grant.get('ownerUid') !== ownerUid) {
+      throw new HttpsError('permission-denied', 'You cannot report this private-media item.');
+    }
+
+    const reportRef = db.collection('reports').doc();
+    await reportRef.set({
+      reportId: reportRef.id,
+      reporterUid,
+      reportedUid: ownerUid,
+      subjectType: 'private_media',
+      subjectId: mediaId,
+      reason,
+      details,
+      status: 'open',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('private_media').doc(mediaId).set({
+      reportedAt: FieldValue.serverTimestamp(),
+      hasOpenReport: true,
+    }, {merge: true});
+
+    return {submitted: true, reportId: reportRef.id};
   },
 );
