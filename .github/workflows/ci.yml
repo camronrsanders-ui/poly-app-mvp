@@ -42,6 +42,17 @@ jobs:
       - name: TypeScript build
         run: npm run build
 
+  contracts:
+    name: Client/backend callable contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run callable contract tests
+        run: node --test tests/contracts/callable_contracts.test.mjs
+
   security-rules:
     name: Firebase security rules
     runs-on: ubuntu-latest
