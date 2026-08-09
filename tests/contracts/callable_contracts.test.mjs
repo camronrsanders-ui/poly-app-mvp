@@ -13,6 +13,7 @@ const index = read('functions/src/index.ts');
 const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
 const profileMedia = read('functions/src/profile_media.ts');
+const profileMediaListing = read('functions/src/profile_media_listing.ts');
 const discoveryService = read('lib/services/discovery_service.dart');
 const connectionService = read('lib/services/connection_service.dart');
 const messagingService = read('lib/services/messaging_service.dart');
@@ -29,6 +30,7 @@ const callableContracts = [
   {name: 'submitReport', client: safetyService, backend: `${index}\n${safety}`},
   {name: 'beginProfilePhotoUpload', client: profileMediaService, backend: `${index}\n${profileMedia}`},
   {name: 'confirmProfilePhotoUpload', client: profileMediaService, backend: `${index}\n${profileMedia}`},
+  {name: 'listMyProfilePhotos', client: profileMediaService, backend: `${index}\n${profileMediaListing}`},
   {name: 'getProfilePhotoAccess', client: profileMediaService, backend: `${index}\n${profileMedia}`},
   {name: 'deleteProfilePhoto', client: profileMediaService, backend: `${index}\n${profileMedia}`},
 ];
@@ -71,4 +73,11 @@ test('Profile media moderation stays backend-only', () => {
   assert.match(profileMedia, /export const reviewProfilePhoto\b/);
   assert.match(index, /export \{[^}]*\breviewProfilePhoto\b[^}]*\} from '.\/profile_media'/);
   assert.doesNotMatch(profileMediaService, /httpsCallable\(['"]reviewProfilePhoto['"]\)/);
+});
+
+test('Public profile model never stores permanent media URLs', () => {
+  const profileModel = read('lib/models/profile.dart');
+  const onboarding = read('lib/screens/onboarding/onboarding_screen.dart');
+  assert.doesNotMatch(profileModel, /photoUrls|avatarUrl/);
+  assert.doesNotMatch(onboarding, /photoUrls|avatarUrl/);
 });
