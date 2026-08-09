@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/connection_service.dart';
@@ -14,26 +12,10 @@ class ConnectionsScreen extends StatefulWidget {
 }
 
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
+  final _connections = ConnectionService();
   Key _reloadKey = UniqueKey();
 
-  Future<List<Map<String, dynamic>>> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return [];
-    final db = FirebaseFirestore.instance;
-    final a = await db.collection('matches').where('userAUid', isEqualTo: uid).where('active', isEqualTo: true).get();
-    final b = await db.collection('matches').where('userBUid', isEqualTo: uid).where('active', isEqualTo: true).get();
-    final matches = [...a.docs, ...b.docs];
-    final result = <Map<String, dynamic>>[];
-    for (final match in matches) {
-      final data = match.data();
-      final otherUid = data['userAUid'] == uid ? data['userBUid'] as String? : data['userAUid'] as String?;
-      if (otherUid == null) continue;
-      final profile = await db.collection('profiles').doc(otherUid).get();
-      if (!profile.exists) continue;
-      result.add({...?profile.data(), 'uid': otherUid, 'matchId': match.id});
-    }
-    return result;
-  }
+  Future<List<Map<String, dynamic>>> _load() => _connections.loadConnections();
 
   Future<void> _openChat(BuildContext context, Map<String, dynamic> person) async {
     final otherUid = person['uid'] as String?;
@@ -78,7 +60,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await ConnectionService().endConnection(otherUid);
+      await _connections.endConnection(otherUid);
       if (!mounted) return;
       setState(() => _reloadKey = UniqueKey());
       ScaffoldMessenger.of(context).showSnackBar(
