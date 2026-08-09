@@ -120,9 +120,12 @@ export const createConversation = onCall(
     const uid = requireUid(request.auth);
     const otherUid = String(request.data?.otherUid ?? '').trim();
     if (!otherUid || otherUid === uid || otherUid.length > 128) throw new HttpsError('invalid-argument', 'Invalid participant.');
+
     await assertActive(uid);
-    await assertActive(otherUid);
+    // As with likes, charge before inspecting a target account so arbitrary UID
+    // probing cannot bypass the callable budget.
     await consumeRateLimit(uid, 'conversation', 30, 60 * 60_000);
+    await assertActive(otherUid);
     if (await isBlocked(uid, otherUid)) throw new HttpsError('permission-denied', 'Interaction unavailable.');
 
     const id = pairId(uid, otherUid);
@@ -220,6 +223,7 @@ export const deleteMyAccount = onCall(
       'discover', 'like', 'conversation', 'connections_list', 'delete_account',
       'block', 'unblock', 'unmatch', 'report',
       'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
+      'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
       'private_media_grant', 'private_media_revoke', 'private_media_access',
       'private_media_report', 'private_media_upload', 'profile_photo_upload',
     ]) {
@@ -252,6 +256,11 @@ export {
   reportPrivateMedia,
 } from './private_vault';
 export {cancelPrivateMediaRequest} from './private_vault_consent';
+export {
+  listMyPrivateMediaRequests,
+  listMyPrivateMediaShares,
+  listMyPrivateMediaInbox,
+} from './private_vault_listing';
 export {
   beginPrivateMediaUpload,
   confirmPrivateMediaUpload,
