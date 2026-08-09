@@ -14,12 +14,11 @@ class AccountService {
     if (user == null) throw StateError('No signed-in user.');
 
     final callable = _functions.httpsCallable('deleteMyAccount');
-    await callable.call(<String, dynamic>{'confirmation': 'DELETE'});
-  }
-
-  Future<void> refreshAuthentication() async {
-    final user = _auth.currentUser;
-    if (user == null) throw StateError('No signed-in user.');
-    await user.getIdToken(true);
+    final result = await callable.call<Map<String, dynamic>>(<String, dynamic>{
+      'confirmation': 'DELETE',
+    });
+    if (result.data['deleted'] != true) {
+      throw StateError('Account deletion did not complete.');
+    }
   }
 }
