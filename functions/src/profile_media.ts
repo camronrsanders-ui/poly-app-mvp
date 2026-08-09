@@ -24,6 +24,35 @@ async function assertActive(uid: string) {
   }
 }
 
+async function consumeRateLimit(
+  uid: string,
+  action: string,
+  max: number,
+  windowMs: number,
+): Promise<void> {
+  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const start = Number(snap.get('windowStartMs') ?? 0);
+    const count = Number(snap.get('count') ?? 0);
+    if (!snap.exists || now - start >= windowMs) {
+      tx.set(ref, {
+        uid,
+        action,
+        windowStartMs: now,
+        count: 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (count >= max) {
+      throw new HttpsError('resource-exhausted', 'Too many profile-media requests. Try again later.');
+    }
+    tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  });
+}
+
 function requireContentType(raw: unknown): string {
   const value = String(raw ?? '').trim().toLowerCase();
   if (!allowedContentTypes.has(value)) {
@@ -72,7 +101,10 @@ export const beginProfilePhotoUpload = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await Promise.all([
+      assertActive(uid),
+      consumeRateLimit(uid, 'profile_photo_upload', 20, 24 * 60 * 60_000),
+    ]);
 
     const contentType = requireContentType(request.data?.contentType);
     const photoId = randomUUID();
@@ -106,7 +138,10 @@ export const confirmProfilePhotoUpload = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await Promise.all([
+      assertActive(uid),
+      consumeRateLimit(uid, 'profile_photo_confirm', 60, 60 * 60_000),
+    ]);
 
     const photoId = requirePhotoId(request.data?.photoId);
     const ref = db.collection('profile_media').doc(photoId);
@@ -250,7 +285,8 @@ export const processProfilePhoto = onObjectFinalized(
 export const reviewProfilePhoto = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
-    requireUid(request.auth);
+    const reviewerUid = requireUid(request.auth);
+    await consumeRateLimit(reviewerUid, 'profile_photo_review', 120, 60 * 60_000);
     if (request.auth?.token?.moderator !== true && request.auth?.token?.admin !== true) {
       throw new HttpsError('permission-denied', 'Moderator access required.');
     }
@@ -274,7 +310,7 @@ export const reviewProfilePhoto = onCall(
         status: 'rejected',
         rejectionReason: String(request.data?.reason ?? 'moderation').slice(0, 160),
         reviewedAt: FieldValue.serverTimestamp(),
-        reviewedByUid: request.auth!.uid,
+        reviewedByUid: reviewerUid,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
       return {photoId, status: 'rejected'};
@@ -283,7 +319,7 @@ export const reviewProfilePhoto = onCall(
     await ref.set({
       status: 'active',
       reviewedAt: FieldValue.serverTimestamp(),
-      reviewedByUid: request.auth!.uid,
+      reviewedByUid: reviewerUid,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     return {photoId, status: 'active'};
@@ -294,6 +330,10 @@ export const getProfilePhotoAccess = onCall(
   {enforceAppCheck: true, maxInstances: 30},
   async (request) => {
     const requesterUid = requireUid(request.auth);
+    await Promise.all([
+      assertActive(requesterUid),
+      consumeRateLimit(requesterUid, 'profile_photo_access', 120, 60_000),
+    ]);
     const photoId = requirePhotoId(request.data?.photoId);
     const ref = db.collection('profile_media').doc(photoId);
     const photo = await ref.get();
@@ -319,7 +359,10 @@ export const deleteProfilePhoto = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await Promise.all([
+      assertActive(uid),
+      consumeRateLimit(uid, 'profile_photo_delete', 30, 60 * 60_000),
+    ]);
 
     const photoId = requirePhotoId(request.data?.photoId);
     const ref = db.collection('profile_media').doc(photoId);
