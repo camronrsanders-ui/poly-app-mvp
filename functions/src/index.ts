@@ -3,6 +3,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertCanReceiveNewConnection} from './connection_eligibility';
 import {toProfileView} from './profile_view_fields';
 
 initializeApp();
@@ -88,10 +89,14 @@ export const likeProfile = onCall(
     const uid = requireUid(request.auth);
     const toUid = String(request.data?.toUid ?? '').trim();
     if (!toUid || toUid === uid || toUid.length > 128) throw new HttpsError('invalid-argument', 'Invalid target user.');
+
     await assertActive(uid);
-    await assertActive(toUid);
+    // Charge the caller before target-specific lookups so invalid/inactive UID
+    // probing cannot bypass the request budget.
     await consumeRateLimit(uid, 'like', 120, 60 * 60_000);
+    await assertActive(toUid);
     if (await isBlocked(uid, toUid)) throw new HttpsError('permission-denied', 'Interaction unavailable.');
+    await assertCanReceiveNewConnection(db, toUid);
 
     const likeRef = db.collection('likes').doc(`${uid}_${toUid}`);
     const reverseRef = db.collection('likes').doc(`${toUid}_${uid}`);
