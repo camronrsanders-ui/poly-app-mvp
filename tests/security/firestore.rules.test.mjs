@@ -30,14 +30,21 @@ const baseProfile = (uid, visibility = 'public') => ({
   genderIdentity: 'self-described',
   pronouns: 'they/them',
   orientation: 'self-described',
+  customIdentityTags: [],
   relationshipStructure: 'Solo poly',
   relationshipStatus: 'single',
-  lookingForNote: '',
-  profileVisibility: visibility,
-  mapVisibility: 'matches_only',
-  photoUrls: [],
+  partnered: false,
+  openToConnections: true,
   intentionTags: ['Friendship'],
   interests: [],
+  lookingForNote: '',
+  ageMin: 18,
+  ageMax: 99,
+  distanceRadius: 50,
+  preferredStructures: [],
+  preferredIntentions: [],
+  profileVisibility: visibility,
+  mapVisibility: 'matches_only',
   createdAt: new Date(),
   updatedAt: new Date(),
 });
@@ -124,6 +131,32 @@ test('profile owner cannot change uid ownership field', async () => {
   ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {uid: 'bob'}));
+});
+
+test('client cannot store permanent profile photo URLs', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(doc(db, 'profiles', 'alice'), {
+    ...baseProfile('alice'),
+    photoUrls: ['https://example.invalid/permanent-photo.jpg'],
+  }));
+  await assertFails(setDoc(doc(db, 'profiles', 'alice'), {
+    ...baseProfile('alice'),
+    avatarUrl: 'https://example.invalid/avatar.jpg',
+  }));
+});
+
+test('profile owner cannot add unknown privileged fields', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['profiles', 'alice', baseProfile('alice')],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {
+    moderationApproved: true,
+  }));
+  await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {
+    storagePath: 'users/alice/profile/forged.jpg',
+  }));
 });
 
 test('blocked user cannot directly read an otherwise public profile', async () => {
