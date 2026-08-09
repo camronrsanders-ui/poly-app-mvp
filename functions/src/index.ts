@@ -212,10 +212,11 @@ export const deleteMyAccount = onCall(
 
     writer.delete(db.collection('profiles').doc(uid));
     for (const action of [
-      'discover', 'like', 'conversation', 'delete_account', 'block', 'unblock',
-      'unmatch', 'report', 'private_media_request', 'private_media_request_response',
+      'discover', 'like', 'conversation', 'connections_list', 'delete_account',
+      'block', 'unblock', 'unmatch', 'report',
+      'private_media_request', 'private_media_request_response',
       'private_media_grant', 'private_media_revoke', 'private_media_access',
-      'private_media_report', 'profile_photo_upload',
+      'private_media_report', 'private_media_upload', 'profile_photo_upload',
     ]) {
       writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
     }
@@ -226,6 +227,7 @@ export const deleteMyAccount = onCall(
       bucket.deleteFiles({prefix: `users/${uid}/profile/`}).catch(() => undefined),
       bucket.deleteFiles({prefix: `users/${uid}/profile_quarantine/`}).catch(() => undefined),
       bucket.deleteFiles({prefix: `private_media/${uid}/`}).catch(() => undefined),
+      bucket.deleteFiles({prefix: `private_media_quarantine/${uid}/`}).catch(() => undefined),
     ]);
 
     await userRef.delete();
@@ -244,6 +246,13 @@ export {
   getPrivateMediaAccess,
   reportPrivateMedia,
 } from './private_vault';
+export {
+  beginPrivateMediaUpload,
+  confirmPrivateMediaUpload,
+  processPrivateMedia,
+  reviewPrivateMedia,
+  listMyPrivateMedia,
+} from './private_vault_upload';
 export {
   beginProfilePhotoUpload,
   confirmProfilePhotoUpload,
