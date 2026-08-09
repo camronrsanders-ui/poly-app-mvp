@@ -214,7 +214,7 @@ export const deleteMyAccount = onCall(
     for (const action of [
       'discover', 'like', 'conversation', 'connections_list', 'delete_account',
       'block', 'unblock', 'unmatch', 'report',
-      'private_media_request', 'private_media_request_response',
+      'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
       'private_media_grant', 'private_media_revoke', 'private_media_access',
       'private_media_report', 'private_media_upload', 'profile_photo_upload',
     ]) {
@@ -246,6 +246,7 @@ export {
   getPrivateMediaAccess,
   reportPrivateMedia,
 } from './private_vault';
+export {cancelPrivateMediaRequest} from './private_vault_consent';
 export {
   beginPrivateMediaUpload,
   confirmPrivateMediaUpload,
