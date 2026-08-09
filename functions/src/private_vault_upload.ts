@@ -4,6 +4,7 @@ import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {onObjectFinalized} from 'firebase-functions/v2/storage';
 import sharp from 'sharp';
+import {assertPrivateVaultEnabled, privateVaultServerEnabled} from './private_vault_gate';
 
 const db = getFirestore();
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -13,6 +14,7 @@ const terminalStatuses = new Set(['processed_pending_review', 'active', 'rejecte
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  assertPrivateVaultEnabled();
   return auth.uid;
 }
 
@@ -194,20 +196,38 @@ export const processPrivateMedia = onObjectFinalized(
     if (!parsed) return;
 
     const {uid: ownerUid, mediaId} = parsed;
+    const source = getStorage().bucket().file(storagePath);
+
+    // If the server kill switch is OFF, remove any quarantine object that may
+    // have been uploaded using a previously-issued URL instead of processing it.
+    if (!privateVaultServerEnabled) {
+      await source.delete({ignoreNotFound: true});
+      const disabledRef = db.collection('private_media').doc(mediaId);
+      const disabledMedia = await disabledRef.get();
+      if (disabledMedia.exists && disabledMedia.get('ownerUid') === ownerUid) {
+        await disabledRef.set({
+          status: 'rejected',
+          rejectionReason: 'feature_disabled',
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return;
+    }
+
     const ref = db.collection('private_media').doc(mediaId);
     const media = await ref.get();
     if (!media.exists || media.get('ownerUid') !== ownerUid || media.get('quarantinePath') !== storagePath) {
-      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await source.delete({ignoreNotFound: true});
       return;
     }
 
     const currentStatus = String(media.get('status') ?? '');
     if (terminalStatuses.has(currentStatus)) {
-      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await source.delete({ignoreNotFound: true});
       return;
     }
     if (currentStatus !== 'awaiting_upload' && currentStatus !== 'pending_processing') {
-      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await source.delete({ignoreNotFound: true});
       await ref.set({
         status: 'rejected',
         rejectionReason: 'invalid_processing_state',
@@ -220,7 +240,7 @@ export const processPrivateMedia = onObjectFinalized(
     const size = Number(object.size ?? 0);
     const expectedContentType = String(media.get('contentType') ?? '').toLowerCase();
     if (!allowedContentTypes.has(contentType) || size <= 0 || size > maxUploadBytes || contentType !== expectedContentType) {
-      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await source.delete({ignoreNotFound: true});
       await ref.set({
         status: 'rejected',
         rejectionReason: 'storage_validation',
@@ -230,7 +250,6 @@ export const processPrivateMedia = onObjectFinalized(
     }
 
     const bucket = getStorage().bucket();
-    const source = bucket.file(storagePath);
     try {
       await ref.set({
         status: 'pending_processing',
