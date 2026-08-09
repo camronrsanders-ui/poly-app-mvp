@@ -51,23 +51,24 @@ class SafetyService {
     if (safeReason.isEmpty || safeReason.length > 80 || safeDetails.length > 2000) {
       throw ArgumentError('Invalid report content.');
     }
-    await _firestore.collection('reports').add({
-      'reporterUid': reporterUid,
+
+    final callable = _functions.httpsCallable('submitReport');
+    await callable.call(<String, dynamic>{
       'reportedUid': reportedUid,
       'reason': safeReason,
       'details': safeDetails,
-      'createdAt': FieldValue.serverTimestamp(),
-      'status': 'open',
     });
   }
 
   Future<Set<String>> getBlockedUserIds() async {
     final uid = _requireUid();
-    final outgoing = await _firestore.collection('blocks').where('blockerUid', isEqualTo: uid).get();
-    final incoming = await _firestore.collection('blocks').where('blockedUid', isEqualTo: uid).get();
-    return {
-      ...outgoing.docs.map((d) => d.data()['blockedUid'] as String),
-      ...incoming.docs.map((d) => d.data()['blockerUid'] as String),
-    };
+    final outgoing = await _firestore
+        .collection('blocks')
+        .where('blockerUid', isEqualTo: uid)
+        .get();
+    return outgoing.docs
+        .map((d) => d.data()['blockedUid'])
+        .whereType<String>()
+        .toSet();
   }
 }
