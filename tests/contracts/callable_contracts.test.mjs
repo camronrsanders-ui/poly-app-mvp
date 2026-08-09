@@ -15,6 +15,7 @@ const vault = read('functions/src/private_vault.ts');
 const vaultUpload = read('functions/src/private_vault_upload.ts');
 const vaultConsent = read('functions/src/private_vault_consent.ts');
 const vaultListing = read('functions/src/private_vault_listing.ts');
+const vaultGate = read('functions/src/private_vault_gate.ts');
 const connectionEligibility = read('functions/src/connection_eligibility.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
@@ -85,9 +86,19 @@ test('Conversation creation rate-limits before target-specific lookups', () => {
     'Conversation attempts must be rate-limited before target-specific account lookups');
 });
 
-test('Private Vault remains disabled in Flutter until release gates pass', () => {
+test('Private Vault remains disabled in both Flutter and trusted backend', () => {
   const flags = read('lib/config/feature_flags.dart');
   assert.match(flags, /privateVaultEnabled\s*=\s*false/);
+  assert.match(vaultGate, /privateVaultServerEnabled\s*=\s*false/);
+  assert.match(vaultGate, /assertPrivateVaultEnabled/);
+
+  for (const source of [vault, vaultConsent, vaultListing, vaultUpload]) {
+    assert.match(source, /assertPrivateVaultEnabled/,
+      'Every callable Private Vault module must enforce the server-side kill switch');
+  }
+  assert.match(vaultUpload, /if \(!privateVaultServerEnabled\)/,
+    'Storage-triggered Private Vault processing must also honor the server kill switch');
+  assert.match(vaultUpload, /rejectionReason:\s*'feature_disabled'/);
 });
 
 test('Private Vault trusted sharing functions are exported by backend', () => {
@@ -130,6 +141,8 @@ test('Private Vault listings expose safe metadata only', () => {
   }
   assert.doesNotMatch(vaultListing, /storagePath|quarantinePath|uploadUrl|signedUrl/);
   assert.match(vaultListing, /pairIsEligible/);
+  assert.match(vaultListing, /maxRequestsPerDirection\s*=\s*50/);
+  assert.match(vaultListing, /maxGrantsPerListing\s*=\s*100/);
 });
 
 test('Private Vault upload pipeline stays trusted and consent-gated', () => {
