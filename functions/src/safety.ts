@@ -1,6 +1,16 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
+const allowedReportReasons = new Set([
+  'harassment',
+  'fake_profile',
+  'hate_speech',
+  'misrepresentation',
+  'spam',
+  'nonconsensual_content',
+  'other',
+]);
+
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   return auth.uid;
@@ -26,12 +36,10 @@ async function assertActive(uid: string): Promise<void> {
   }
 }
 
-async function enforceRateLimit(uid: string, action: string): Promise<void> {
+async function enforceRateLimit(uid: string, action: string, max = 20, windowMs = 60_000): Promise<void> {
   const db = getFirestore();
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
   const now = Date.now();
-  const windowMs = 60_000;
-  const max = 20;
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -80,6 +88,45 @@ async function revokePrivateAccessBetween(a: string, b: string, reason: string):
   }
   await writer.close();
 }
+
+export const submitReport = onCall(
+  {enforceAppCheck: true, maxInstances: 20},
+  async (request) => {
+    const db = getFirestore();
+    const reporterUid = requireUid(request.auth);
+    const reportedUid = requireTargetUid(request.data?.reportedUid, reporterUid);
+    const reason = String(request.data?.reason ?? '').trim();
+    const details = String(request.data?.details ?? '').trim();
+
+    if (!allowedReportReasons.has(reason)) {
+      throw new HttpsError('invalid-argument', 'Invalid report reason.');
+    }
+    if (details.length > 2000) {
+      throw new HttpsError('invalid-argument', 'Report details are too long.');
+    }
+
+    await Promise.all([
+      assertActive(reporterUid),
+      enforceRateLimit(reporterUid, 'report', 8, 60 * 60_000),
+    ]);
+
+    const target = await db.collection('users').doc(reportedUid).get();
+    if (!target.exists) throw new HttpsError('not-found', 'Reported account was not found.');
+
+    const ref = db.collection('reports').doc();
+    await ref.set({
+      reportId: ref.id,
+      reporterUid,
+      reportedUid,
+      reason,
+      details,
+      createdAt: FieldValue.serverTimestamp(),
+      status: 'open',
+    });
+
+    return {submitted: true, reportId: ref.id};
+  },
+);
 
 export const blockUser = onCall(
   {enforceAppCheck: true, maxInstances: 20},
@@ -131,8 +178,6 @@ export const blockUser = onCall(
       }
     });
 
-    // Private-media access is revoked independently of cleanup timing. The
-    // access function also re-checks blocks, so a stale grant cannot bypass a block.
     await revokePrivateAccessBetween(blockerUid, blockedUid, 'blocked');
     return {blocked: true};
   },
@@ -147,9 +192,6 @@ export const unblockUser = onCall(
     await Promise.all([assertActive(blockerUid), enforceRateLimit(blockerUid, 'unblock')]);
 
     await db.collection('blocks').doc(`${blockerUid}_${blockedUid}`).delete();
-
-    // Intentionally do not restore likes, matches, conversations, or grants.
-    // Unblocking only removes the block; both people must form a new connection.
     return {blocked: false};
   },
 );
