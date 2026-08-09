@@ -54,6 +54,33 @@ async function enforceRateLimit(uid: string, action: string): Promise<void> {
   });
 }
 
+async function revokePrivateAccessBetween(a: string, b: string, reason: string): Promise<void> {
+  const db = getFirestore();
+  const [grantsAB, grantsBA, requestsAB, requestsBA] = await Promise.all([
+    db.collection('private_media_grants').where('ownerUid', '==', a).where('recipientUid', '==', b).get(),
+    db.collection('private_media_grants').where('ownerUid', '==', b).where('recipientUid', '==', a).get(),
+    db.collection('private_media_requests').where('requesterUid', '==', a).where('recipientUid', '==', b).get(),
+    db.collection('private_media_requests').where('requesterUid', '==', b).where('recipientUid', '==', a).get(),
+  ]);
+
+  const writer = db.bulkWriter();
+  for (const doc of [...grantsAB.docs, ...grantsBA.docs]) {
+    writer.set(doc.ref, {
+      active: false,
+      revokedAt: FieldValue.serverTimestamp(),
+      revokedReason: reason,
+    }, {merge: true});
+  }
+  for (const doc of [...requestsAB.docs, ...requestsBA.docs]) {
+    writer.set(doc.ref, {
+      status: 'cancelled',
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancelledReason: reason,
+    }, {merge: true});
+  }
+  await writer.close();
+}
+
 export const blockUser = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
@@ -104,6 +131,9 @@ export const blockUser = onCall(
       }
     });
 
+    // Private-media access is revoked independently of cleanup timing. The
+    // access function also re-checks blocks, so a stale grant cannot bypass a block.
+    await revokePrivateAccessBetween(blockerUid, blockedUid, 'blocked');
     return {blocked: true};
   },
 );
@@ -121,5 +151,52 @@ export const unblockUser = onCall(
     // Intentionally do not restore likes, matches, conversations, or grants.
     // Unblocking only removes the block; both people must form a new connection.
     return {blocked: false};
+  },
+);
+
+export const endConnection = onCall(
+  {enforceAppCheck: true, maxInstances: 20},
+  async (request) => {
+    const db = getFirestore();
+    const uid = requireUid(request.auth);
+    const otherUid = requireTargetUid(request.data?.otherUid, uid);
+    await Promise.all([assertActive(uid), enforceRateLimit(uid, 'unmatch')]);
+
+    const pair = pairId(uid, otherUid);
+    const matchRef = db.collection('matches').doc(pair);
+    const conversationRef = db.collection('conversations').doc(pair);
+    const outgoingLikeRef = db.collection('likes').doc(`${uid}_${otherUid}`);
+    const incomingLikeRef = db.collection('likes').doc(`${otherUid}_${uid}`);
+
+    await db.runTransaction(async (tx) => {
+      const [match, conversation] = await Promise.all([
+        tx.get(matchRef),
+        tx.get(conversationRef),
+      ]);
+
+      if (!match.exists || (match.get('userAUid') !== uid && match.get('userBUid') !== uid)) {
+        throw new HttpsError('not-found', 'Connection not found.');
+      }
+
+      tx.delete(outgoingLikeRef);
+      tx.delete(incomingLikeRef);
+      tx.set(matchRef, {
+        active: false,
+        endedAt: FieldValue.serverTimestamp(),
+        endedByUid: uid,
+        endedReason: 'unmatched',
+      }, {merge: true});
+
+      if (conversation.exists) {
+        tx.set(conversationRef, {
+          active: false,
+          lastMessageAt: FieldValue.serverTimestamp(),
+          endedReason: 'unmatched',
+        }, {merge: true});
+      }
+    });
+
+    await revokePrivateAccessBetween(uid, otherUid, 'unmatched');
+    return {ended: true};
   },
 );
