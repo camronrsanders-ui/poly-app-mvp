@@ -12,8 +12,6 @@ void main() {
         region: 'MA',
         bio: 'Community-minded and open to connection.',
         headline: 'Building my circle intentionally',
-        photoUrls: ['photo-1'],
-        avatarUrl: 'avatar-1',
         genderIdentity: 'Nonbinary',
         pronouns: 'they/them',
         orientation: 'Queer',
@@ -43,6 +41,8 @@ void main() {
       expect(restored.customIdentityTags, profile.customIdentityTags);
       expect(restored.profileVisibility, 'public');
       expect(restored.mapVisibility, 'matches_only');
+      expect(profile.toMap().containsKey('photoUrls'), isFalse);
+      expect(profile.toMap().containsKey('avatarUrl'), isFalse);
     });
 
     test('uses privacy-conscious defaults for missing fields', () {
@@ -55,7 +55,6 @@ void main() {
       expect(profile.openToConnections, isTrue);
       expect(profile.profileVisibility, 'public');
       expect(profile.mapVisibility, 'matches_only');
-      expect(profile.photoUrls, isEmpty);
       expect(profile.customIdentityTags, isEmpty);
     });
   });
