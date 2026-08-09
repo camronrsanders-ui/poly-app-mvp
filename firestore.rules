@@ -18,13 +18,6 @@ service cloud.firestore {
         || exists(/databases/$(database)/documents/blocks/$(b + '_' + a));
     }
 
-    function activeMatchBetween(a, b) {
-      return (exists(/databases/$(database)/documents/matches/$(a + '_' + b))
-        && get(/databases/$(database)/documents/matches/$(a + '_' + b)).data.active == true)
-        || (exists(/databases/$(database)/documents/matches/$(b + '_' + a))
-        && get(/databases/$(database)/documents/matches/$(b + '_' + a)).data.active == true);
-    }
-
     function isConversationParticipant(conversationId) {
       return signedIn() && conversationExists(conversationId)
         && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
@@ -84,7 +77,11 @@ service cloud.firestore {
     }
 
     function validRelationshipCard(data, ownerUid) {
-      return data.ownerUid == ownerUid
+      return data.keys().hasOnly([
+          'ownerUid', 'label', 'connectionType', 'displayNameOptional', 'status',
+          'note', 'visibility', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == ownerUid
         && data.label is string && data.label.size() >= 1 && data.label.size() <= 100
         && data.connectionType is string && data.connectionType.size() >= 1 && data.connectionType.size() <= 100
         && data.displayNameOptional is string && data.displayNameOptional.size() <= 100
@@ -113,16 +110,15 @@ service cloud.firestore {
       allow read, delete: if isSelf(uid);
     }
 
+    // Full Circle cards can contain optional names and free-text notes. Only the
+    // owner may read them directly; other members use a trusted redacted view.
     match /relationship_cards/{cardId} {
       allow create: if signedIn() && validRelationshipCard(request.resource.data, request.auth.uid);
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
         && validRelationshipCard(request.resource.data, request.auth.uid)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || (userIsActive(resource.data.ownerUid)
-        && !blockedEitherWay(request.auth.uid, resource.data.ownerUid)
-        && (resource.data.visibility == 'public' || resource.data.visibility == 'unnamed_public'
-        || (resource.data.visibility == 'matches_only' && activeMatchBetween(request.auth.uid, resource.data.ownerUid)))));
     }
 
     match /likes/{likeId} {
