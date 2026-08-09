@@ -21,6 +21,18 @@ class ConnectionService {
     return result.data['matched'] == true;
   }
 
+  Future<void> passUser(String toUid) async {
+    final fromUid = _auth.currentUser?.uid;
+    if (fromUid == null) throw StateError('No signed-in user.');
+    if (fromUid == toUid) throw ArgumentError('You cannot pass yourself.');
+
+    final callable = _functions.httpsCallable('passProfile');
+    final result = await callable.call<Map<String, dynamic>>({'toUid': toUid});
+    if (result.data['passed'] != true) {
+      throw StateError('Profile was not passed.');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> loadConnections() async {
     if (_auth.currentUser == null) return const [];
     final callable = _functions.httpsCallable('listMyConnections');
