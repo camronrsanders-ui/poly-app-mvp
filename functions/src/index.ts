@@ -225,7 +225,9 @@ export const deleteMyAccount = onCall(
       'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
       'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
       'private_media_grant', 'private_media_revoke', 'private_media_access',
-      'private_media_report', 'private_media_upload', 'profile_photo_upload',
+      'private_media_report', 'private_media_upload',
+      'profile_photo_upload', 'profile_photo_confirm', 'profile_photo_review',
+      'profile_photo_access', 'profile_photo_delete', 'profile_photo_list',
     ]) {
       writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
     }
