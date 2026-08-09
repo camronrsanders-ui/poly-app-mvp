@@ -250,3 +250,4 @@ export {
   getProfilePhotoAccess,
   deleteProfilePhoto,
 } from './profile_media';
+export {listMyProfilePhotos} from './profile_media_listing';
