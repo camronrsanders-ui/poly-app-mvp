@@ -11,34 +11,46 @@ function boundedAge(value: unknown, fallback: number): number {
   return Math.min(120, Math.max(18, Math.trunc(parsed)));
 }
 
-export function candidateMatchesPreferences(
-  requester: ProfileData,
-  candidate: ProfileData,
-): boolean {
-  const candidateAge = Number(candidate.age);
-  if (!Number.isInteger(candidateAge) || candidateAge < 18 || candidateAge > 120) {
-    return false;
-  }
+function validAdultAge(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 18 || parsed > 120) return null;
+  return parsed;
+}
 
-  const minAge = boundedAge(requester.ageMin, 18);
-  const maxAge = Math.max(minAge, boundedAge(requester.ageMax, 120));
-  if (candidateAge < minAge || candidateAge > maxAge) return false;
+function viewerAcceptsProfile(viewer: ProfileData, profile: ProfileData): boolean {
+  const profileAge = validAdultAge(profile.age);
+  if (profileAge == null) return false;
 
-  const preferredStructures = stringList(requester.preferredStructures);
+  const minAge = boundedAge(viewer.ageMin, 18);
+  const maxAge = Math.max(minAge, boundedAge(viewer.ageMax, 120));
+  if (profileAge < minAge || profileAge > maxAge) return false;
+
+  const preferredStructures = stringList(viewer.preferredStructures);
   if (preferredStructures.length > 0) {
-    const structure = typeof candidate.relationshipStructure === 'string'
-      ? candidate.relationshipStructure
+    const structure = typeof profile.relationshipStructure === 'string'
+      ? profile.relationshipStructure
       : '';
     if (!preferredStructures.includes(structure)) return false;
   }
 
-  const preferredIntentions = stringList(requester.preferredIntentions);
+  const preferredIntentions = stringList(viewer.preferredIntentions);
   if (preferredIntentions.length > 0) {
-    const candidateIntentions = new Set(stringList(candidate.intentionTags));
-    if (!preferredIntentions.some((intention) => candidateIntentions.has(intention))) {
+    const profileIntentions = new Set(stringList(profile.intentionTags));
+    if (!preferredIntentions.some((intention) => profileIntentions.has(intention))) {
       return false;
     }
   }
 
   return true;
+}
+
+export function candidateMatchesPreferences(
+  requester: ProfileData,
+  candidate: ProfileData,
+): boolean {
+  // Discovery is reciprocal: do not show a candidate unless each person's
+  // saved age/structure/intention preferences permit the other. This keeps
+  // preference data private while respecting both users' boundaries.
+  return viewerAcceptsProfile(requester, candidate)
+    && viewerAcceptsProfile(candidate, requester);
 }
