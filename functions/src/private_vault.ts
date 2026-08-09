@@ -73,6 +73,23 @@ async function assertEligiblePair(ownerUid: string, recipientUid: string) {
   }
 }
 
+async function assertAcceptedShareRequest(ownerUid: string, recipientUid: string) {
+  // The viewer requests access from the owner. The owner may share only after
+  // that viewer has explicitly asked and the owner accepted the request.
+  const requestId = `${recipientUid}_${ownerUid}`;
+  const request = await db.collection('private_media_requests').doc(requestId).get();
+  if (!request.exists
+      || request.get('requesterUid') !== recipientUid
+      || request.get('recipientUid') !== ownerUid
+      || request.get('status') !== 'accepted') {
+    throw new HttpsError(
+      'failed-precondition',
+      'An accepted private-media request is required before sharing.',
+    );
+  }
+  return request.ref;
+}
+
 function requireOwnerStoragePath(ownerUid: string, storagePath: string) {
   const prefix = `private_media/${ownerUid}/`;
   if (!storagePath.startsWith(prefix) || storagePath.includes('..')) {
@@ -143,6 +160,7 @@ export const respondToPrivateMediaRequest = onCall(
 
     const requesterUid = String(snap.get('requesterUid') ?? '');
     if (!requesterUid) throw new HttpsError('failed-precondition', 'Invalid request state.');
+    await assertEligiblePair(requesterUid, recipientUid);
 
     await ref.set({
       status: decision,
@@ -191,6 +209,7 @@ export const grantPrivateMedia = onCall(
       assertEligiblePair(ownerUid, recipientUid),
       consumeRateLimit(ownerUid, 'private_media_grant', 60, 60 * 60_000),
     ]);
+    const acceptedRequestRef = await assertAcceptedShareRequest(ownerUid, recipientUid);
 
     const mediaRef = db.collection('private_media').doc(mediaId);
     const media = await mediaRef.get();
@@ -202,14 +221,20 @@ export const grantPrivateMedia = onCall(
     requireOwnerStoragePath(ownerUid, storagePath);
 
     const grantId = `${mediaId}_${recipientUid}`;
-    await db.collection('private_media_grants').doc(grantId).set({
-      mediaId,
-      ownerUid,
-      recipientUid,
-      active: true,
-      createdAt: FieldValue.serverTimestamp(),
-      revokedAt: null,
-    }, {merge: true});
+    await Promise.all([
+      db.collection('private_media_grants').doc(grantId).set({
+        mediaId,
+        ownerUid,
+        recipientUid,
+        active: true,
+        createdAt: FieldValue.serverTimestamp(),
+        revokedAt: null,
+      }, {merge: true}),
+      acceptedRequestRef.set({
+        lastSharedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true}),
+    ]);
 
     return {grantId};
   },
@@ -301,8 +326,8 @@ export const reportPrivateMedia = onCall(
       throw new HttpsError('invalid-argument', 'Invalid private-media report target.');
     }
 
-    // Only someone who was explicitly granted this item may report it through
-    // this endpoint. Moderators can access preserved evidence separately.
+    // Reporting remains available after a grant is revoked so a recipient can
+    // report media they previously received without needing current access.
     const grant = await db.collection('private_media_grants')
       .doc(`${mediaId}_${reporterUid}`)
       .get();
