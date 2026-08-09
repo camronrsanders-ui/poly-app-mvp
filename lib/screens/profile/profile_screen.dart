@@ -6,6 +6,7 @@ import '../../config/discovery_options.dart';
 import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
+import 'profile_photos_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -249,6 +250,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Text('Your profile', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 6),
         const Text('Share enough to be understood without giving up more privacy than you want.'),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ProfilePhotosScreen()),
+          ),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('Manage profile photos'),
+        ),
         const SizedBox(height: 22),
         _field(_name, 'Display name', maxLength: 80),
         _field(_age, 'Age', maxLength: 3, keyboardType: TextInputType.number),
