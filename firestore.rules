@@ -128,6 +128,13 @@ service cloud.firestore {
       allow read, delete: if signedIn() && resource.data.fromUid == request.auth.uid;
     }
 
+    // Pass state is intentionally opaque to clients, including its owner. This
+    // prevents another member from learning about it and keeps discovery-state
+    // changes behind the App-Check-protected callable boundary.
+    match /profile_passes/{passId} {
+      allow read, write: if false;
+    }
+
     match /matches/{matchId} {
       allow read: if signedIn() && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
         && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid);
