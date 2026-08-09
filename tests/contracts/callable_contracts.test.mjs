@@ -14,6 +14,7 @@ const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
 const vaultUpload = read('functions/src/private_vault_upload.ts');
 const vaultConsent = read('functions/src/private_vault_consent.ts');
+const connectionEligibility = read('functions/src/connection_eligibility.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
 const profileView = read('functions/src/profile_view.ts');
@@ -61,6 +62,18 @@ for (const contract of callableContracts) {
 test('Account deletion requires explicit DELETE confirmation from the trusted client service', () => {
   assert.match(accountService, /'confirmation':\s*'DELETE'/);
   assert.match(index, /confirmation\s*\?\?\s*''\)\s*!==\s*'DELETE'/);
+});
+
+test('Trusted like flow respects the targets discoverability preference', () => {
+  assert.match(connectionEligibility, /profileVisibility'\)\s*!==\s*'public'/);
+  assert.match(connectionEligibility, /openToConnections'\)\s*!==\s*true/);
+  assert.match(index, /assertCanReceiveNewConnection\(db, toUid\)/);
+
+  const likeSection = index.match(/export const likeProfile[\s\S]*?export const createConversation/)?.[0] ?? '';
+  const rateIndex = likeSection.indexOf("consumeRateLimit(uid, 'like'");
+  const targetLookupIndex = likeSection.indexOf('assertActive(toUid)');
+  assert.ok(rateIndex >= 0 && targetLookupIndex >= 0 && rateIndex < targetLookupIndex,
+    'Like attempts must be rate-limited before target-specific account lookups');
 });
 
 test('Private Vault remains disabled in Flutter until release gates pass', () => {
@@ -162,7 +175,9 @@ test('Firestore index config includes the public-and-open discovery query index'
   assert.ok(discoveryIndex, 'Missing composite index for profileVisibility + openToConnections');
 });
 
-test('Profile sanitizer imported before initializeApp stays Firebase-free', () => {
+test('Helpers imported before initializeApp stay Firebase-initialization safe', () => {
   assert.match(index, /from '.\/profile_view_fields'/);
+  assert.match(index, /from '.\/connection_eligibility'/);
   assert.doesNotMatch(profileViewFields, /getFirestore|getStorage|getAuth|initializeApp/);
+  assert.doesNotMatch(connectionEligibility, /getFirestore|getStorage|getAuth|initializeApp/);
 });
