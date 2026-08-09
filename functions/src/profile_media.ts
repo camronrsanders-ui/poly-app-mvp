@@ -10,6 +10,7 @@ const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const quarantinePrefix = 'profile_quarantine';
 const maxUploadBytes = 10 * 1024 * 1024;
 const maxInputPixels = 40_000_000;
+const terminalStatuses = new Set(['processed_pending_review', 'active', 'rejected', 'removed']);
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -96,7 +97,12 @@ export const confirmProfilePhotoUpload = onCall(
     if (!photo.exists || photo.get('ownerUid') !== uid) {
       throw new HttpsError('not-found', 'Profile photo upload not found.');
     }
-    if (photo.get('status') !== 'awaiting_upload') {
+
+    const currentStatus = String(photo.get('status') ?? '');
+    if (terminalStatuses.has(currentStatus) || currentStatus === 'pending_processing') {
+      return {photoId, status: currentStatus};
+    }
+    if (currentStatus !== 'awaiting_upload') {
       throw new HttpsError('failed-precondition', 'Upload is not awaiting confirmation.');
     }
 
@@ -109,7 +115,14 @@ export const confirmProfilePhotoUpload = onCall(
 
     const file = getStorage().bucket().file(storagePath);
     const [exists] = await file.exists();
-    if (!exists) throw new HttpsError('failed-precondition', 'Uploaded file was not found.');
+    if (!exists) {
+      const refreshed = await ref.get();
+      const refreshedStatus = String(refreshed.get('status') ?? '');
+      if (terminalStatuses.has(refreshedStatus) || refreshedStatus === 'pending_processing') {
+        return {photoId, status: refreshedStatus};
+      }
+      throw new HttpsError('failed-precondition', 'Uploaded file was not found.');
+    }
 
     const [metadata] = await file.getMetadata();
     const size = Number(metadata.size ?? 0);
@@ -151,6 +164,21 @@ export const processProfilePhoto = onObjectFinalized(
       return;
     }
 
+    const currentStatus = String(photo.get('status') ?? '');
+    if (terminalStatuses.has(currentStatus)) {
+      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      return;
+    }
+    if (currentStatus !== 'awaiting_upload' && currentStatus !== 'pending_processing') {
+      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await ref.set({
+        status: 'rejected',
+        rejectionReason: 'invalid_processing_state',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return;
+    }
+
     const contentType = String(object.contentType ?? '').toLowerCase();
     const size = Number(object.size ?? 0);
     if (!allowedContentTypes.has(contentType) || size <= 0 || size > maxUploadBytes) {
@@ -163,9 +191,27 @@ export const processProfilePhoto = onObjectFinalized(
       return;
     }
 
+    const expectedContentType = String(photo.get('contentType') ?? '').toLowerCase();
+    if (contentType !== expectedContentType) {
+      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await ref.set({
+        status: 'rejected',
+        rejectionReason: 'content_type_mismatch',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return;
+    }
+
     const bucket = getStorage().bucket();
     const source = bucket.file(storagePath);
     try {
+      await ref.set({
+        status: 'pending_processing',
+        uploadedAt: photo.get('uploadedAt') ?? FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        sizeBytes: size,
+      }, {merge: true});
+
       const [input] = await source.download();
       const output = await sharp(input, {limitInputPixels: maxInputPixels})
         .rotate()
