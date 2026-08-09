@@ -74,12 +74,22 @@ export const getDiscoverCandidates = onCall(
 
     const candidateIds = profiles.docs.map((doc) => doc.id).filter((id) => id !== uid);
     const userRefs = candidateIds.map((id) => db.collection('users').doc(id));
-    const userSnaps = userRefs.length ? await db.getAll(...userRefs) : [];
-    const active = new Set(userSnaps.filter((snap) => snap.exists && snap.get('accountStatus') === 'active').map((snap) => snap.id));
+    const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
+    const [userSnaps, passSnaps] = await Promise.all([
+      userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
+      passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
+    ]);
+    const active = new Set(userSnaps
+      .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
+      .map((snap) => snap.id));
+    const passed = new Set(passSnaps
+      .filter((snap) => snap.exists)
+      .map((snap) => String(snap.get('toUid') ?? ''))
+      .filter((id) => id.length > 0));
 
     const output: FirebaseFirestore.DocumentData[] = [];
     for (const doc of profiles.docs) {
-      if (doc.id === uid || !active.has(doc.id)) continue;
+      if (doc.id === uid || !active.has(doc.id) || passed.has(doc.id)) continue;
       if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
       if (await isBlocked(uid, doc.id)) continue;
       output.push(toProfileView(doc.id, doc.data()));
@@ -107,9 +117,12 @@ export const likeProfile = onCall(
     const likeRef = db.collection('likes').doc(`${uid}_${toUid}`);
     const reverseRef = db.collection('likes').doc(`${toUid}_${uid}`);
     const matchRef = db.collection('matches').doc(pairId(uid, toUid));
+    const passRef = db.collection('profile_passes').doc(`${uid}_${toUid}`);
 
     const matched = await db.runTransaction(async (tx) => {
       const reverse = await tx.get(reverseRef);
+      // An explicit Like reverses a previous Pass by this same user.
+      tx.delete(passRef);
       tx.set(likeRef, {likeId: likeRef.id, fromUid: uid, toUid, createdAt: FieldValue.serverTimestamp()});
       if (!reverse.exists) return false;
       const [userAUid, userBUid] = [uid, toUid].sort();
@@ -164,14 +177,17 @@ export const deleteMyAccount = onCall(
     await userRef.set({accountStatus: 'paused', deletionRequestedAt: FieldValue.serverTimestamp()}, {merge: true});
 
     const [
-      cards, outgoingLikes, incomingLikes, matchesA, matchesB, conversations,
-      sentMessages, outgoingBlocks, incomingBlocks, privateMedia, grantsOwned,
-      grantsReceived, requestsFrom, requestsTo, preferencesAsRecipient,
-      preferencesAsRequester, reportsFrom, reportsAgainst, profileMedia,
+      cards, outgoingLikes, incomingLikes, outgoingPasses, incomingPasses,
+      matchesA, matchesB, conversations, sentMessages, outgoingBlocks,
+      incomingBlocks, privateMedia, grantsOwned, grantsReceived, requestsFrom,
+      requestsTo, preferencesAsRecipient, preferencesAsRequester, reportsFrom,
+      reportsAgainst, profileMedia,
     ] = await Promise.all([
       db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
       db.collection('likes').where('fromUid', '==', uid).get(),
       db.collection('likes').where('toUid', '==', uid).get(),
+      db.collection('profile_passes').where('fromUid', '==', uid).get(),
+      db.collection('profile_passes').where('toUid', '==', uid).get(),
       db.collection('matches').where('userAUid', '==', uid).get(),
       db.collection('matches').where('userBUid', '==', uid).get(),
       db.collection('conversations').where('participantUids', 'array-contains', uid).get(),
@@ -203,6 +219,8 @@ export const deleteMyAccount = onCall(
     deleteDocs(cards.docs);
     deleteDocs(outgoingLikes.docs);
     deleteDocs(incomingLikes.docs);
+    deleteDocs(outgoingPasses.docs);
+    deleteDocs(incomingPasses.docs);
     deleteDocs(sentMessages.docs);
     deleteDocs(outgoingBlocks.docs);
     deleteDocs(incomingBlocks.docs);
@@ -226,7 +244,7 @@ export const deleteMyAccount = onCall(
 
     writer.delete(db.collection('profiles').doc(uid));
     for (const action of [
-      'discover', 'like', 'conversation', 'connections_list', 'circle_view', 'delete_account',
+      'discover', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
       'block', 'unblock', 'unmatch', 'report',
       'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
       'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
@@ -254,6 +272,7 @@ export const deleteMyAccount = onCall(
 );
 
 export {blockUser, unblockUser, endConnection, submitReport} from './safety';
+export {passProfile} from './discovery_actions';
 export {getCircleForProfile} from './circle_view';
 export {
   requestPrivateMedia,
