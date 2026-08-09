@@ -150,8 +150,8 @@ export const deleteMyAccount = onCall(
     const [
       cards, outgoingLikes, incomingLikes, matchesA, matchesB, conversations,
       sentMessages, outgoingBlocks, incomingBlocks, privateMedia, grantsOwned,
-      grantsReceived, requestsFrom, requestsTo, reportsFrom, reportsAgainst,
-      profileMedia,
+      grantsReceived, requestsFrom, requestsTo, preferencesAsRecipient,
+      preferencesAsRequester, reportsFrom, reportsAgainst, profileMedia,
     ] = await Promise.all([
       db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
       db.collection('likes').where('fromUid', '==', uid).get(),
@@ -167,6 +167,8 @@ export const deleteMyAccount = onCall(
       db.collection('private_media_grants').where('recipientUid', '==', uid).get(),
       db.collection('private_media_requests').where('requesterUid', '==', uid).get(),
       db.collection('private_media_requests').where('recipientUid', '==', uid).get(),
+      db.collection('private_media_request_preferences').where('recipientUid', '==', uid).get(),
+      db.collection('private_media_request_preferences').where('requesterUid', '==', uid).get(),
       db.collection('reports').where('reporterUid', '==', uid).get(),
       db.collection('reports').where('reportedUid', '==', uid).get(),
       db.collection('profile_media').where('ownerUid', '==', uid).get(),
@@ -193,6 +195,8 @@ export const deleteMyAccount = onCall(
     deleteDocs(grantsReceived.docs);
     deleteDocs(requestsFrom.docs);
     deleteDocs(requestsTo.docs);
+    deleteDocs(preferencesAsRecipient.docs);
+    deleteDocs(preferencesAsRequester.docs);
     deleteDocs(profileMedia.docs);
 
     for (const doc of [...matchesA.docs, ...matchesB.docs]) {
@@ -207,8 +211,9 @@ export const deleteMyAccount = onCall(
     writer.delete(db.collection('profiles').doc(uid));
     for (const action of [
       'discover', 'like', 'conversation', 'delete_account', 'block', 'unblock',
-      'unmatch', 'report', 'private_media_grant', 'private_media_revoke',
-      'private_media_access', 'profile_photo_upload',
+      'unmatch', 'report', 'private_media_request', 'private_media_request_response',
+      'private_media_grant', 'private_media_revoke', 'private_media_access',
+      'private_media_report', 'profile_photo_upload',
     ]) {
       writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
     }
@@ -228,7 +233,15 @@ export const deleteMyAccount = onCall(
 );
 
 export {blockUser, unblockUser, endConnection, submitReport} from './safety';
-export {grantPrivateMedia, revokePrivateMedia, getPrivateMediaAccess} from './private_vault';
+export {
+  requestPrivateMedia,
+  respondToPrivateMediaRequest,
+  clearPrivateMediaRequestPreference,
+  grantPrivateMedia,
+  revokePrivateMedia,
+  getPrivateMediaAccess,
+  reportPrivateMedia,
+} from './private_vault';
 export {
   beginProfilePhotoUpload,
   confirmProfilePhotoUpload,
