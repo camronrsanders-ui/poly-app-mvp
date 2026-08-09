@@ -1,6 +1,7 @@
 name: Polycircle CI
 
 on:
+  workflow_dispatch:
   push:
     branches: ["restart-foundation", "main"]
   pull_request:
