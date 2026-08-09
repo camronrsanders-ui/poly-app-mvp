@@ -28,6 +28,24 @@ async function assertActive(uid: string) {
   }
 }
 
+async function consumeRateLimit(uid: string, action: string, max: number, windowMs: number) {
+  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const start = Number(snap.get('windowStartMs') ?? 0);
+    const count = Number(snap.get('count') ?? 0);
+    if (!snap.exists || now - start >= windowMs) {
+      tx.set(ref, {uid, action, windowStartMs: now, count: 1, updatedAt: FieldValue.serverTimestamp()});
+      return;
+    }
+    if (count >= max) {
+      throw new HttpsError('resource-exhausted', 'Too many private-media requests. Try again later.');
+    }
+    tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  });
+}
+
 async function assertEligiblePair(ownerUid: string, recipientUid: string) {
   if (ownerUid === recipientUid) {
     throw new HttpsError('invalid-argument', 'You cannot share private media with yourself.');
@@ -48,6 +66,13 @@ async function assertEligiblePair(ownerUid: string, recipientUid: string) {
   }
 }
 
+function requireOwnerStoragePath(ownerUid: string, storagePath: string) {
+  const prefix = `private_media/${ownerUid}/`;
+  if (!storagePath.startsWith(prefix) || storagePath.includes('..')) {
+    throw new HttpsError('failed-precondition', 'Invalid private media storage path.');
+  }
+}
+
 export const grantPrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
@@ -55,13 +80,19 @@ export const grantPrivateMedia = onCall(
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
     const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
 
-    await assertEligiblePair(ownerUid, recipientUid);
+    await Promise.all([
+      assertEligiblePair(ownerUid, recipientUid),
+      consumeRateLimit(ownerUid, 'private_media_grant', 60, 60 * 60_000),
+    ]);
 
     const mediaRef = db.collection('private_media').doc(mediaId);
     const media = await mediaRef.get();
     if (!media.exists || media.get('ownerUid') !== ownerUid || media.get('status') !== 'active') {
       throw new HttpsError('not-found', 'Private media is unavailable.');
     }
+
+    const storagePath = String(media.get('storagePath') ?? '');
+    requireOwnerStoragePath(ownerUid, storagePath);
 
     const grantId = `${mediaId}_${recipientUid}`;
     await db.collection('private_media_grants').doc(grantId).set({
@@ -83,9 +114,10 @@ export const revokePrivateMedia = onCall(
     const ownerUid = requireUid(request.auth);
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
     const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
+    await consumeRateLimit(ownerUid, 'private_media_revoke', 120, 60 * 60_000);
+
     const grantRef = db.collection('private_media_grants').doc(`${mediaId}_${recipientUid}`);
     const grant = await grantRef.get();
-
     if (!grant.exists || grant.get('ownerUid') !== ownerUid) {
       throw new HttpsError('not-found', 'Private media grant not found.');
     }
@@ -104,6 +136,7 @@ export const getPrivateMediaAccess = onCall(
   async (request) => {
     const recipientUid = requireUid(request.auth);
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
+    await consumeRateLimit(recipientUid, 'private_media_access', 90, 60 * 60_000);
 
     const mediaRef = db.collection('private_media').doc(mediaId);
     const media = await mediaRef.get();
@@ -116,6 +149,7 @@ export const getPrivateMediaAccess = onCall(
     if (!ownerUid || !storagePath) {
       throw new HttpsError('failed-precondition', 'Private media is not ready.');
     }
+    requireOwnerStoragePath(ownerUid, storagePath);
 
     await assertEligiblePair(ownerUid, recipientUid);
 
