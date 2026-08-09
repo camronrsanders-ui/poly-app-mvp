@@ -69,10 +69,11 @@ class MessagingService {
       'messageType': 'text',
       'readBy': [senderUid],
     });
-    batch.set(conversationRef, {
+    // Conversation lifecycle state is backend-controlled. The client may only
+    // advance lastMessageAt while the conversation is already active.
+    batch.update(conversationRef, {
       'lastMessageAt': FieldValue.serverTimestamp(),
-      'active': true,
-    }, SetOptions(merge: true));
+    });
     await batch.commit();
   }
 
