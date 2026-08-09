@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "profileVisibility", "order": "ASCENDING"},
+        {"fieldPath": "openToConnections", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "matches",
       "queryScope": "COLLECTION",
       "fields": [
