@@ -14,6 +14,7 @@ const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
 const vaultUpload = read('functions/src/private_vault_upload.ts');
 const vaultConsent = read('functions/src/private_vault_consent.ts');
+const vaultListing = read('functions/src/private_vault_listing.ts');
 const connectionEligibility = read('functions/src/connection_eligibility.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
@@ -76,6 +77,14 @@ test('Trusted like flow respects the targets discoverability preference', () => 
     'Like attempts must be rate-limited before target-specific account lookups');
 });
 
+test('Conversation creation rate-limits before target-specific lookups', () => {
+  const section = index.match(/export const createConversation[\s\S]*?export const deleteMyAccount/)?.[0] ?? '';
+  const rateIndex = section.indexOf("consumeRateLimit(uid, 'conversation'");
+  const targetLookupIndex = section.indexOf('assertActive(otherUid)');
+  assert.ok(rateIndex >= 0 && targetLookupIndex >= 0 && rateIndex < targetLookupIndex,
+    'Conversation attempts must be rate-limited before target-specific account lookups');
+});
+
 test('Private Vault remains disabled in Flutter until release gates pass', () => {
   const flags = read('lib/config/feature_flags.dart');
   assert.match(flags, /privateVaultEnabled\s*=\s*false/);
@@ -108,6 +117,19 @@ test('Private Vault recipient can withdraw consent and revoke active grants', ()
   assert.match(vaultConsent, /revocationReason:\s*'recipient_cancelled_request'/);
   assert.match(vaultConsent, /active:\s*false/);
   assert.match(index, /'private_media_request_cancel'/);
+});
+
+test('Private Vault listings expose safe metadata only', () => {
+  for (const name of [
+    'listMyPrivateMediaRequests',
+    'listMyPrivateMediaShares',
+    'listMyPrivateMediaInbox',
+  ]) {
+    assert.match(vaultListing, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault_listing.ts`);
+    assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault_listing'`), `${name} is not re-exported from index.ts`);
+  }
+  assert.doesNotMatch(vaultListing, /storagePath|quarantinePath|uploadUrl|signedUrl/);
+  assert.match(vaultListing, /pairIsEligible/);
 });
 
 test('Private Vault upload pipeline stays trusted and consent-gated', () => {
