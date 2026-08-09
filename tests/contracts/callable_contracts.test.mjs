@@ -12,6 +12,7 @@ function read(relativePath) {
 const index = read('functions/src/index.ts');
 const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
+const vaultUpload = read('functions/src/private_vault_upload.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
 const profileView = read('functions/src/profile_view.ts');
@@ -66,7 +67,7 @@ test('Private Vault remains disabled in Flutter until release gates pass', () =>
   assert.match(flags, /privateVaultEnabled\s*=\s*false/);
 });
 
-test('Private Vault trusted functions are exported by backend', () => {
+test('Private Vault trusted sharing functions are exported by backend', () => {
   for (const name of [
     'grantPrivateMedia',
     'revokePrivateMedia',
@@ -78,6 +79,23 @@ test('Private Vault trusted functions are exported by backend', () => {
     assert.match(vault, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault.ts`);
     assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault'`), `${name} is not re-exported from index.ts`);
   }
+});
+
+test('Private Vault upload pipeline stays trusted and consent-gated', () => {
+  for (const name of [
+    'beginPrivateMediaUpload',
+    'confirmPrivateMediaUpload',
+    'processPrivateMedia',
+    'reviewPrivateMedia',
+    'listMyPrivateMedia',
+  ]) {
+    assert.match(vaultUpload, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault_upload.ts`);
+    assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault_upload'`), `${name} is not re-exported from index.ts`);
+  }
+  assert.match(vaultUpload, /allSubjectsAdults\s*!==\s*true/);
+  assert.match(vaultUpload, /sharingRightsConfirmed\s*!==\s*true/);
+  assert.match(vaultUpload, /processed_pending_review/);
+  assert.match(vaultUpload, /moderator.*admin|admin.*moderator/s);
 });
 
 test('Profile media moderation stays backend-only', () => {
