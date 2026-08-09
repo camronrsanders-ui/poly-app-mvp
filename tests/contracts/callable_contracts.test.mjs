@@ -13,6 +13,7 @@ const index = read('functions/src/index.ts');
 const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
 const vaultUpload = read('functions/src/private_vault_upload.ts');
+const vaultConsent = read('functions/src/private_vault_consent.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
 const profileView = read('functions/src/profile_view.ts');
@@ -79,6 +80,21 @@ test('Private Vault trusted sharing functions are exported by backend', () => {
     assert.match(vault, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault.ts`);
     assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault'`), `${name} is not re-exported from index.ts`);
   }
+});
+
+test('Private Vault sharing requires an explicit accepted request', () => {
+  assert.match(vault, /async function assertAcceptedShareRequest\b/);
+  assert.match(vault, /grantPrivateMedia[\s\S]*assertAcceptedShareRequest\(ownerUid, recipientUid\)/);
+  assert.match(vault, /request\.get\('status'\)\s*!==\s*'accepted'/);
+});
+
+test('Private Vault recipient can withdraw consent and revoke active grants', () => {
+  assert.match(vaultConsent, /export const cancelPrivateMediaRequest\b/);
+  assert.match(index, /export \{cancelPrivateMediaRequest\} from '.\/private_vault_consent'/);
+  assert.match(vaultConsent, /status:\s*'cancelled'/);
+  assert.match(vaultConsent, /revocationReason:\s*'recipient_cancelled_request'/);
+  assert.match(vaultConsent, /active:\s*false/);
+  assert.match(index, /'private_media_request_cancel'/);
 });
 
 test('Private Vault upload pipeline stays trusted and consent-gated', () => {
