@@ -94,8 +94,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'region': _region.text.trim(),
         'bio': _bio.text.trim(),
         'headline': '',
-        'photoUrls': <String>[],
-        'avatarUrl': '',
         'genderIdentity': _gender.text.trim(),
         'pronouns': _pronouns.text.trim(),
         'orientation': _orientation.text.trim(),
