@@ -7,8 +7,6 @@ class Profile {
     required this.region,
     required this.bio,
     required this.headline,
-    required this.photoUrls,
-    required this.avatarUrl,
     required this.genderIdentity,
     required this.pronouns,
     required this.orientation,
@@ -36,8 +34,6 @@ class Profile {
   final String region;
   final String bio;
   final String headline;
-  final List<String> photoUrls;
-  final String avatarUrl;
   final String genderIdentity;
   final String pronouns;
   final String orientation;
@@ -68,8 +64,6 @@ class Profile {
       region: data['region'] as String? ?? '',
       bio: data['bio'] as String? ?? '',
       headline: data['headline'] as String? ?? '',
-      photoUrls: strings('photoUrls'),
-      avatarUrl: data['avatarUrl'] as String? ?? '',
       genderIdentity: data['genderIdentity'] as String? ?? '',
       pronouns: data['pronouns'] as String? ?? '',
       orientation: data['orientation'] as String? ?? '',
@@ -99,8 +93,6 @@ class Profile {
         'region': region,
         'bio': bio,
         'headline': headline,
-        'photoUrls': photoUrls,
-        'avatarUrl': avatarUrl,
         'genderIdentity': genderIdentity,
         'pronouns': pronouns,
         'orientation': orientation,
