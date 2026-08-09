@@ -23,7 +23,7 @@ const callableContracts = [
   {name: 'createConversation', client: messagingService, backend: index},
   {name: 'blockUser', client: safetyService, backend: `${index}\n${safety}`},
   {name: 'unblockUser', client: safetyService, backend: `${index}\n${safety}`},
-  {name: 'endConnection', client: safetyService, backend: `${index}\n${safety}`},
+  {name: 'endConnection', client: connectionService, backend: `${index}\n${safety}`},
   {name: 'submitReport', client: safetyService, backend: `${index}\n${safety}`},
 ];
 
