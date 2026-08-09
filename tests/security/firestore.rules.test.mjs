@@ -180,7 +180,7 @@ test('matches-only profile is unreadable without a match', async () => {
   await assertFails(getDoc(doc(db, 'profiles', 'alice')));
 });
 
-test('matches-only profile is readable by an active match', async () => {
+test('active match still cannot read the other users full profile document directly', async () => {
   await adminSeed([
     ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
     ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
@@ -188,7 +188,7 @@ test('matches-only profile is readable by an active match', async () => {
     ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
   ]);
   const db = env.authenticatedContext('bob').firestore();
-  await assertSucceeds(getDoc(doc(db, 'profiles', 'alice')));
+  await assertFails(getDoc(doc(db, 'profiles', 'alice')));
 });
 
 test('client cannot forge a match', async () => {
