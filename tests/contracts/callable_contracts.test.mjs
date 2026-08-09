@@ -116,3 +116,13 @@ test('Connections screen does not bypass trusted profile views with direct Fires
   assert.doesNotMatch(connectionsScreen, /cloud_firestore/);
   assert.doesNotMatch(connectionsScreen, /collection\(['"]profiles['"]\)/);
 });
+
+test('Firestore index config includes the public-and-open discovery query index', () => {
+  const config = JSON.parse(read('firestore.indexes.json'));
+  const discoveryIndex = config.indexes.find((entry) => {
+    if (entry.collectionGroup !== 'profiles') return false;
+    const fields = new Set(entry.fields.map((field) => field.fieldPath));
+    return fields.has('profileVisibility') && fields.has('openToConnections');
+  });
+  assert.ok(discoveryIndex, 'Missing composite index for profileVisibility + openToConnections');
+});
