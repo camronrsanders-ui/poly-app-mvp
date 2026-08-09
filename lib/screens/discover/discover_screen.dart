@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/connection_service.dart';
 import '../../services/discovery_service.dart';
+import '../profile/profile_detail_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -14,6 +15,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   final _discovery = DiscoveryService();
   final _connections = ConnectionService();
   late Future<List<Map<String, dynamic>>> _future;
+  final Set<String> _actingOn = {};
 
   @override
   void initState() {
@@ -25,18 +27,53 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Future<void> _like(Map<String, dynamic> profile) async {
     final uid = profile['uid'] as String?;
-    if (uid == null) return;
+    if (uid == null || _actingOn.contains(uid)) return;
+    setState(() => _actingOn.add(uid));
     try {
       final matched = await _connections.likeUser(uid);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(matched ? 'You connected 🎉' : 'Connection request sent.'),
+        content: Text(matched ? 'You connected 🎉' : 'Interest sent.'),
       ));
-    } catch (e) {
+      _reload();
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not send connection right now.')),
+        const SnackBar(content: Text('Could not send interest right now.')),
       );
+    } finally {
+      if (mounted) setState(() => _actingOn.remove(uid));
+    }
+  }
+
+  Future<void> _pass(Map<String, dynamic> profile) async {
+    final uid = profile['uid'] as String?;
+    if (uid == null || _actingOn.contains(uid)) return;
+    setState(() => _actingOn.add(uid));
+    try {
+      await _connections.passUser(uid);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passed. This profile will stay out of Discover.')),
+      );
+      _reload();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save that Pass right now.')),
+      );
+    } finally {
+      if (mounted) setState(() => _actingOn.remove(uid));
+    }
+  }
+
+  Future<void> _viewProfile(Map<String, dynamic> profile) async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => ProfileDetailScreen(profile: profile)),
+    );
+    if (!mounted) return;
+    if (result == 'liked' || result == 'matched' || result == 'blocked') {
+      _reload();
     }
   }
 
@@ -68,10 +105,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         return RefreshIndicator(
           onRefresh: () async => _reload(),
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: profiles.length,
             itemBuilder: (context, index) {
               final p = profiles[index];
+              final uid = p['uid']?.toString() ?? '';
+              final acting = uid.isNotEmpty && _actingOn.contains(uid);
               final intentions = (p['intentionTags'] as List?)?.cast<String>() ?? const <String>[];
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -87,8 +127,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${p['displayName'] ?? 'Someone'}${p['age'] != null ? ', ${p['age']}' : ''}', style: Theme.of(context).textTheme.titleLarge),
-                            Text([p['city'], p['region']].whereType<String>().where((e) => e.isNotEmpty).join(', ')),
+                            Text(
+                              '${p['displayName'] ?? 'Someone'}${p['age'] != null ? ', ${p['age']}' : ''}',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            Text([p['city'], p['region']]
+                                .whereType<String>()
+                                .where((e) => e.isNotEmpty)
+                                .join(', ')),
                           ],
                         )),
                       ]),
@@ -101,18 +147,37 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       ],
                       if (intentions.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        Wrap(spacing: 8, runSpacing: 8, children: intentions.map((i) => Chip(label: Text(i))).toList()),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: intentions.map((i) => Chip(label: Text(i))).toList(),
+                        ),
                       ],
                       const SizedBox(height: 14),
-                      Row(children: [
-                        Expanded(child: OutlinedButton(onPressed: () {}, child: const Text('View profile'))),
-                        const SizedBox(width: 10),
-                        Expanded(child: FilledButton.icon(
-                          onPressed: () => _like(p),
-                          icon: const Icon(Icons.favorite_border),
-                          label: const Text('Connect'),
-                        )),
-                      ]),
+                      Row(
+                        children: [
+                          IconButton.outlined(
+                            tooltip: 'Pass',
+                            onPressed: acting ? null : () => _pass(p),
+                            icon: const Icon(Icons.close),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: acting ? null : () => _viewProfile(p),
+                              child: const Text('View profile'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: acting ? null : () => _like(p),
+                              icon: const Icon(Icons.favorite_border),
+                              label: const Text('Connect'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
