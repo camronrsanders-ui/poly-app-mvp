@@ -4,6 +4,7 @@ import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {assertCanReceiveNewConnection} from './connection_eligibility';
+import {candidateMatchesPreferences} from './discovery_preferences';
 import {toProfileView} from './profile_view_fields';
 
 initializeApp();
@@ -60,11 +61,15 @@ export const getDiscoverCandidates = onCall(
     const limit = Math.min(Math.max(Number(request.data?.limit ?? 20), 1), 40);
     const profileSnap = await db.collection('profiles').doc(uid).get();
     if (!profileSnap.exists) throw new HttpsError('failed-precondition', 'Complete your profile first.');
+    const requesterProfile = profileSnap.data()!;
 
+    // Scan a bounded pool because private age/structure/intention preferences
+    // are applied in trusted code rather than exposed in client-readable data.
+    const scanLimit = Math.min(Math.max(limit * 4, limit + 20), 120);
     const profiles = await db.collection('profiles')
       .where('profileVisibility', '==', 'public')
       .where('openToConnections', '==', true)
-      .limit(limit + 20)
+      .limit(scanLimit)
       .get();
 
     const candidateIds = profiles.docs.map((doc) => doc.id).filter((id) => id !== uid);
@@ -75,6 +80,7 @@ export const getDiscoverCandidates = onCall(
     const output: FirebaseFirestore.DocumentData[] = [];
     for (const doc of profiles.docs) {
       if (doc.id === uid || !active.has(doc.id)) continue;
+      if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
       if (await isBlocked(uid, doc.id)) continue;
       output.push(toProfileView(doc.id, doc.data()));
       if (output.length >= limit) break;
