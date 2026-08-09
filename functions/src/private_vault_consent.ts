@@ -1,10 +1,12 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertPrivateVaultEnabled} from './private_vault_gate';
 
 const db = getFirestore();
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  assertPrivateVaultEnabled();
   return auth.uid;
 }
 
