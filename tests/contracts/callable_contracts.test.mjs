@@ -19,11 +19,13 @@ const connectionService = read('lib/services/connection_service.dart');
 const messagingService = read('lib/services/messaging_service.dart');
 const safetyService = read('lib/services/safety_service.dart');
 const profileMediaService = read('lib/services/profile_media_service.dart');
+const accountService = read('lib/services/account_service.dart');
 
 const callableContracts = [
   {name: 'getDiscoverCandidates', client: discoveryService, backend: index},
   {name: 'likeProfile', client: connectionService, backend: index},
   {name: 'createConversation', client: messagingService, backend: index},
+  {name: 'deleteMyAccount', client: accountService, backend: index},
   {name: 'blockUser', client: safetyService, backend: `${index}\n${safety}`},
   {name: 'unblockUser', client: safetyService, backend: `${index}\n${safety}`},
   {name: 'endConnection', client: connectionService, backend: `${index}\n${safety}`},
@@ -49,6 +51,11 @@ for (const contract of callableContracts) {
     );
   });
 }
+
+test('Account deletion requires explicit DELETE confirmation from the trusted client service', () => {
+  assert.match(accountService, /'confirmation':\s*'DELETE'/);
+  assert.match(index, /confirmation\s*\?\?\s*''\)\s*!==\s*'DELETE'/);
+});
 
 test('Private Vault remains disabled in Flutter until release gates pass', () => {
   const flags = read('lib/config/feature_flags.dart');
