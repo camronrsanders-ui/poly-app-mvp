@@ -3,6 +3,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {toProfileView} from './profile_view';
 
 initializeApp();
 
@@ -61,6 +62,7 @@ export const getDiscoverCandidates = onCall(
 
     const profiles = await db.collection('profiles')
       .where('profileVisibility', '==', 'public')
+      .where('openToConnections', '==', true)
       .limit(limit + 20)
       .get();
 
@@ -73,7 +75,7 @@ export const getDiscoverCandidates = onCall(
     for (const doc of profiles.docs) {
       if (doc.id === uid || !active.has(doc.id)) continue;
       if (await isBlocked(uid, doc.id)) continue;
-      output.push(doc.data());
+      output.push(toProfileView(doc.id, doc.data()));
       if (output.length >= limit) break;
     }
     return {profiles: output};
@@ -251,3 +253,4 @@ export {
   deleteProfilePhoto,
 } from './profile_media';
 export {listMyProfilePhotos} from './profile_media_listing';
+export {listMyConnections} from './profile_view';
