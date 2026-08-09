@@ -15,6 +15,7 @@ const vault = read('functions/src/private_vault.ts');
 const profileMedia = read('functions/src/profile_media.ts');
 const profileMediaListing = read('functions/src/profile_media_listing.ts');
 const profileView = read('functions/src/profile_view.ts');
+const profileViewFields = read('functions/src/profile_view_fields.ts');
 const discoveryService = read('lib/services/discovery_service.dart');
 const connectionService = read('lib/services/connection_service.dart');
 const messagingService = read('lib/services/messaging_service.dart');
@@ -105,7 +106,7 @@ test('Discovery and connection profile views do not expose private preference fi
     'updatedAt',
   ]) {
     assert.doesNotMatch(
-      profileView,
+      profileViewFields,
       new RegExp(`['\"]${privateKey}['\"]`),
       `${privateKey} must not be included in trusted public profile views`,
     );
@@ -125,4 +126,9 @@ test('Firestore index config includes the public-and-open discovery query index'
     return fields.has('profileVisibility') && fields.has('openToConnections');
   });
   assert.ok(discoveryIndex, 'Missing composite index for profileVisibility + openToConnections');
+});
+
+test('Profile sanitizer imported before initializeApp stays Firebase-free', () => {
+  assert.match(index, /from '.\/profile_view_fields'/);
+  assert.doesNotMatch(profileViewFields, /getFirestore|getStorage|getAuth|initializeApp/);
 });
