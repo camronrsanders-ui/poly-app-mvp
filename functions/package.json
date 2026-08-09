@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
-    "firebase-functions": "^6.0.0"
+    "firebase-functions": "^6.0.0",
+    "sharp": "^0.34.3"
   },
   "devDependencies": {
+    "@types/sharp": "^0.32.0",
     "typescript": "^5.7.0"
   }
 }
