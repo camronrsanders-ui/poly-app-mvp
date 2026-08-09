@@ -24,7 +24,7 @@ class MessagingService {
   Future<String> ensureConversation(String otherUid) async {
     final currentUid = _requireUid();
     if (currentUid == otherUid) throw ArgumentError('Cannot create a conversation with yourself.');
-    final callable = _functions.httpsCallable('ensureConversation');
+    final callable = _functions.httpsCallable('createConversation');
     final result = await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
     final id = result.data['conversationId'] as String?;
     if (id == null || id.isEmpty) throw StateError('Conversation was not created.');
