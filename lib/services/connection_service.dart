@@ -21,6 +21,18 @@ class ConnectionService {
     return result.data['matched'] == true;
   }
 
+  Future<List<Map<String, dynamic>>> loadConnections() async {
+    if (_auth.currentUser == null) return const [];
+    final callable = _functions.httpsCallable('listMyConnections');
+    final result = await callable.call<Map<String, dynamic>>();
+    final raw = result.data['connections'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
   Future<void> endConnection(String otherUid) async {
     final currentUid = _auth.currentUser?.uid;
     if (currentUid == null) throw StateError('No signed-in user.');
