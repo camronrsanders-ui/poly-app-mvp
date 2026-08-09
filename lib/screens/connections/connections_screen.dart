@@ -2,11 +2,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/connection_service.dart';
 import '../../services/messaging_service.dart';
 import '../messages/chat_screen.dart';
 
-class ConnectionsScreen extends StatelessWidget {
+class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({super.key});
+
+  @override
+  State<ConnectionsScreen> createState() => _ConnectionsScreenState();
+}
+
+class _ConnectionsScreenState extends State<ConnectionsScreen> {
+  Key _reloadKey = UniqueKey();
 
   Future<List<Map<String, dynamic>>> _load() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -50,9 +58,45 @@ class ConnectionsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _confirmUnmatch(Map<String, dynamic> person) async {
+    final otherUid = person['uid'] as String?;
+    if (otherUid == null) return;
+    final name = person['displayName']?.toString() ?? 'this connection';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End connection?'),
+        content: Text(
+          'Ending your connection with $name will close the conversation and revoke any Private Vault access in both directions. This cannot be undone automatically.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('End connection')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ConnectionService().endConnection(otherUid);
+      if (!mounted) return;
+      setState(() => _reloadKey = UniqueKey());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connection with $name ended.')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not end this connection right now.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
+      key: _reloadKey,
       future: _load(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -82,14 +126,24 @@ class ConnectionsScreen extends StatelessWidget {
           itemCount: people.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, index) {
-            final p = people[index];
+            final person = people[index];
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
               leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(p['displayName']?.toString() ?? 'Connection'),
-              subtitle: Text(p['relationshipStructure']?.toString() ?? ''),
-              trailing: const Icon(Icons.chat_bubble_outline),
-              onTap: () => _openChat(context, p),
+              title: Text(person['displayName']?.toString() ?? 'Connection'),
+              subtitle: Text(person['relationshipStructure']?.toString() ?? ''),
+              onTap: () => _openChat(context, person),
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Connection options',
+                onSelected: (value) {
+                  if (value == 'chat') _openChat(context, person);
+                  if (value == 'unmatch') _confirmUnmatch(person);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'chat', child: Text('Open chat')),
+                  PopupMenuItem(value: 'unmatch', child: Text('End connection')),
+                ],
+              ),
             );
           },
         );
