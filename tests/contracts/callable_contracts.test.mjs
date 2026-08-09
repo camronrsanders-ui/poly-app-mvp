@@ -12,10 +12,12 @@ function read(relativePath) {
 const index = read('functions/src/index.ts');
 const safety = read('functions/src/safety.ts');
 const vault = read('functions/src/private_vault.ts');
+const profileMedia = read('functions/src/profile_media.ts');
 const discoveryService = read('lib/services/discovery_service.dart');
 const connectionService = read('lib/services/connection_service.dart');
 const messagingService = read('lib/services/messaging_service.dart');
 const safetyService = read('lib/services/safety_service.dart');
+const profileMediaService = read('lib/services/profile_media_service.dart');
 
 const callableContracts = [
   {name: 'getDiscoverCandidates', client: discoveryService, backend: index},
@@ -25,6 +27,10 @@ const callableContracts = [
   {name: 'unblockUser', client: safetyService, backend: `${index}\n${safety}`},
   {name: 'endConnection', client: connectionService, backend: `${index}\n${safety}`},
   {name: 'submitReport', client: safetyService, backend: `${index}\n${safety}`},
+  {name: 'beginProfilePhotoUpload', client: profileMediaService, backend: `${index}\n${profileMedia}`},
+  {name: 'confirmProfilePhotoUpload', client: profileMediaService, backend: `${index}\n${profileMedia}`},
+  {name: 'getProfilePhotoAccess', client: profileMediaService, backend: `${index}\n${profileMedia}`},
+  {name: 'deleteProfilePhoto', client: profileMediaService, backend: `${index}\n${profileMedia}`},
 ];
 
 for (const contract of callableContracts) {
@@ -59,4 +65,10 @@ test('Private Vault trusted functions are exported by backend', () => {
     assert.match(vault, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault.ts`);
     assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault'`), `${name} is not re-exported from index.ts`);
   }
+});
+
+test('Profile media moderation stays backend-only', () => {
+  assert.match(profileMedia, /export const reviewProfilePhoto\b/);
+  assert.match(index, /export \{[^}]*\breviewProfilePhoto\b[^}]*\} from '.\/profile_media'/);
+  assert.doesNotMatch(profileMediaService, /httpsCallable\(['"]reviewProfilePhoto['"]\)/);
 });
