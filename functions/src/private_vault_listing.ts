@@ -2,6 +2,8 @@ import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 const db = getFirestore();
+const maxRequestsPerDirection = 50;
+const maxGrantsPerListing = 100;
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -15,7 +17,7 @@ async function assertActive(uid: string): Promise<void> {
   }
 }
 
-async function consumeRateLimit(uid: string, action: string, max = 60): Promise<void> {
+async function consumeRateLimit(uid: string, action: string, max = 20): Promise<void> {
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
   const now = Date.now();
   await db.runTransaction(async (tx) => {
@@ -74,7 +76,7 @@ function millis(value: unknown): number | null {
 }
 
 export const listMyPrivateMediaRequests = onCall(
-  {enforceAppCheck: true, maxInstances: 15},
+  {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const uid = requireUid(request.auth);
     await Promise.all([
@@ -83,8 +85,8 @@ export const listMyPrivateMediaRequests = onCall(
     ]);
 
     const [outgoing, incoming] = await Promise.all([
-      db.collection('private_media_requests').where('requesterUid', '==', uid).limit(100).get(),
-      db.collection('private_media_requests').where('recipientUid', '==', uid).limit(100).get(),
+      db.collection('private_media_requests').where('requesterUid', '==', uid).limit(maxRequestsPerDirection).get(),
+      db.collection('private_media_requests').where('recipientUid', '==', uid).limit(maxRequestsPerDirection).get(),
     ]);
 
     const items: FirebaseFirestore.DocumentData[] = [];
@@ -111,7 +113,7 @@ export const listMyPrivateMediaRequests = onCall(
 );
 
 export const listMyPrivateMediaShares = onCall(
-  {enforceAppCheck: true, maxInstances: 15},
+  {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const ownerUid = requireUid(request.auth);
     await Promise.all([
@@ -121,7 +123,7 @@ export const listMyPrivateMediaShares = onCall(
 
     const grants = await db.collection('private_media_grants')
       .where('ownerUid', '==', ownerUid)
-      .limit(250)
+      .limit(maxGrantsPerListing)
       .get();
     const shares: FirebaseFirestore.DocumentData[] = [];
     for (const grant of grants.docs) {
@@ -142,7 +144,7 @@ export const listMyPrivateMediaShares = onCall(
 );
 
 export const listMyPrivateMediaInbox = onCall(
-  {enforceAppCheck: true, maxInstances: 15},
+  {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const recipientUid = requireUid(request.auth);
     await Promise.all([
@@ -152,7 +154,7 @@ export const listMyPrivateMediaInbox = onCall(
 
     const grants = await db.collection('private_media_grants')
       .where('recipientUid', '==', recipientUid)
-      .limit(250)
+      .limit(maxGrantsPerListing)
       .get();
     const mediaItems: FirebaseFirestore.DocumentData[] = [];
     for (const grant of grants.docs) {
