@@ -47,7 +47,16 @@ service cloud.firestore {
     }
 
     function validProfile(data, uid) {
-      return data.uid == uid
+      return data.keys().hasOnly([
+          'uid', 'displayName', 'age', 'city', 'region', 'bio', 'headline',
+          'genderIdentity', 'pronouns', 'orientation', 'customIdentityTags',
+          'relationshipStructure', 'relationshipStatus', 'partnered',
+          'openToConnections', 'intentionTags', 'interests', 'lookingForNote',
+          'ageMin', 'ageMax', 'distanceRadius', 'preferredStructures',
+          'preferredIntentions', 'profileVisibility', 'mapVisibility',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid == uid
         && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
         && data.age is int && data.age >= 18 && data.age <= 120
         && data.city is string && data.city.size() <= 100
@@ -57,14 +66,21 @@ service cloud.firestore {
         && data.genderIdentity is string && data.genderIdentity.size() <= 100
         && data.pronouns is string && data.pronouns.size() <= 100
         && data.orientation is string && data.orientation.size() <= 100
+        && data.customIdentityTags is list && data.customIdentityTags.size() <= 12
         && data.relationshipStructure is string && data.relationshipStructure.size() <= 120
         && data.relationshipStatus is string && data.relationshipStatus.size() <= 120
-        && data.lookingForNote is string && data.lookingForNote.size() <= 1200
-        && data.profileVisibility in ['public', 'hidden', 'matches_only']
-        && data.mapVisibility in ['public', 'matches_only', 'private']
-        && data.photoUrls is list && data.photoUrls.size() <= 6
+        && data.partnered is bool
+        && data.openToConnections is bool
         && data.intentionTags is list && data.intentionTags.size() <= 12
-        && data.interests is list && data.interests.size() <= 20;
+        && data.interests is list && data.interests.size() <= 20
+        && data.lookingForNote is string && data.lookingForNote.size() <= 1200
+        && data.ageMin is int && data.ageMin >= 18 && data.ageMin <= 120
+        && data.ageMax is int && data.ageMax >= data.ageMin && data.ageMax <= 120
+        && data.distanceRadius is int && data.distanceRadius >= 1 && data.distanceRadius <= 500
+        && data.preferredStructures is list && data.preferredStructures.size() <= 12
+        && data.preferredIntentions is list && data.preferredIntentions.size() <= 12
+        && data.profileVisibility in ['public', 'hidden', 'matches_only']
+        && data.mapVisibility in ['public', 'matches_only', 'private'];
     }
 
     function validRelationshipCard(data, ownerUid) {
