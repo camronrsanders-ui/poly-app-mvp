@@ -46,6 +46,28 @@ function parseQuarantinePath(storagePath: string) {
   return {uid: match[1], photoId: match[2]};
 }
 
+function requireProcessedPath(ownerUid: string, photoId: string, storagePath: string) {
+  if (storagePath !== `users/${ownerUid}/profile/${photoId}.jpg`) {
+    throw new HttpsError('failed-precondition', 'Invalid processed profile media path.');
+  }
+}
+
+async function canViewOwnerProfile(requesterUid: string, ownerUid: string): Promise<boolean> {
+  if (requesterUid === ownerUid) return true;
+  await Promise.all([assertActive(requesterUid), assertActive(ownerUid)]);
+  const pair = [requesterUid, ownerUid].sort().join('_');
+  const [blockedAB, blockedBA, profile, match] = await Promise.all([
+    db.collection('blocks').doc(`${requesterUid}_${ownerUid}`).get(),
+    db.collection('blocks').doc(`${ownerUid}_${requesterUid}`).get(),
+    db.collection('profiles').doc(ownerUid).get(),
+    db.collection('matches').doc(pair).get(),
+  ]);
+  if (blockedAB.exists || blockedBA.exists || !profile.exists) return false;
+  const visibility = String(profile.get('profileVisibility') ?? 'hidden');
+  if (visibility === 'public') return true;
+  return visibility === 'matches_only' && match.exists && match.get('active') === true;
+}
+
 export const beginProfilePhotoUpload = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
@@ -76,12 +98,7 @@ export const beginProfilePhotoUpload = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return {
-      photoId,
-      uploadUrl,
-      expiresInSeconds: 600,
-      requiredContentType: contentType,
-    };
+    return {photoId, uploadUrl, expiresInSeconds: 600, requiredContentType: contentType};
   },
 );
 
@@ -129,11 +146,7 @@ export const confirmProfilePhotoUpload = onCall(
     const actualContentType = String(metadata.contentType ?? '').toLowerCase();
     if (size <= 0 || size > maxUploadBytes || actualContentType !== expectedContentType) {
       await file.delete({ignoreNotFound: true});
-      await ref.set({
-        status: 'rejected',
-        rejectionReason: 'upload_validation',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await ref.set({status: 'rejected', rejectionReason: 'upload_validation', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       throw new HttpsError('invalid-argument', 'Uploaded image failed validation.');
     }
 
@@ -171,11 +184,7 @@ export const processProfilePhoto = onObjectFinalized(
     }
     if (currentStatus !== 'awaiting_upload' && currentStatus !== 'pending_processing') {
       await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
-      await ref.set({
-        status: 'rejected',
-        rejectionReason: 'invalid_processing_state',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await ref.set({status: 'rejected', rejectionReason: 'invalid_processing_state', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       return;
     }
 
@@ -183,22 +192,14 @@ export const processProfilePhoto = onObjectFinalized(
     const size = Number(object.size ?? 0);
     if (!allowedContentTypes.has(contentType) || size <= 0 || size > maxUploadBytes) {
       await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
-      await ref.set({
-        status: 'rejected',
-        rejectionReason: 'storage_validation',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await ref.set({status: 'rejected', rejectionReason: 'storage_validation', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       return;
     }
 
     const expectedContentType = String(photo.get('contentType') ?? '').toLowerCase();
     if (contentType !== expectedContentType) {
       await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
-      await ref.set({
-        status: 'rejected',
-        rejectionReason: 'content_type_mismatch',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await ref.set({status: 'rejected', rejectionReason: 'content_type_mismatch', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       return;
     }
 
@@ -220,17 +221,12 @@ export const processProfilePhoto = onObjectFinalized(
         .toBuffer();
 
       const destinationPath = `users/${uid}/profile/${photoId}.jpg`;
-      const destination = bucket.file(destinationPath);
-      await destination.save(output, {
+      await bucket.file(destinationPath).save(output, {
         resumable: false,
         contentType: 'image/jpeg',
         metadata: {
           cacheControl: 'private, max-age=300',
-          metadata: {
-            ownerUid: uid,
-            photoId,
-            processed: 'true',
-          },
+          metadata: {ownerUid: uid, photoId, processed: 'true'},
         },
       });
 
@@ -245,13 +241,77 @@ export const processProfilePhoto = onObjectFinalized(
       await source.delete({ignoreNotFound: true});
     } catch (error) {
       await source.delete({ignoreNotFound: true});
-      await ref.set({
-        status: 'rejected',
-        rejectionReason: 'image_processing',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await ref.set({status: 'rejected', rejectionReason: 'image_processing', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       console.error('Profile photo processing failed', {uid, photoId, error});
     }
+  },
+);
+
+export const reviewProfilePhoto = onCall(
+  {enforceAppCheck: true, maxInstances: 10},
+  async (request) => {
+    requireUid(request.auth);
+    if (request.auth?.token?.moderator !== true && request.auth?.token?.admin !== true) {
+      throw new HttpsError('permission-denied', 'Moderator access required.');
+    }
+    const photoId = requirePhotoId(request.data?.photoId);
+    const decision = String(request.data?.decision ?? '').trim();
+    if (decision !== 'approve' && decision !== 'reject') {
+      throw new HttpsError('invalid-argument', 'Decision must be approve or reject.');
+    }
+    const ref = db.collection('profile_media').doc(photoId);
+    const photo = await ref.get();
+    if (!photo.exists || photo.get('status') !== 'processed_pending_review') {
+      throw new HttpsError('failed-precondition', 'Photo is not awaiting review.');
+    }
+    const ownerUid = String(photo.get('ownerUid') ?? '');
+    const storagePath = String(photo.get('storagePath') ?? '');
+    requireProcessedPath(ownerUid, photoId, storagePath);
+
+    if (decision === 'reject') {
+      await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
+      await ref.set({
+        status: 'rejected',
+        rejectionReason: String(request.data?.reason ?? 'moderation').slice(0, 160),
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedByUid: request.auth!.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {photoId, status: 'rejected'};
+    }
+
+    await ref.set({
+      status: 'active',
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedByUid: request.auth!.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {photoId, status: 'active'};
+  },
+);
+
+export const getProfilePhotoAccess = onCall(
+  {enforceAppCheck: true, maxInstances: 30},
+  async (request) => {
+    const requesterUid = requireUid(request.auth);
+    const photoId = requirePhotoId(request.data?.photoId);
+    const ref = db.collection('profile_media').doc(photoId);
+    const photo = await ref.get();
+    if (!photo.exists || photo.get('status') !== 'active') {
+      throw new HttpsError('not-found', 'Profile photo is unavailable.');
+    }
+    const ownerUid = String(photo.get('ownerUid') ?? '');
+    const storagePath = String(photo.get('storagePath') ?? '');
+    requireProcessedPath(ownerUid, photoId, storagePath);
+    if (!(await canViewOwnerProfile(requesterUid, ownerUid))) {
+      throw new HttpsError('permission-denied', 'Profile photo is unavailable.');
+    }
+
+    const [url] = await getStorage().bucket().file(storagePath).getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 2 * 60 * 1000,
+    });
+    return {url, expiresInSeconds: 120};
   },
 );
 
@@ -276,7 +336,6 @@ export const deleteProfilePhoto = onCall(
 
     await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
     await ref.delete();
-
     return {deleted: true};
   },
 );
