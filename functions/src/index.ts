@@ -246,5 +246,7 @@ export {
   beginProfilePhotoUpload,
   confirmProfilePhotoUpload,
   processProfilePhoto,
+  reviewProfilePhoto,
+  getProfilePhotoAccess,
   deleteProfilePhoto,
 } from './profile_media';
