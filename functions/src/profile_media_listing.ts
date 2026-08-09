@@ -1,4 +1,4 @@
-import {getFirestore} from 'firebase-admin/firestore';
+import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 const db = getFirestore();
@@ -15,6 +15,31 @@ async function assertActive(uid: string): Promise<void> {
   }
 }
 
+async function consumeRateLimit(uid: string): Promise<void> {
+  const action = 'profile_photo_list';
+  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const start = Number(snap.get('windowStartMs') ?? 0);
+    const count = Number(snap.get('count') ?? 0);
+    if (!snap.exists || now - start >= 60_000) {
+      tx.set(ref, {
+        uid,
+        action,
+        windowStartMs: now,
+        count: 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (count >= 60) {
+      throw new HttpsError('resource-exhausted', 'Too many profile-photo requests. Try again later.');
+    }
+    tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  });
+}
+
 function timestampMillis(value: unknown): number | null {
   const candidate = value as {toMillis?: () => number} | null | undefined;
   return candidate?.toMillis?.() ?? null;
@@ -24,7 +49,7 @@ export const listMyProfilePhotos = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await Promise.all([assertActive(uid), consumeRateLimit(uid)]);
 
     const snapshot = await db.collection('profile_media')
       .where('ownerUid', '==', uid)
