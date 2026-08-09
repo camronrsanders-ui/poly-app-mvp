@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {after, before, beforeEach, test} from 'node:test';
 import {assertFails, initializeTestEnvironment} from '@firebase/rules-unit-testing';
-import {doc, setDoc, updateDoc} from 'firebase/firestore';
+import {doc, getDoc, setDoc, updateDoc} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -67,4 +67,48 @@ test('participant cannot send a new message to an inactive conversation', async 
     messageType: 'text',
     readBy: ['alice'],
   }));
+});
+
+test('participant cannot read conversation metadata after the connection ends', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      conversationId: 'alice_bob',
+      participantUids: ['alice', 'bob'],
+      active: false,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+      endedReason: 'unmatched',
+    }],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(getDoc(doc(db, 'conversations', 'alice_bob')));
+});
+
+test('participant cannot read old messages after the connection ends', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      conversationId: 'alice_bob',
+      participantUids: ['alice', 'bob'],
+      active: false,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+      endedReason: 'unmatched',
+    }],
+    ['messages', 'old-message', {
+      conversationId: 'alice_bob',
+      senderUid: 'alice',
+      text: 'history',
+      createdAt: new Date(),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['alice'],
+    }],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(getDoc(doc(db, 'messages', 'old-message')));
+  await assertFails(updateDoc(doc(db, 'messages', 'old-message'), {readBy: ['alice', 'bob']}));
 });
