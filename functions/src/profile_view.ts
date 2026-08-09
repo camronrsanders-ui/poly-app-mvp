@@ -1,37 +1,8 @@
 import {getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {toProfileView} from './profile_view_fields';
 
 const db = getFirestore();
-
-const publicProfileFields = [
-  'displayName',
-  'age',
-  'city',
-  'region',
-  'bio',
-  'headline',
-  'genderIdentity',
-  'pronouns',
-  'orientation',
-  'customIdentityTags',
-  'relationshipStructure',
-  'relationshipStatus',
-  'partnered',
-  'intentionTags',
-  'interests',
-  'lookingForNote',
-] as const;
-
-export function toProfileView(
-  uid: string,
-  data: FirebaseFirestore.DocumentData,
-): FirebaseFirestore.DocumentData {
-  const output: FirebaseFirestore.DocumentData = {uid};
-  for (const key of publicProfileFields) {
-    if (data[key] !== undefined) output[key] = data[key];
-  }
-  return output;
-}
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
