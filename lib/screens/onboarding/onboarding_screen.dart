@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../config/discovery_options.dart';
 import '../../services/profile_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -27,15 +28,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _busy = false;
   String? _structure;
   final Set<String> _intentions = {};
-
-  static const structures = [
-    'Solo poly', 'Hierarchical poly', 'Non-hierarchical poly', 'Open relationship',
-    'Polyfidelity', 'Relationship anarchy', 'Monogamish', 'Exploring', 'Custom / self-described',
-  ];
-  static const intentions = [
-    'Friendship', 'Community', 'Dating', 'Long-term relationship', 'Casual connection',
-    'Join a polycule', 'Build / grow a polycule', 'Exploring / learning',
-  ];
 
   @override
   void dispose() {
@@ -155,7 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: structures.map((s) => ChoiceChip(
+          children: relationshipStructureOptions.map((s) => ChoiceChip(
             label: Text(s),
             selected: _structure == s,
             onSelected: (_) => setState(() => _structure = s),
@@ -163,7 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ]),
       _OnboardingPage(title: 'What are you hoping to find?', subtitle: 'Choose as many as feel right.', children: [
-        Wrap(spacing: 8, runSpacing: 8, children: intentions.map((i) => FilterChip(
+        Wrap(spacing: 8, runSpacing: 8, children: connectionIntentionOptions.map((i) => FilterChip(
           label: Text(i), selected: _intentions.contains(i), onSelected: (selected) => setState(() => selected ? _intentions.add(i) : _intentions.remove(i)),
         )).toList()),
       ]),
