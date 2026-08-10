@@ -53,6 +53,13 @@ function timestampMillis(value: unknown): number | null {
   return candidate?.toMillis?.() ?? null;
 }
 
+async function assertActiveStaff(uid: string): Promise<void> {
+  const user = await getFirestore().collection('users').doc(uid).get();
+  if (!user.exists || user.get('accountStatus') !== 'active') {
+    throw new HttpsError('permission-denied', 'Staff account is not active.');
+  }
+}
+
 async function consumeModeratorRateLimit(
   uid: string,
   action: string,
@@ -151,7 +158,10 @@ export const listModerationReports = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const moderatorUid = requireModerator(request.auth);
-    await consumeModeratorRateLimit(moderatorUid, 'moderation_list', 120, 60_000);
+    await Promise.all([
+      assertActiveStaff(moderatorUid),
+      consumeModeratorRateLimit(moderatorUid, 'moderation_list', 120, 60_000),
+    ]);
 
     const status = String(request.data?.status ?? 'open').trim();
     if (!queueStatuses.has(status)) {
@@ -199,7 +209,10 @@ export const reviewModerationReport = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const moderatorUid = requireModerator(request.auth);
-    await consumeModeratorRateLimit(moderatorUid, 'moderation_review', 120, 60_000);
+    await Promise.all([
+      assertActiveStaff(moderatorUid),
+      consumeModeratorRateLimit(moderatorUid, 'moderation_review', 120, 60_000),
+    ]);
 
     const reportId = requireReportId(request.data?.reportId);
     const status = String(request.data?.status ?? '').trim();
@@ -239,7 +252,10 @@ export const setAccountModerationState = onCall(
   {enforceAppCheck: true, maxInstances: 5},
   async (request) => {
     const adminUid = requireAdmin(request.auth);
-    await consumeModeratorRateLimit(adminUid, 'moderation_account', 60, 60 * 60_000);
+    await Promise.all([
+      assertActiveStaff(adminUid),
+      consumeModeratorRateLimit(adminUid, 'moderation_account', 60, 60 * 60_000),
+    ]);
 
     const targetUid = requireTargetUid(request.data?.targetUid, adminUid);
     const state = String(request.data?.state ?? '').trim();
@@ -279,10 +295,17 @@ export const setAccountModerationState = onCall(
       throw new HttpsError('permission-denied', 'Super-administrator access is required for a privileged target.');
     }
 
-    // Status changes first so Firestore rules/callables fail closed immediately
-    // even if later ban cleanup experiences an operational failure.
-    await userRef.set({accountStatus: state}, {merge: true});
-    await getAuth().updateUser(targetUid, {disabled: state === 'banned'});
+    // Fail closed across the Auth + Firestore boundary. Restrictive states are
+    // written to Firestore first. Reinstatement enables Auth first while the old
+    // restrictive Firestore state still blocks app access until the second step
+    // succeeds.
+    if (state === 'active') {
+      await getAuth().updateUser(targetUid, {disabled: false});
+      await userRef.set({accountStatus: 'active'}, {merge: true});
+    } else {
+      await userRef.set({accountStatus: state}, {merge: true});
+      await getAuth().updateUser(targetUid, {disabled: state === 'banned'});
+    }
 
     if (state === 'banned') {
       await terminateForBan(targetUid);
