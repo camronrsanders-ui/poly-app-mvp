@@ -26,11 +26,10 @@ before(async () => {
 beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
 
-test('active participant query succeeds only when it includes the active constraint', async () => {
+test('participant may read a known active conversation but cannot list the conversation collection', async () => {
   await seed([
     ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
     ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
-    ['users', 'carol', {uid: 'carol', accountStatus: 'active'}],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -38,25 +37,14 @@ test('active participant query succeeds only when it includes the active constra
       createdAt: new Date(),
       lastMessageAt: new Date(),
     }],
-    ['conversations', 'alice_carol', {
-      conversationId: 'alice_carol',
-      participantUids: ['alice', 'carol'],
-      active: false,
-      createdAt: new Date(),
-      lastMessageAt: new Date(),
-      endedReason: 'unmatched',
-    }],
   ]);
 
   const db = env.authenticatedContext('alice').firestore();
-  await assertSucceeds(getDocs(query(
-    collection(db, 'conversations'),
-    where('participantUids', 'array-contains', 'alice'),
-    where('active', '==', true),
-  )));
+  await assertSucceeds(getDoc(doc(db, 'conversations', 'alice_bob')));
   await assertFails(getDocs(query(
     collection(db, 'conversations'),
     where('participantUids', 'array-contains', 'alice'),
+    where('active', '==', true),
   )));
 });
 
