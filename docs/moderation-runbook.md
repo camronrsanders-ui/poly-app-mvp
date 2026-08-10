@@ -10,12 +10,43 @@ Polycircle moderation should prioritize member safety, consent, privacy, evidenc
 
 Use Firebase custom claims or an equivalent trusted administrative identity system for privileged moderation actions. Client-writable Firestore fields must never grant moderation access.
 
-Recommended roles:
-- `moderator`: may review queued reports/media and record a decision.
-- `admin`: may perform moderator actions plus account-level suspension/ban/reinstatement and operational escalation.
+Current trusted backend role model:
+- `moderator`: may list/review report queues and review processed profile photos.
+- `admin`: may perform moderator actions plus account-level suspension/ban/reinstatement.
+- `superadmin`: required when an account-level action targets another privileged moderator/admin account.
 - ordinary members: no direct access to moderation queues, evidence, internal notes, or another member's reports.
 
-Every privileged operation should require authentication, App Check where applicable, authorization by trusted claims, bounded query/list sizes, and an audit event that excludes message bodies, intimate media, email addresses, and unnecessary profile text.
+Current backend protections include App Check, trusted custom-claim checks, bounded queue sizes, per-actor rate limits, backend-only internal moderation collections, and default-deny Firestore client access. These controls still require staging validation and an operator-facing moderation interface/process before real-member use.
+
+## Implemented trusted moderation callables
+
+### Report queue
+`listModerationReports`:
+- requires moderator/admin/superadmin claim;
+- limits queue state to supported moderation statuses;
+- bounds each response;
+- returns report data and internal reviewer notes only to trusted moderators.
+
+`reviewModerationReport`:
+- records the user-visible report status/review timestamp on the report;
+- stores reviewer UID and internal note separately in backend-only `report_moderation` so a reporting member cannot directly read staff identity/notes through Firestore.
+
+### Profile-photo queue
+`listProfilePhotosForReview` provides a bounded moderator-only list of photos in `processed_pending_review` and issues short-lived preview URLs only after trusted role checks. `reviewProfilePhoto` performs the final approve/reject transition. This still needs staging/real operational validation before moderators handle real member photos.
+
+### Account state
+`setAccountModerationState` is admin-only and can set `active`, `suspended`, or `banned` with a structured reason. A non-superadmin cannot target an account carrying moderator/admin/superadmin claims.
+
+The account state is changed first so Firestore rules and ordinary callables fail closed immediately. A ban additionally:
+- disables the Firebase Auth user;
+- deletes incoming/outgoing likes;
+- closes active matches and conversations without falsifying `lastMessageAt`;
+- revokes Private Vault grants;
+- cancels Private Vault requests.
+
+Reinstatement does **not** recreate likes, matches, conversations, or private-media permissions ended by a ban. A pending account-deletion state cannot be overwritten by moderation state changes.
+
+`account_moderation` stores current internal account-action metadata and `moderation_audit` records minimal action history. These collections are not directly client-accessible. Their retention period still requires approval.
 
 ## Report intake
 
@@ -62,7 +93,7 @@ Actions:
 
 ## Protected profile-media review
 
-Profile photos are processed into a trusted, metadata-stripped representation before moderation. Moderators should review only the processed copy that is awaiting review.
+Profile photos are processed into a trusted, re-encoded representation before moderation. Moderators should review only the processed copy that is awaiting review.
 
 Approval means only that the image passed the current content/safety review. It must not imply identity verification, relationship verification, or endorsement by Polycircle.
 
@@ -71,6 +102,8 @@ On rejection:
 - avoid free-text moderator notes containing sensitive personal data unless necessary;
 - ensure rejected media is not available through member-facing signed URL flows;
 - remove the processed object according to the approved retention policy.
+
+The queue/list and review callables are implemented, but staging validation, moderator UI/workstation controls, reason taxonomy, staffing procedures, and final retention rules remain release blockers.
 
 ## Private Vault moderation
 
@@ -89,13 +122,13 @@ Screenshots or external-camera capture cannot be guaranteed to be prevented. Pro
 
 ## Account actions
 
-Recommended trusted states:
+Trusted states:
 - `active`: normal access.
-- `paused`: member-initiated or deletion-safety hold; not discoverable/interactive.
-- `suspended`: temporary moderator/admin restriction.
-- `banned`: administrative enforcement state.
+- `paused`: deletion-safety/recovery state in the current implementation; it is not yet a generalized member pause feature.
+- `suspended`: administrative restriction. The Firebase Auth identity may still authenticate, but app routing, Firestore rules, and trusted callables deny ordinary product use.
+- `banned`: administrative enforcement state; Firebase Auth is disabled and interaction state is terminated.
 
-Clients must not be able to set these moderation states directly.
+Clients cannot set these moderation states directly.
 
 Blocking and unmatching are member safety controls, not moderation penalties. Unblocking must not automatically restore a prior match, conversation, or Private Vault grant.
 
@@ -108,17 +141,17 @@ Until final retention periods are approved:
 - use stable internal identifiers rather than copying sensitive content into logs/tickets;
 - access to sensitive evidence should be auditable without recording the evidence itself in the audit event.
 
-The final retention matrix must define at least: ordinary reports, non-consensual-content reports, protected profile media, Private Vault media, messages tied to a report, audit/security logs, backups, and appeals.
+The final retention matrix must define at least: ordinary reports, non-consensual-content reports, protected profile media, Private Vault media, messages tied to a report, moderation/audit/security logs, backups, and appeals.
 
 ## Decision record
 
 A moderation decision should capture structured fields such as:
 - report ID;
-- decision (`no_action`, `content_removed`, `warning`, `temporary_suspension`, `ban`, `escalated`);
+- decision/status;
 - policy reason code;
-- reviewer UID;
+- reviewer UID in an internal-only record;
 - decision timestamp;
-- optional expiration timestamp for temporary restrictions;
+- optional expiration timestamp for temporary restrictions when that feature is added;
 - whether protected-media access was revoked/removed;
 - appeal eligibility/status when an appeal process exists.
 
@@ -126,7 +159,7 @@ Do not place intimate content, message bodies, passwords, tokens, signed URLs, o
 
 ## Appeals and mistakes
 
-Before external beta, define a simple appeal path for suspensions/bans. Reinstatement must be a trusted admin operation. Reinstatement must not silently recreate matches, likes, conversations, blocks, or private-media grants that were ended while the account was restricted.
+Before external beta, define a support/appeal intake path for suspensions/bans. Reinstatement is implemented as a trusted admin state transition, but the human appeal process is not yet complete. Reinstatement must not silently recreate matches, likes, conversations, blocks, or private-media grants that were ended while the account was restricted.
 
 ## Incident response triggers
 
@@ -138,18 +171,20 @@ Escalate from ordinary moderation to security/incident response when a report su
 - bulk scraping or enumeration;
 - abuse of moderator/admin credentials.
 
-For a suspected authorization defect, disable the affected feature or server-side gate first when feasible, preserve minimal diagnostic evidence, patch the trusted boundary, add a regression test, and only then restore access.
+For a suspected authorization defect, disable the affected feature or server-side gate first when feasible, preserve minimal diagnostic evidence, patch the trusted boundary, add a regression test, and only then restore access. See `docs/incident-response.md`.
 
 ## Pre-beta operational checklist
 
 Before moderators handle real member data:
-- moderation claims/roles tested in staging;
-- report queue built with strict server-side authorization;
-- account suspension/ban/reinstatement implemented and tested;
-- protected-media review queue tested end-to-end;
+- moderator/admin/superadmin claim assignment and revocation tested in staging;
+- report queue callables validated against deployed App Check endpoints;
+- account suspension/ban/reinstatement fault-tested end-to-end;
+- privileged-target protection tested;
+- protected profile-media review queue tested end-to-end;
+- operator-facing moderator UI/workstation procedure built and access-reviewed;
 - Private Vault remains off unless its separate gate is fully passed;
 - evidence-retention matrix approved;
 - appeal/support route defined;
-- audit logging reviewed for sensitive-data minimization;
+- audit logging reviewed for sensitive-data minimization and retention;
 - moderator access reviewed on real devices/browsers;
 - incident-response owner and escalation path assigned.
