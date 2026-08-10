@@ -58,22 +58,26 @@ export const listMyConnections = onCall(
     await assertActive(uid);
     await consumeRateLimit(uid, 60, 60_000);
 
-    // Query each participant field separately and filter active state in trusted
-    // code. This avoids requiring a composite index just to list connections.
+    // Filter active state in Firestore before applying the read cap. Limiting a
+    // user's entire historical match set first could hide current connections
+    // after enough old matches accumulated.
     const [asA, asB] = await Promise.all([
       db.collection('matches')
         .where('userAUid', '==', uid)
-        .limit(150)
+        .where('active', '==', true)
+        .limit(maxConnectionsPerResponse)
         .get(),
       db.collection('matches')
         .where('userBUid', '==', uid)
-        .limit(150)
+        .where('active', '==', true)
+        .limit(maxConnectionsPerResponse)
         .get(),
     ]);
 
     const seen = new Set<string>();
     const records: Array<{match: FirebaseFirestore.QueryDocumentSnapshot; otherUid: string}> = [];
     for (const match of [...asA.docs, ...asB.docs]) {
+      // Keep this defensive check even though the query is already active-only.
       if (match.get('active') !== true) continue;
       const data = match.data();
       const otherUid = data.userAUid === uid
