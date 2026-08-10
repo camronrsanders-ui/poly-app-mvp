@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/discovery_options.dart';
@@ -106,7 +107,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'mapVisibility': 'matches_only',
       });
       await _profileService.completeOnboarding(uid);
+      if (!mounted) return;
       widget.onComplete();
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Onboarding save failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('We could not finish setting up your profile. Your answers are still here—please try again.'),
+        ));
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -150,13 +162,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: relationshipStructureOptions.map((s) => ChoiceChip(
             label: Text(s),
             selected: _structure == s,
-            onSelected: (_) => setState(() => _structure = s),
+            onSelected: _busy ? null : (_) => setState(() => _structure = s),
           )).toList(),
         ),
       ]),
       _OnboardingPage(title: 'What are you hoping to find?', subtitle: 'Choose as many as feel right.', children: [
         Wrap(spacing: 8, runSpacing: 8, children: connectionIntentionOptions.map((i) => FilterChip(
-          label: Text(i), selected: _intentions.contains(i), onSelected: (selected) => setState(() => selected ? _intentions.add(i) : _intentions.remove(i)),
+          label: Text(i), selected: _intentions.contains(i), onSelected: _busy ? null : (selected) => setState(() => selected ? _intentions.add(i) : _intentions.remove(i)),
         )).toList()),
       ]),
       _OnboardingPage(title: 'Tell your circle a little more', subtitle: 'Keep it genuine. You can always edit this later.', children: [
@@ -176,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Row(children: [
             if (_step > 0)
               TextButton(
-                onPressed: () {
+                onPressed: _busy ? null : () {
                   setState(() => _step--);
                   _page.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
                 },
