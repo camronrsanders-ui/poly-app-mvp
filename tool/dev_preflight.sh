@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Keep the runtime selection inside this script so opening a new terminal does
+# not accidentally run Functions tooling with an incompatible global Node.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tool/ensure_node22.sh"
+
 FULL=0
 if [[ "${1:-}" == "--full" ]]; then
   FULL=1
@@ -39,7 +44,7 @@ ok "development shell scripts parse cleanly"
 
 NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
 if [[ "$NODE_MAJOR" != "22" ]]; then
-  fail "Node 22 is required for Polycircle Functions. Current Node major is $NODE_MAJOR. Run 'nvm use' from the repo root and retry."
+  fail "Node 22 is required for Polycircle Functions. Current Node major is $NODE_MAJOR."
 fi
 ok "Node 22 active"
 
