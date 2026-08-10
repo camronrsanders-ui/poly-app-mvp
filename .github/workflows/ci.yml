@@ -41,6 +41,8 @@ jobs:
         run: npm install
       - name: TypeScript build
         run: npm run build
+      - name: Check local emulator seed script
+        run: npm run check:seed
       - name: Run pure backend behavior tests
         run: node --test test/*.test.cjs
       - name: Load compiled Functions module
