@@ -1,13 +1,33 @@
+import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 const queueStatuses = new Set(['open', 'reviewing', 'escalated']);
 const reviewStatuses = new Set(['reviewing', 'escalated', 'resolved', 'dismissed']);
+const accountStates = new Set(['active', 'suspended', 'banned']);
+const accountReasonCodes = new Set([
+  'reported_abuse',
+  'security_risk',
+  'spam_fraud',
+  'policy_violation',
+  'appeal_granted',
+  'other',
+]);
 
-function requireModerator(auth: {uid: string; token?: Record<string, unknown>} | undefined): string {
+type TrustedAuth = {uid: string; token?: Record<string, unknown>} | undefined;
+
+function requireModerator(auth: TrustedAuth): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
-  if (auth.token?.moderator !== true && auth.token?.admin !== true) {
+  if (auth.token?.moderator !== true && auth.token?.admin !== true && auth.token?.superadmin !== true) {
     throw new HttpsError('permission-denied', 'Moderator access required.');
+  }
+  return auth.uid;
+}
+
+function requireAdmin(auth: TrustedAuth): string {
+  if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (auth.token?.admin !== true && auth.token?.superadmin !== true) {
+    throw new HttpsError('permission-denied', 'Administrator access required.');
   }
   return auth.uid;
 }
@@ -16,6 +36,14 @@ function requireReportId(raw: unknown): string {
   const value = String(raw ?? '').trim();
   if (!value || value.length > 128 || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new HttpsError('invalid-argument', 'Invalid report ID.');
+  }
+  return value;
+}
+
+function requireTargetUid(raw: unknown, callerUid: string): string {
+  const value = String(raw ?? '').trim();
+  if (!value || value === callerUid || value.length > 128 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new HttpsError('invalid-argument', 'Invalid target account.');
   }
   return value;
 }
@@ -53,6 +81,70 @@ async function consumeModeratorRateLimit(
     }
     tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   });
+}
+
+async function terminateForBan(targetUid: string): Promise<void> {
+  const db = getFirestore();
+  const [
+    outgoingLikes,
+    incomingLikes,
+    matchesA,
+    matchesB,
+    conversations,
+    grantsOwned,
+    grantsReceived,
+    requestsFrom,
+    requestsTo,
+  ] = await Promise.all([
+    db.collection('likes').where('fromUid', '==', targetUid).get(),
+    db.collection('likes').where('toUid', '==', targetUid).get(),
+    db.collection('matches').where('userAUid', '==', targetUid).get(),
+    db.collection('matches').where('userBUid', '==', targetUid).get(),
+    db.collection('conversations').where('participantUids', 'array-contains', targetUid).get(),
+    db.collection('private_media_grants').where('ownerUid', '==', targetUid).get(),
+    db.collection('private_media_grants').where('recipientUid', '==', targetUid).get(),
+    db.collection('private_media_requests').where('requesterUid', '==', targetUid).get(),
+    db.collection('private_media_requests').where('recipientUid', '==', targetUid).get(),
+  ]);
+
+  const writer = db.bulkWriter();
+  const seen = new Set<string>();
+  for (const doc of [...outgoingLikes.docs, ...incomingLikes.docs]) {
+    if (seen.has(doc.ref.path)) continue;
+    seen.add(doc.ref.path);
+    writer.delete(doc.ref);
+  }
+  for (const doc of [...matchesA.docs, ...matchesB.docs]) {
+    if (doc.get('active') !== true) continue;
+    writer.set(doc.ref, {
+      active: false,
+      endedAt: FieldValue.serverTimestamp(),
+      endedReason: 'moderation_ban',
+    }, {merge: true});
+  }
+  for (const doc of conversations.docs) {
+    if (doc.get('active') !== true) continue;
+    writer.set(doc.ref, {
+      active: false,
+      endedAt: FieldValue.serverTimestamp(),
+      endedReason: 'moderation_ban',
+    }, {merge: true});
+  }
+  for (const doc of [...grantsOwned.docs, ...grantsReceived.docs]) {
+    writer.set(doc.ref, {
+      active: false,
+      revokedAt: FieldValue.serverTimestamp(),
+      revokedReason: 'moderation_ban',
+    }, {merge: true});
+  }
+  for (const doc of [...requestsFrom.docs, ...requestsTo.docs]) {
+    writer.set(doc.ref, {
+      status: 'cancelled',
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancelledReason: 'moderation_ban',
+    }, {merge: true});
+  }
+  await writer.close();
 }
 
 export const listModerationReports = onCall(
@@ -140,5 +232,81 @@ export const reviewModerationReport = onCall(
     });
 
     return {reportId, status};
+  },
+);
+
+export const setAccountModerationState = onCall(
+  {enforceAppCheck: true, maxInstances: 5},
+  async (request) => {
+    const adminUid = requireAdmin(request.auth);
+    await consumeModeratorRateLimit(adminUid, 'moderation_account', 60, 60 * 60_000);
+
+    const targetUid = requireTargetUid(request.data?.targetUid, adminUid);
+    const state = String(request.data?.state ?? '').trim();
+    const reasonCode = String(request.data?.reasonCode ?? '').trim();
+    const note = String(request.data?.note ?? '').trim();
+    if (!accountStates.has(state)) {
+      throw new HttpsError('invalid-argument', 'Unsupported account state.');
+    }
+    if (!accountReasonCodes.has(reasonCode)) {
+      throw new HttpsError('invalid-argument', 'Unsupported moderation reason.');
+    }
+    if (note.length > 1000) {
+      throw new HttpsError('invalid-argument', 'Moderation note is too long.');
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection('users').doc(targetUid);
+    const [user, targetAuth] = await Promise.all([
+      userRef.get(),
+      getAuth().getUser(targetUid).catch((error: any) => {
+        if (error?.code === 'auth/user-not-found') return null;
+        throw error;
+      }),
+    ]);
+    if (!user.exists || targetAuth == null) {
+      throw new HttpsError('not-found', 'Target account not found.');
+    }
+    if (user.get('accountStatus') === 'paused' && user.get('deletionRequestedAt') != null) {
+      throw new HttpsError('failed-precondition', 'An account pending deletion cannot be moderated into another state.');
+    }
+
+    const targetClaims = targetAuth.customClaims ?? {};
+    const targetPrivileged = targetClaims.moderator === true
+      || targetClaims.admin === true
+      || targetClaims.superadmin === true;
+    if (targetPrivileged && request.auth?.token?.superadmin !== true) {
+      throw new HttpsError('permission-denied', 'Super-administrator access is required for a privileged target.');
+    }
+
+    // Status changes first so Firestore rules/callables fail closed immediately
+    // even if later ban cleanup experiences an operational failure.
+    await userRef.set({accountStatus: state}, {merge: true});
+    await getAuth().updateUser(targetUid, {disabled: state === 'banned'});
+
+    if (state === 'banned') {
+      await terminateForBan(targetUid);
+    }
+
+    await Promise.all([
+      db.collection('account_moderation').doc(targetUid).set({
+        targetUid,
+        state,
+        reasonCode,
+        note,
+        updatedByUid: adminUid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true}),
+      db.collection('moderation_audit').add({
+        action: 'account_state_changed',
+        targetUid,
+        state,
+        reasonCode,
+        actorUid: adminUid,
+        createdAt: FieldValue.serverTimestamp(),
+      }),
+    ]);
+
+    return {targetUid, state};
   },
 );
