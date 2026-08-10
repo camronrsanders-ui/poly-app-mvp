@@ -7,7 +7,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import {doc, serverTimestamp, setDoc, updateDoc} from 'firebase/firestore';
+import {doc, serverTimestamp, setDoc, updateDoc, writeBatch} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -26,6 +26,7 @@ async function seedActiveConversation() {
         active: true,
         createdAt: new Date(Date.now() - 60_000),
         lastMessageAt: new Date(Date.now() - 30_000),
+        lastMessageId: null,
       }),
     ]);
   });
@@ -54,34 +55,70 @@ beforeEach(async () => {
 
 after(async () => env.cleanup());
 
-test('chat accepts server-generated timestamps for message and conversation activity', async () => {
+test('chat accepts only an atomic message plus matching conversation activity update', async () => {
   const db = env.authenticatedContext('alice').firestore();
-  await assertSucceeds(setDoc(
-    doc(db, 'messages', 'message-server-time'),
+  const batch = writeBatch(db);
+  const messageRef = doc(db, 'messages', 'message-server-time');
+  batch.set(messageRef, message(serverTimestamp()));
+  batch.update(doc(db, 'conversations', 'alice_bob'), {
+    lastMessageAt: serverTimestamp(),
+    lastMessageId: messageRef.id,
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test('standalone message create cannot bypass conversation activity binding', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(
+    doc(db, 'messages', 'standalone-message'),
     message(serverTimestamp()),
   ));
-  await assertSucceeds(updateDoc(doc(db, 'conversations', 'alice_bob'), {
+});
+
+test('standalone conversation activity bump cannot fake a message', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(updateDoc(doc(db, 'conversations', 'alice_bob'), {
     lastMessageAt: serverTimestamp(),
+    lastMessageId: 'nonexistent-message',
   }));
 });
 
-test('chat rejects caller-forged message and conversation timestamps', async () => {
+test('chat rejects caller-forged timestamps even in a linked atomic batch', async () => {
   const db = env.authenticatedContext('alice').firestore();
   const forged = new Date('2000-01-01T00:00:00.000Z');
-
-  await assertFails(setDoc(
-    doc(db, 'messages', 'message-forged-time'),
-    message(forged),
-  ));
-  await assertFails(updateDoc(doc(db, 'conversations', 'alice_bob'), {
+  const batch = writeBatch(db);
+  const messageRef = doc(db, 'messages', 'message-forged-time');
+  batch.set(messageRef, message(forged));
+  batch.update(doc(db, 'conversations', 'alice_bob'), {
     lastMessageAt: forged,
-  }));
+    lastMessageId: messageRef.id,
+  });
+  await assertFails(batch.commit());
+});
+
+test('conversation cannot point at a different message than the one being created', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  const batch = writeBatch(db);
+  const messageRef = doc(db, 'messages', 'message-a');
+  batch.set(messageRef, message(serverTimestamp()));
+  batch.update(doc(db, 'conversations', 'alice_bob'), {
+    lastMessageAt: serverTimestamp(),
+    lastMessageId: 'message-b',
+  });
+  await assertFails(batch.commit());
 });
 
 test('chat rejects extra client-controlled message fields', async () => {
   const db = env.authenticatedContext('alice').firestore();
-  await assertFails(setDoc(doc(db, 'messages', 'message-extra-field'), {
+  const batch = writeBatch(db);
+  const messageRef = doc(db, 'messages', 'message-extra-field');
+  batch.set(messageRef, {
     ...message(serverTimestamp()),
     moderationApproved: true,
-  }));
+  });
+  batch.update(doc(db, 'conversations', 'alice_bob'), {
+    lastMessageAt: serverTimestamp(),
+    lastMessageId: messageRef.id,
+  });
+  await assertFails(batch.commit());
 });
