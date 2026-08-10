@@ -22,18 +22,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   void dispose() {
-    _email.dispose(); _password.dispose(); _confirm.dispose(); super.dispose();
+    _email.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
   }
 
   Future<void> _signup() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       await _auth.signUp(email: _email.text, password: _password.text);
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? 'Unable to create account.');
+      if (mounted) {
+        setState(() => _error = e.message ?? 'Unable to create account.');
+      }
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -83,7 +93,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ),
             const SizedBox(height: 20),
             FilledButton(onPressed: _busy ? null : _signup, child: Text(_busy ? 'Creating account…' : 'Create account')),
-            TextButton(onPressed: widget.onShowLogin, child: const Text('Already have an account? Sign in')),
+            TextButton(onPressed: _busy ? null : widget.onShowLogin, child: const Text('Already have an account? Sign in')),
           ],
         ),
       ),
