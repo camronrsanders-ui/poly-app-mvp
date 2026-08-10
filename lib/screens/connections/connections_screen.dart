@@ -21,8 +21,14 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final otherUid = person['uid'] as String?;
     if (otherUid == null) return;
     try {
-      final service = MessagingService();
-      final conversationId = await service.ensureConversation(otherUid);
+      var conversationId = person['conversationId']?.toString().trim() ?? '';
+      if (conversationId.isEmpty) {
+        final service = MessagingService();
+        conversationId = await service.ensureConversation(otherUid);
+        // Reuse the trusted conversation ID for subsequent opens in this
+        // loaded connection list instead of calling createConversation again.
+        person['conversationId'] = conversationId;
+      }
       if (!context.mounted) return;
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ChatScreen(
