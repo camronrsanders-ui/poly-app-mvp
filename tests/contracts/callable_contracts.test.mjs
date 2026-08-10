@@ -121,16 +121,31 @@ test('Private Vault sharing requires an explicit accepted request', () => {
   assert.match(vault, /request\.get\('status'\)\s*!==\s*'accepted'/);
 });
 
-test('Private Vault recipient can withdraw consent and revoke active grants', () => {
+test('Private Vault request response and privacy preference commit atomically', () => {
+  const section = vault.match(/export const respondToPrivateMediaRequest[\s\S]*?export const clearPrivateMediaRequestPreference/)?.[0] ?? '';
+  assert.match(section, /const batch = db\.batch\(\)/);
+  assert.match(section, /batch\.set\(ref/);
+  assert.match(section, /private_media_request_preferences/);
+  assert.match(section, /await batch\.commit\(\)/);
+});
+
+test('Private Vault recipient withdrawal revokes the exact pair exhaustively before cancellation completes', () => {
   assert.match(vaultConsent, /export const cancelPrivateMediaRequest\b/);
   assert.match(index, /export \{cancelPrivateMediaRequest\} from '.\/private_vault_consent'/);
-  assert.match(vaultConsent, /status:\s*'cancelled'/);
-  assert.match(vaultConsent, /revocationReason:\s*'recipient_cancelled_request'/);
+  assert.match(vaultConsent, /where\('ownerUid', '==', ownerUid\)/);
+  assert.match(vaultConsent, /where\('recipientUid', '==', requesterUid\)/);
+  assert.match(vaultConsent, /where\('active', '==', true\)/);
+  assert.doesNotMatch(vaultConsent, /\.limit\(/);
+  assert.match(vaultConsent, /revokedReason:\s*'recipient_cancelled_request'/);
   assert.match(vaultConsent, /active:\s*false/);
+  const revokeIndex = vaultConsent.indexOf('const writer = db.bulkWriter()');
+  const cancelIndex = vaultConsent.indexOf("status: 'cancelled'");
+  assert.ok(revokeIndex >= 0 && cancelIndex >= 0 && revokeIndex < cancelIndex,
+    'Consent withdrawal must revoke grants before marking the request cancelled');
   assert.match(index, /'private_media_request_cancel'/);
 });
 
-test('Private Vault listings expose safe metadata only', () => {
+test('Private Vault listings batch authorization reads instead of N+1 peer lookups', () => {
   for (const name of [
     'listMyPrivateMediaRequests',
     'listMyPrivateMediaShares',
@@ -139,13 +154,21 @@ test('Private Vault listings expose safe metadata only', () => {
     assert.match(vaultListing, new RegExp(`export const ${name}\\b`), `${name} is missing from private_vault_listing.ts`);
     assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault_listing'`), `${name} is not re-exported from index.ts`);
   }
+  assert.match(vaultListing, /async function loadPeerContext/);
+  assert.match(vaultListing, /db\.getAll\(\.\.\.userRefs\)/);
+  assert.match(vaultListing, /db\.getAll\(\.\.\.profileRefs\)/);
+  assert.match(vaultListing, /db\.getAll\(\.\.\.blockRefs\)/);
+  assert.match(vaultListing, /db\.getAll\(\.\.\.matchRefs\)/);
+  assert.doesNotMatch(vaultListing, /async function pairIsEligible|async function displayName/);
+});
+
+test('Private Vault listings expose safe metadata only', () => {
   assert.doesNotMatch(vaultListing, /storagePath|quarantinePath|uploadUrl|signedUrl/);
-  assert.match(vaultListing, /pairIsEligible/);
   assert.match(vaultListing, /maxRequestsPerDirection\s*=\s*50/);
   assert.match(vaultListing, /maxGrantsPerListing\s*=\s*100/);
 });
 
-test('Private Vault upload pipeline stays trusted and consent-gated', () => {
+test('Private Vault upload pipeline stays trusted, consent-gated, rate-limited, and staff-reviewed', () => {
   for (const name of [
     'beginPrivateMediaUpload',
     'confirmPrivateMediaUpload',
@@ -159,7 +182,18 @@ test('Private Vault upload pipeline stays trusted and consent-gated', () => {
   assert.match(vaultUpload, /allSubjectsAdults\s*!==\s*true/);
   assert.match(vaultUpload, /sharingRightsConfirmed\s*!==\s*true/);
   assert.match(vaultUpload, /processed_pending_review/);
-  assert.match(vaultUpload, /moderator.*admin|admin.*moderator/s);
+  assert.match(vaultUpload, /moderator.*admin.*superadmin/s);
+  assert.match(vaultUpload, /consumeRateLimit\(ownerUid, 'private_media_confirm'/);
+  assert.match(vaultUpload, /consumeRateLimit\(reviewerUid, 'private_media_review'/);
+  assert.match(vaultUpload, /consumeRateLimit\(ownerUid, 'private_media_list'/);
+  assert.match(vaultUpload, /assertActive\(reviewerUid\)/);
+});
+
+test('Private Vault owner revocation is active-account gated and records one canonical reason field', () => {
+  const section = vault.match(/export const revokePrivateMedia[\s\S]*?export const getPrivateMediaAccess/)?.[0] ?? '';
+  assert.match(section, /assertActive\(ownerUid\)/);
+  assert.match(section, /revokedReason:\s*'owner_revoked'/);
+  assert.doesNotMatch(section, /revocationReason/);
 });
 
 test('Profile media moderation stays backend-only', () => {
