@@ -265,18 +265,38 @@ export const deleteMyAccount = onCall(
       throw new HttpsError('failed-precondition', 'Please sign in again before deleting your account.');
     }
 
-    await consumeRateLimit(uid, 'delete_account', 2, 24 * 60 * 60_000);
-
     const userRef = db.collection('users').doc(uid);
-    await userRef.set({
-      accountStatus: 'paused',
-      deletionRequestedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+    let userState = await userRef.get();
+    if (!userState.exists) {
+      throw new HttpsError('not-found', 'Account record was not found.');
+    }
+    const deletionPending = userState.get('accountStatus') === 'paused'
+      && userState.get('deletionRequestedAt') != null;
+    if (!deletionPending && userState.get('accountStatus') !== 'active') {
+      throw new HttpsError('permission-denied', 'Account is not available for deletion.');
+    }
+
+    // Initial destructive requests are tightly limited. Once deletion has
+    // already entered the recoverable paused state, allow enough retries for a
+    // transient Storage/Firestore outage without trapping the user for a day.
+    await consumeRateLimit(uid, 'delete_account', deletionPending ? 20 : 2, 24 * 60 * 60_000);
+
+    if (!deletionPending) {
+      await userRef.set({
+        accountStatus: 'paused',
+        deletionRequestedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      userState = await userRef.get();
+    }
+    const originalDeletionRequestedAt = userState.get('deletionRequestedAt');
+    if (originalDeletionRequestedAt == null) {
+      throw new HttpsError('internal', 'Account deletion could not establish a durable request marker.');
+    }
 
     const minimalPendingAccount = () => ({
       uid,
       accountStatus: 'paused',
-      deletionRequestedAt: FieldValue.serverTimestamp(),
+      deletionRequestedAt: originalDeletionRequestedAt,
     });
 
     try {
@@ -364,9 +384,11 @@ export const deleteMyAccount = onCall(
         'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',
         'moderation_list', 'moderation_review', 'moderation_account',
         'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
+        'private_media_preference_clear',
         'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
         'private_media_grant', 'private_media_revoke', 'private_media_access',
-        'private_media_report', 'private_media_upload',
+        'private_media_report', 'private_media_upload', 'private_media_confirm',
+        'private_media_review', 'private_media_list',
         'profile_photo_upload', 'profile_photo_confirm', 'profile_photo_review',
         'profile_photo_access', 'profile_photo_delete', 'profile_photo_list', 'profile_photo_moderation_list',
       ]) {
