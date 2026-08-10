@@ -33,11 +33,22 @@ test('client code does not issue a conversations collection listener', () => {
   assert.doesNotMatch(messagingService, /collection\(['"]conversations['"]\)[\s\S]*?snapshots\(\)/);
 });
 
-test('message send is atomic with the conversation activity update', () => {
+test('message send is atomically bound to the exact conversation activity pointer', () => {
   assert.match(messagingService, /final batch = _firestore\.batch\(\)/);
+  assert.match(messagingService, /final messageRef = _firestore\.collection\('messages'\)\.doc\(\)/);
   assert.match(messagingService, /batch\.set\(messageRef/);
-  assert.match(messagingService, /batch\.update\(conversationRef/);
+  assert.match(messagingService, /batch\.update\(conversationRef,[\s\S]*'lastMessageAt': FieldValue\.serverTimestamp\(\)[\s\S]*'lastMessageId': messageRef\.id/);
   assert.match(messagingService, /await batch\.commit\(\)/);
+  assert.match(rules, /existsAfter\(\/databases\/\$\(database\)\/documents\/messages\/\$\(request\.resource\.data\.lastMessageId\)\)/);
+  assert.match(rules, /getAfter\(\/databases\/\$\(database\)\/documents\/conversations\/\$\(request\.resource\.data\.conversationId\)\)\.data\.lastMessageId == messageId/);
+});
+
+test('conversation timestamp cannot be advanced without an authorized same-batch message', () => {
+  const conversationRules = rules.match(/match \/conversations\/\{conversationId\}[\s\S]*?match \/messages/)?.[0] ?? '';
+  assert.match(conversationRules, /affectedKeys\(\)\.hasOnly\(\['lastMessageAt', 'lastMessageId'\]\)/);
+  assert.match(conversationRules, /lastMessageAt == request\.time/);
+  assert.match(conversationRules, /senderUid == request\.auth\.uid/);
+  assert.match(conversationRules, /createdAt == request\.time/);
 });
 
 test('full profile documents remain owner-only and active-account-only', () => {
