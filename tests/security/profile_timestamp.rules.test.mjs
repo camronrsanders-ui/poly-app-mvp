@@ -62,16 +62,20 @@ beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
 
 test('active owner can create profile only with server timestamps', async () => {
-  await seed([['users', 'alice', {uid: 'alice', accountStatus: 'active'}]]);
-  const db = env.authenticatedContext('alice').firestore();
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+  ]);
+  const aliceDb = env.authenticatedContext('alice').firestore();
+  const bobDb = env.authenticatedContext('bob').firestore();
 
-  await assertSucceeds(setDoc(doc(db, 'profiles', 'alice'), profile('alice')));
+  await assertSucceeds(setDoc(doc(aliceDb, 'profiles', 'alice'), profile('alice')));
 
   const forged = new Date('2000-01-01T00:00:00.000Z');
-  await assertFails(setDoc(doc(db, 'profiles', 'alice-forged'), {
-    ...profile('alice-forged', {createdAt: forged, updatedAt: forged}),
-    uid: 'alice',
-  }));
+  await assertFails(setDoc(doc(bobDb, 'profiles', 'bob'), profile('bob', {
+    createdAt: forged,
+    updatedAt: forged,
+  })));
 });
 
 test('profile update preserves creation time and requires server updatedAt', async () => {
