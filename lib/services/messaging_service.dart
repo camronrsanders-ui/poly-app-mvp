@@ -59,10 +59,12 @@ class MessagingService {
       'messageType': 'text',
       'readBy': [senderUid],
     });
-    // Conversation lifecycle state is backend-controlled. The client may only
-    // advance lastMessageAt while the conversation is already active.
+    // Firestore rules bind these two fields to the exact message created in this
+    // same atomic batch. A modified client cannot fake conversation activity by
+    // bumping lastMessageAt without also creating an authorized message.
     batch.update(conversationRef, {
       'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastMessageId': messageRef.id,
     });
     await batch.commit();
   }
