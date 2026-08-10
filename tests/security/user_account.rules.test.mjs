@@ -71,9 +71,10 @@ beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
 
 test('new account document must use the minimal trusted client schema', async () => {
-  const db = env.authenticatedContext('alice').firestore();
-  await assertSucceeds(setDoc(doc(db, 'users', 'alice'), userDoc('alice')));
-  await assertFails(setDoc(doc(db, 'users', 'mallory'), userDoc('mallory', {
+  const alice = env.authenticatedContext('alice').firestore();
+  const mallory = env.authenticatedContext('mallory').firestore();
+  await assertSucceeds(setDoc(doc(alice, 'users', 'alice'), userDoc('alice')));
+  await assertFails(setDoc(doc(mallory, 'users', 'mallory'), userDoc('mallory', {
     role: 'admin',
   })));
 });
