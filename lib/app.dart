@@ -47,12 +47,6 @@ class _SessionGateState extends State<_SessionGate> {
   bool _showSignUp = false;
   int _refresh = 0;
 
-  Future<Map<String, dynamic>> _loadAccountState(String uid) async {
-    final data = await _profiles.getAccount(uid).timeout(const Duration(seconds: 10));
-    if (data == null) throw StateError('Account record is unavailable.');
-    return data;
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -74,9 +68,15 @@ class _SessionGateState extends State<_SessionGate> {
               ? SignUpScreen(onShowLogin: () => setState(() => _showSignUp = false))
               : LoginScreen(onShowSignUp: () => setState(() => _showSignUp = true));
         }
-        return FutureBuilder<Map<String, dynamic>>(
+
+        // Watch the trusted account document rather than checking it only once
+        // at login. A suspension, ban, deletion pause, or onboarding completion
+        // therefore removes or advances the app shell as soon as Firestore
+        // delivers the authoritative change. Backend rules remain the final
+        // enforcement boundary even if the device is temporarily offline.
+        return StreamBuilder<Map<String, dynamic>?>(
           key: ValueKey('${user.uid}-$_refresh'),
-          future: _loadAccountState(user.uid),
+          stream: _profiles.watchAccount(user.uid),
           builder: (context, accountSnapshot) {
             if (accountSnapshot.connectionState == ConnectionState.waiting) {
               return const _LoadingScreen();
@@ -89,7 +89,15 @@ class _SessionGateState extends State<_SessionGate> {
               );
             }
 
-            final account = accountSnapshot.data!;
+            final account = accountSnapshot.data;
+            if (account == null) {
+              return _SessionErrorScreen(
+                onRetry: () => setState(() => _refresh++),
+                onSignOut: _auth.signOut,
+                debugError: StateError('Account record is unavailable.'),
+              );
+            }
+
             final status = account['accountStatus']?.toString() ?? '';
             final deletionPending = status == 'paused' && account['deletionRequestedAt'] != null;
             if (deletionPending) {
@@ -102,7 +110,7 @@ class _SessionGateState extends State<_SessionGate> {
               return _AccountUnavailableScreen(onSignOut: _auth.signOut);
             }
             if (account['onboardingComplete'] != true) {
-              return OnboardingScreen(onComplete: () => setState(() => _refresh++));
+              return const OnboardingScreen(onComplete: _noop);
             }
             return const MainShell();
           },
@@ -111,6 +119,8 @@ class _SessionGateState extends State<_SessionGate> {
     );
   }
 }
+
+void _noop() {}
 
 class _LoadingScreen extends StatelessWidget {
   const _LoadingScreen();
