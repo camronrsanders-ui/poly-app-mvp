@@ -29,10 +29,13 @@ class ProfileService {
   }
 
   Future<void> completeOnboarding(String uid) async {
-    await _firestore.collection('users').doc(uid).set({
+    // AuthService is responsible for creating the canonical account record.
+    // update() fails closed instead of silently creating a partial user document
+    // if account bootstrap ever regresses.
+    await _firestore.collection('users').doc(uid).update({
       'onboardingComplete': true,
       'lastActiveAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   Future<bool> isOnboardingComplete(String uid) async {
