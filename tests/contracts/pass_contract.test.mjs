@@ -23,9 +23,26 @@ test('Flutter Pass action has an App-Check-protected trusted backend export', ()
 test('Pass attempts are rate-limited before target-specific account lookup', () => {
   const section = actions.match(/export const passProfile[\s\S]*/)?.[0] ?? '';
   const rateIndex = section.indexOf('consumeRateLimit(db, uid)');
-  const targetLookupIndex = section.indexOf('assertActive(db, toUid)');
+  const targetLookupIndex = section.indexOf('tx.get(targetUserRef)');
   assert.ok(rateIndex >= 0 && targetLookupIndex >= 0 && rateIndex < targetLookupIndex,
     'Pass must charge the request budget before target lookup');
+});
+
+test('Pass is atomic with outgoing Like state and refuses current or former matches', () => {
+  const section = actions.match(/export const passProfile[\s\S]*/)?.[0] ?? '';
+  assert.match(section, /db\.runTransaction/);
+  assert.match(section, /tx\.get\(likeRef\)/);
+  assert.match(section, /tx\.get\(passRef\)/);
+  assert.match(section, /tx\.get\(matchRef\)/);
+  assert.match(section, /if \(existingMatch\.exists\)/);
+  assert.match(section, /if \(existingLike\.exists\) tx\.delete\(likeRef\)/);
+  assert.match(section, /tx\.set\(passRef/);
+});
+
+test('Like reads prior Pass in its transaction before deleting it', () => {
+  const section = index.match(/export const likeProfile[\s\S]*?export const createConversation/)?.[0] ?? '';
+  assert.match(section, /tx\.get\(passRef\)/);
+  assert.match(section, /if \(existingPass\.exists\) tx\.delete\(passRef\)/);
 });
 
 test('Discover excludes persisted passes before returning sanitized profile views', () => {
