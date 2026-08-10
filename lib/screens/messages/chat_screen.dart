@@ -49,16 +49,23 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _send() async {
-    if (_controller.text.trim().isEmpty) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
+    _controller.clear();
     try {
-      final text = _controller.text;
-      _controller.clear();
       await _messages.sendMessage(conversationId: widget.conversationId, text: text);
     } catch (_) {
+      // Do not make a transient network/backend error eat the user's draft.
+      // If they already started typing a new message while this request was in
+      // flight, leave that newer text alone instead of overwriting it.
+      if (mounted && _controller.text.isEmpty) {
+        _controller.text = text;
+        _controller.selection = TextSelection.collapsed(offset: text.length);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message failed to send. Please try again.')),
+          const SnackBar(content: Text('Message failed to send. Your text was kept so you can retry.')),
         );
       }
     } finally {
