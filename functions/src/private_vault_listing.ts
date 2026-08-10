@@ -118,6 +118,25 @@ async function loadPeerContext(uid: string, rawPeerUids: string[]): Promise<Peer
   return {eligible, displayNames};
 }
 
+async function loadAcceptedRecipients(ownerUid: string, rawRecipientUids: string[]): Promise<Set<string>> {
+  const recipients = [...new Set(rawRecipientUids)]
+    .filter((recipientUid) => recipientUid.length > 0 && recipientUid !== ownerUid)
+    .slice(0, maxGrantsPerListing);
+  if (recipients.length === 0) return new Set();
+
+  const requestRefs = recipients.map((recipientUid) =>
+    db.collection('private_media_requests').doc(`${recipientUid}_${ownerUid}`));
+  const requests = await db.getAll(...requestRefs);
+  const accepted = new Set<string>();
+  for (const request of requests) {
+    if (!request.exists || request.get('status') !== 'accepted') continue;
+    const requesterUid = String(request.get('requesterUid') ?? '');
+    const recipientUid = String(request.get('recipientUid') ?? '');
+    if (recipientUid === ownerUid && recipients.includes(requesterUid)) accepted.add(requesterUid);
+  }
+  return accepted;
+}
+
 export const listMyPrivateMediaRequests = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
@@ -181,10 +200,13 @@ export const listMyPrivateMediaShares = onCall(
         mediaId: String(grant.get('mediaId') ?? ''),
       }))
       .filter(({recipientUid, mediaId}) => recipientUid.length > 0 && mediaId.length > 0);
-    const context = await loadPeerContext(ownerUid, records.map(({recipientUid}) => recipientUid));
+    const [context, acceptedRecipients] = await Promise.all([
+      loadPeerContext(ownerUid, records.map(({recipientUid}) => recipientUid)),
+      loadAcceptedRecipients(ownerUid, records.map(({recipientUid}) => recipientUid)),
+    ]);
 
     const shares = records
-      .filter(({recipientUid}) => context.eligible.has(recipientUid))
+      .filter(({recipientUid}) => context.eligible.has(recipientUid) && acceptedRecipients.has(recipientUid))
       .map(({grant, recipientUid, mediaId}) => ({
         grantId: grant.id,
         mediaId,
@@ -218,7 +240,14 @@ export const listMyPrivateMediaInbox = onCall(
       }))
       .filter(({ownerUid, mediaId}) => ownerUid.length > 0 && mediaId.length > 0);
     const context = await loadPeerContext(recipientUid, records.map(({ownerUid}) => ownerUid));
-    const eligibleRecords = records.filter(({ownerUid}) => context.eligible.has(ownerUid));
+    const ownerUids = [...new Set(records.map(({ownerUid}) => ownerUid))];
+    const acceptedByOwner = new Map<string, boolean>();
+    await Promise.all(ownerUids.map(async (ownerUid) => {
+      const accepted = await loadAcceptedRecipients(ownerUid, [recipientUid]);
+      acceptedByOwner.set(ownerUid, accepted.has(recipientUid));
+    }));
+    const eligibleRecords = records.filter(({ownerUid}) =>
+      context.eligible.has(ownerUid) && acceptedByOwner.get(ownerUid) === true);
     if (eligibleRecords.length === 0) return {media: []};
 
     const mediaRefs = eligibleRecords.map(({mediaId}) => db.collection('private_media').doc(mediaId));
