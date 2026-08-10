@@ -4,12 +4,30 @@ Polycircle can continue backend development on the Firebase Emulator Suite even 
 
 ## What stays local
 
-The emulator workflow can run Authentication, Firestore, Cloud Functions, and Storage on the developer machine. It does not deploy or mutate production Cloud Functions. The Flutter app only connects to the emulators when both conditions are true:
+The emulator workflow can run Authentication, Firestore, Cloud Functions, and Storage on the developer machine. It does not deploy Cloud Functions or intentionally mutate live Firebase data. The Flutter app only connects to the emulators when both conditions are true:
 
 1. the Flutter build is a debug build; and
 2. `USE_FIREBASE_EMULATORS=true` is supplied as a Dart define.
 
 The default remains production/staging Firebase configuration, so emulator routing cannot silently turn on in a release build. When emulator mode is active, the app displays a `LOCAL FIREBASE` debug banner.
+
+## Why the local iOS runner uses the real project ID
+
+The native iOS Firebase configuration identifies project `poly-circle-j5v6dy`. Firebase emulator services that interact with each other must use the same project ID as the app, otherwise Auth/Firestore/Functions can appear to be running while the app and seed data are actually in different emulator namespaces.
+
+For that reason, the one-command iOS runner starts Auth, Firestore, Functions, and Storage emulators with `poly-circle-j5v6dy`, matching the native app configuration. This does **not** make the run a deployment. However, using a real project ID with emulators requires extra discipline because any Firebase product that is not explicitly emulated could otherwise reach a live resource.
+
+Polycircle adds defense in depth:
+
+- the runner starts every Firebase backend service currently used by the test path: Auth, Firestore, Functions, and Storage;
+- Flutter routes Auth, Firestore, and Functions explicitly to localhost only in debug emulator mode;
+- the local seed requires Auth + Firestore emulator host variables;
+- those seed hosts must be loopback addresses;
+- seeding the real project ID additionally requires `POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true`;
+- the runner contains no deploy command;
+- CI rules tests continue to use isolated `demo-*` project IDs.
+
+Do not copy the real-project opt-in flag into unrelated scripts.
 
 ## Recommended path before every simulator run
 
@@ -39,7 +57,15 @@ After `nvm use`, the preferred simulator workflow is:
 bash tool/run_ios_local.sh
 ```
 
-That command runs the preflight, starts Authentication/Firestore/Functions/Storage emulators against the production-safe `demo-polycircle` project ID, seeds the local fixture data, launches the iPhone 17 simulator build with explicit emulator routing, and shuts the emulators down when the Flutter run exits.
+That command:
+
+1. refreshes the approved launcher branding if the exact logo file is locally available;
+2. runs the development preflight;
+3. checks for stale Firebase emulator processes on the configured ports;
+4. starts Authentication, Firestore, Functions, and Storage emulators using the same project ID as the native iOS app;
+5. seeds safe local fixture data through loopback-only Admin SDK emulator connections;
+6. launches the iPhone 17 simulator build with explicit emulator routing; and
+7. shuts the emulators down when the Flutter run exits.
 
 To target another already-available Flutter device, pass its exact device name:
 
@@ -58,7 +84,7 @@ The fixture includes two Discover profiles, an existing connection, seeded chat 
 
 ## Manual emulator workflow
 
-The steps below remain useful when the emulators need to stay running across multiple app launches.
+The steps below remain useful when the emulators need to stay running across multiple app launches. Prefer the one-command runner unless you specifically need this mode.
 
 ### Node version
 
@@ -70,7 +96,7 @@ nvm use
 
 The repository `.nvmrc` pins Node 22. Do not develop the Functions package under Node 26 just because Homebrew installed it globally; npm will warn that it is outside the supported engine.
 
-### Start the emulators
+### Start matching-project emulators
 
 From the repository root:
 
@@ -79,23 +105,24 @@ cd functions
 npm install
 npm run build
 cd ..
-firebase emulators:start --project demo-polycircle --only auth,firestore,functions,storage
+firebase emulators:start --project poly-circle-j5v6dy --only auth,firestore,functions,storage
 ```
 
 Leave that terminal running. The Emulator Suite UI is configured on port `4000`.
 
 ### Seed safe local test data
 
-The seed script has two independent production guards: it requires both Auth and Firestore emulator host variables and it refuses any project ID that does not begin with `demo-`. It is intentionally safe to use only against Firebase emulators.
-
 With the emulators already running, open another terminal and run:
 
 ```bash
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-GCLOUD_PROJECT=demo-polycircle \
+POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true \
+GCLOUD_PROJECT=poly-circle-j5v6dy \
 npm --prefix functions run seed:emulator
 ```
+
+Do not remove any of those guard variables. The seed script refuses non-loopback hosts and refuses the real Polycircle project ID without the explicit emulator-only opt-in.
 
 ### Run the iOS Simulator against local Firebase
 
@@ -107,7 +134,7 @@ flutter run -d "iPhone 17" --dart-define=USE_FIREBASE_EMULATORS=true
 
 The default emulator host is `127.0.0.1`, which is appropriate for the iOS Simulator on the same Mac.
 
-If a different host is needed, override it explicitly:
+If a different loopback host is needed, override it explicitly:
 
 ```bash
 flutter run \
@@ -117,13 +144,17 @@ flutter run \
 
 ## Android Emulator
 
-The Android Emulator normally reaches the host Mac at `10.0.2.2`:
+The Android Emulator normally reaches the host Mac at `10.0.2.2`. Android native Firebase configuration still needs to be completed and validated before Android manual testing is considered ready.
+
+Once that configuration is complete, the expected debug routing shape is:
 
 ```bash
 flutter run \
   --dart-define=USE_FIREBASE_EMULATORS=true \
   --dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2
 ```
+
+Do not use the real-project seed against `10.0.2.2`; the seed script intentionally requires local loopback because it runs on the Mac itself.
 
 ## App Check
 
@@ -135,7 +166,7 @@ The approved master artwork is pinned in `docs/branding.md` by exact source file
 
 The Flutter/native launcher icon is separate from artwork shown inside the app. Replacing or generating a Polycircle logo does not automatically replace iOS `AppIcon.appiconset` or Android launcher resources.
 
-On the development Mac, place the exact approved PNG in the project root, Downloads, or Desktop under its original filename, or pass its full path explicitly, then run:
+On the development Mac, place the exact approved PNG in the project root, `branding/`, Downloads, or Desktop under its original filename, or pass its full path explicitly, then run:
 
 ```bash
 bash tool/install_branding.sh
@@ -147,7 +178,9 @@ or:
 bash tool/install_branding.sh "/full/path/to/a_logo_for_an_app_named_polycircle_is_displayed.png"
 ```
 
-The installer verifies the approved SHA-256 before writing anything. It generates the iOS AppIcon sizes when the native iOS asset catalog is present and Android legacy launcher mipmaps when Android native resources are present. If Android adaptive-icon XML is detected, the script warns instead of pretending that adaptive branding has been visually validated.
+The installer verifies the approved SHA-256 before writing anything. It generates the iOS AppIcon sizes when the native iOS asset catalog is present and Android legacy + round launcher mipmaps when Android native resources are present. It records the approved source hash beside generated native assets so preflight checks can identify stale branding. If Android adaptive-icon XML is detected, the script warns instead of pretending that adaptive branding has been visually validated.
+
+The one-command iOS runner invokes the branding installer in optional mode automatically. If the approved PNG is in one of the known locations, the icons are refreshed before the build. If it is not present, functional testing can continue but the runner prints a branding warning.
 
 After changing launcher icons, rebuild/reinstall the app. Simulator/device launchers can cache an old icon from a previously installed build.
 
