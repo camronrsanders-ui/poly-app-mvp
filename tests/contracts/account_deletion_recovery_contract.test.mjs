@@ -20,15 +20,36 @@ test('storage cleanup failure cannot be swallowed before Auth deletion', () => {
     'Private Storage cleanup must complete before Auth deletion.');
 });
 
-test('failed deletion leaves a minimal recoverable paused account marker', () => {
+test('failed deletion leaves a minimal recoverable paused account marker with original request time', () => {
   assert.match(deletion, /minimalPendingAccount/);
   assert.match(deletion, /accountStatus:\s*'paused'/);
-  assert.match(deletion, /deletionRequestedAt:\s*FieldValue\.serverTimestamp\(\)/);
+  assert.match(deletion, /originalDeletionRequestedAt/);
+  assert.match(deletion, /deletionRequestedAt:\s*originalDeletionRequestedAt/);
   assert.doesNotMatch(
     deletion.match(/const minimalPendingAccount[\s\S]*?\}\);/)?.[0] ?? '',
     /email|onboardingComplete|lastActiveAt/,
   );
   assert.match(deletion, /Account deletion is still pending\. Sign in again and retry deletion/);
+});
+
+test('deletion retries preserve the original marker and receive a recovery-sized rate budget', () => {
+  assert.match(deletion, /const deletionPending = userState\.get\('accountStatus'\) === 'paused'/);
+  assert.match(deletion, /deletionPending \? 20 : 2/);
+  assert.match(deletion, /if \(!deletionPending\)[\s\S]*deletionRequestedAt:\s*FieldValue\.serverTimestamp\(\)/);
+  const pendingMarkerIndex = deletion.indexOf('const deletionPending');
+  const pauseWriteIndex = deletion.indexOf("accountStatus: 'paused'", pendingMarkerIndex);
+  assert.ok(pendingMarkerIndex >= 0 && pauseWriteIndex > pendingMarkerIndex);
+});
+
+test('Private Vault user-scoped rate limits are included in deletion cleanup', () => {
+  for (const action of [
+    'private_media_preference_clear',
+    'private_media_confirm',
+    'private_media_review',
+    'private_media_list',
+  ]) {
+    assert.match(deletion, new RegExp(`'${action}'`), `${action} must be cleaned on deletion`);
+  }
 });
 
 test('client login and session gate permit only deletion-pending paused accounts into recovery', () => {
