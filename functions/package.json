@@ -8,6 +8,7 @@
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "check:seed": "node --check scripts/seed_emulator.cjs",
     "seed:emulator": "node scripts/seed_emulator.cjs",
+    "test": "node --test test/*.test.cjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
