@@ -97,6 +97,40 @@ test('active participant can query messages for one known conversation while a n
   await assertFails(getDocs(carolQuery));
 });
 
+test('blocked participant cannot query existing chat history', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      conversationId: 'alice_bob',
+      participantUids: ['alice', 'bob'],
+      active: true,
+      createdAt: new Date(Date.now() - 10_000),
+      lastMessageAt: new Date(),
+    }],
+    ['messages', 'message-1', {
+      conversationId: 'alice_bob',
+      senderUid: 'alice',
+      text: 'history',
+      createdAt: new Date(),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['alice'],
+    }],
+    ['blocks', 'alice_bob', {blockerUid: 'alice', blockedUid: 'bob'}],
+  ]);
+
+  const aliceDb = env.authenticatedContext('alice').firestore();
+  const bobDb = env.authenticatedContext('bob').firestore();
+  for (const db of [aliceDb, bobDb]) {
+    await assertFails(getDocs(query(
+      collection(db, 'messages'),
+      where('conversationId', '==', 'alice_bob'),
+      orderBy('createdAt'),
+    )));
+  }
+});
+
 test('participant cannot reactivate an inactive conversation', async () => {
   await seed([
     ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
