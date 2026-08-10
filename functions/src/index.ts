@@ -75,9 +75,13 @@ export const getDiscoverCandidates = onCall(
     const candidateIds = profiles.docs.map((doc) => doc.id).filter((id) => id !== uid);
     const userRefs = candidateIds.map((id) => db.collection('users').doc(id));
     const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
-    const [userSnaps, passSnaps] = await Promise.all([
+    const outgoingLikeRefs = candidateIds.map((id) => db.collection('likes').doc(`${uid}_${id}`));
+    const matchRefs = candidateIds.map((id) => db.collection('matches').doc(pairId(uid, id)));
+    const [userSnaps, passSnaps, outgoingLikeSnaps, matchSnaps] = await Promise.all([
       userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
       passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
+      outgoingLikeRefs.length ? db.getAll(...outgoingLikeRefs) : Promise.resolve([]),
+      matchRefs.length ? db.getAll(...matchRefs) : Promise.resolve([]),
     ]);
     const active = new Set(userSnaps
       .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
@@ -86,10 +90,31 @@ export const getDiscoverCandidates = onCall(
       .filter((snap) => snap.exists)
       .map((snap) => String(snap.get('toUid') ?? ''))
       .filter((id) => id.length > 0));
+    const alreadyLiked = new Set(outgoingLikeSnaps
+      .filter((snap) => snap.exists)
+      .map((snap) => String(snap.get('toUid') ?? ''))
+      .filter((id) => id.length > 0));
+    // A prior match, including an ended match, keeps the pair out of Discover.
+    // Reconnecting after an explicit unmatch needs a future consentful flow
+    // rather than silently resurfacing the same person.
+    const matchedBefore = new Set(matchSnaps
+      .filter((snap) => snap.exists)
+      .map((snap) => {
+        const userAUid = String(snap.get('userAUid') ?? '');
+        const userBUid = String(snap.get('userBUid') ?? '');
+        return userAUid === uid ? userBUid : userAUid;
+      })
+      .filter((id) => id.length > 0));
 
     const output: FirebaseFirestore.DocumentData[] = [];
     for (const doc of profiles.docs) {
-      if (doc.id === uid || !active.has(doc.id) || passed.has(doc.id)) continue;
+      if (
+        doc.id === uid
+        || !active.has(doc.id)
+        || passed.has(doc.id)
+        || alreadyLiked.has(doc.id)
+        || matchedBefore.has(doc.id)
+      ) continue;
       if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
       if (await isBlocked(uid, doc.id)) continue;
       output.push(toProfileView(doc.id, doc.data()));
@@ -120,13 +145,33 @@ export const likeProfile = onCall(
     const passRef = db.collection('profile_passes').doc(`${uid}_${toUid}`);
 
     const matched = await db.runTransaction(async (tx) => {
-      const reverse = await tx.get(reverseRef);
+      const [reverse, existingMatch] = await Promise.all([
+        tx.get(reverseRef),
+        tx.get(matchRef),
+      ]);
+
+      // Once a connection has explicitly ended, do not let direct callable
+      // requests silently reactivate it. A future reconnect feature must define
+      // new mutual consent and conversation-history behavior first.
+      if (existingMatch.exists && existingMatch.get('active') !== true) {
+        throw new HttpsError('failed-precondition', 'This previous connection cannot be restarted here.');
+      }
+
       // An explicit Like reverses a previous Pass by this same user.
       tx.delete(passRef);
       tx.set(likeRef, {likeId: likeRef.id, fromUid: uid, toUid, createdAt: FieldValue.serverTimestamp()});
+
+      if (existingMatch.exists && existingMatch.get('active') === true) return true;
       if (!reverse.exists) return false;
+
       const [userAUid, userBUid] = [uid, toUid].sort();
-      tx.set(matchRef, {matchId: matchRef.id, userAUid, userBUid, createdAt: FieldValue.serverTimestamp(), active: true}, {merge: true});
+      tx.create(matchRef, {
+        matchId: matchRef.id,
+        userAUid,
+        userBUid,
+        createdAt: FieldValue.serverTimestamp(),
+        active: true,
+      });
       return true;
     });
     return {liked: true, matched, matchId: matched ? matchRef.id : null};
@@ -153,7 +198,32 @@ export const createConversation = onCall(
 
     const ref = db.collection('conversations').doc(id);
     const participantUids = [uid, otherUid].sort();
-    await ref.set({conversationId: id, participantUids, createdAt: FieldValue.serverTimestamp(), lastMessageAt: FieldValue.serverTimestamp(), active: true}, {merge: true});
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (!existing.exists) {
+        tx.create(ref, {
+          conversationId: id,
+          participantUids,
+          createdAt: FieldValue.serverTimestamp(),
+          lastMessageAt: FieldValue.serverTimestamp(),
+          active: true,
+        });
+        return;
+      }
+
+      if (existing.get('active') !== true) {
+        throw new HttpsError('failed-precondition', 'This conversation is closed.');
+      }
+      const existingParticipants = existing.get('participantUids');
+      if (!Array.isArray(existingParticipants)
+        || existingParticipants.length !== 2
+        || existingParticipants[0] !== participantUids[0]
+        || existingParticipants[1] !== participantUids[1]) {
+        throw new HttpsError('internal', 'Conversation integrity check failed.');
+      }
+      // Opening an existing chat is read-only. In particular, do not reset
+      // createdAt or lastMessageAt merely because a participant opened it.
+    });
     return {conversationId: id};
   },
 );
