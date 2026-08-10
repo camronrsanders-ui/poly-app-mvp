@@ -168,7 +168,8 @@ service cloud.firestore {
     }
 
     match /matches/{matchId} {
-      allow read: if signedIn() && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
+      allow read: if signedIn() && resource.data.active == true
+        && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
         && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid);
       allow create, update, delete: if false;
     }
