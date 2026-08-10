@@ -90,7 +90,8 @@ class Profile {
       relationshipStructure: stringValue('relationshipStructure'),
       relationshipStatus: stringValue('relationshipStatus'),
       partnered: boolValue('partnered', false),
-      openToConnections: boolValue('openToConnections', true),
+      // Missing/corrupt privacy fields must never make a profile more visible.
+      openToConnections: boolValue('openToConnections', false),
       intentionTags: strings('intentionTags'),
       interests: strings('interests'),
       lookingForNote: stringValue('lookingForNote'),
@@ -99,8 +100,8 @@ class Profile {
       distanceRadius: intValue('distanceRadius', 50),
       preferredStructures: strings('preferredStructures'),
       preferredIntentions: strings('preferredIntentions'),
-      profileVisibility: stringValue('profileVisibility', 'public'),
-      mapVisibility: stringValue('mapVisibility', 'matches_only'),
+      profileVisibility: stringValue('profileVisibility', 'hidden'),
+      mapVisibility: stringValue('mapVisibility', 'private'),
     );
   }
 
