@@ -11,7 +11,38 @@ class CircleScreen extends StatefulWidget {
 }
 
 class _CircleScreenState extends State<CircleScreen> {
+  static const _connectionTypes = <String>[
+    'nesting_partner',
+    'anchor_partner',
+    'primary_partner',
+    'secondary_partner',
+    'romantic_partner',
+    'sexual_partner',
+    'queerplatonic_partner',
+    'comet_partner',
+    'platonic_life_partner',
+    'important_connection',
+    'custom',
+  ];
+  static const _statuses = <String>['active', 'past', 'complicated'];
+  static const _visibilities = <String>[
+    'public',
+    'matches_only',
+    'private',
+    'unnamed_public',
+  ];
+
   final _service = RelationshipCardService();
+
+  String _safeChoice(Object? raw, List<String> choices, String fallback) {
+    final value = raw?.toString().trim() ?? '';
+    return choices.contains(value) ? value : fallback;
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,11 +101,14 @@ class _CircleScreenState extends State<CircleScreen> {
                 itemCount: cards.length,
                 itemBuilder: (context, index) {
                   final card = cards[index];
+                  final label = card['label']?.toString().trim() ?? '';
+                  final initial = label.isEmpty ? '?' : label.characters.first.toUpperCase();
+                  final cardId = card['id']?.toString() ?? '';
                   return Card(
-                    key: ValueKey(card['id']),
+                    key: ValueKey(cardId),
                     child: ListTile(
-                      leading: CircleAvatar(child: Text('${card['label'] ?? '?'}'.characters.first.toUpperCase())),
-                      title: Text('${card['label'] ?? 'Relationship'}'),
+                      leading: CircleAvatar(child: Text(initial)),
+                      title: Text(label.isEmpty ? 'Relationship' : label),
                       subtitle: Text(_subtitle(card)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -91,15 +125,21 @@ class _CircleScreenState extends State<CircleScreen> {
                           ),
                           PopupMenuButton<String>(
                             onSelected: (value) async {
-                              if (value == 'edit') {
-                                await _openEditor(uid: uid, existing: card, sortOrder: index);
-                              } else if (value == 'hide') {
-                                await _service.deactivateCard(card['id'] as String);
-                              } else if (value == 'delete') {
-                                final confirmed = await _confirmDelete();
-                                if (confirmed == true) {
-                                  await _service.deleteCard(card['id'] as String);
+                              if (cardId.isEmpty) {
+                                _showError('This relationship card could not be changed. Please refresh and try again.');
+                                return;
+                              }
+                              try {
+                                if (value == 'edit') {
+                                  await _openEditor(uid: uid, existing: card, sortOrder: index);
+                                } else if (value == 'hide') {
+                                  await _service.deactivateCard(cardId);
+                                } else if (value == 'delete') {
+                                  final confirmed = await _confirmDelete();
+                                  if (confirmed == true) await _service.deleteCard(cardId);
                                 }
+                              } catch (_) {
+                                _showError('That Circle change could not be saved. Please try again.');
                               }
                             },
                             itemBuilder: (_) => const [
@@ -123,10 +163,14 @@ class _CircleScreenState extends State<CircleScreen> {
   }
 
   Future<void> _moveCard(List<Map<String, dynamic>> cards, int oldIndex, int newIndex) async {
-    final reordered = [...cards];
-    final item = reordered.removeAt(oldIndex);
-    reordered.insert(newIndex, item);
-    await _service.reorderCards(reordered);
+    try {
+      final reordered = [...cards];
+      final item = reordered.removeAt(oldIndex);
+      reordered.insert(newIndex, item);
+      await _service.reorderCards(reordered);
+    } catch (_) {
+      _showError('Could not reorder your Circle right now.');
+    }
   }
 
   String _subtitle(Map<String, dynamic> card) {
@@ -144,90 +188,116 @@ class _CircleScreenState extends State<CircleScreen> {
     final label = TextEditingController(text: '${existing?['label'] ?? ''}');
     final displayName = TextEditingController(text: '${existing?['displayNameOptional'] ?? ''}');
     final note = TextEditingController(text: '${existing?['note'] ?? ''}');
-    String type = '${existing?['connectionType'] ?? 'romantic_partner'}';
-    String status = '${existing?['status'] ?? 'active'}';
-    String visibility = '${existing?['visibility'] ?? 'matches_only'}';
+    var type = _safeChoice(existing?['connectionType'], _connectionTypes, 'romantic_partner');
+    var status = _safeChoice(existing?['status'], _statuses, 'active');
+    var visibility = _safeChoice(existing?['visibility'], _visibilities, 'matches_only');
+    var saving = false;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 16),
-                TextField(controller: label, maxLength: 100, decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner')),
-                const SizedBox(height: 12),
-                TextField(controller: displayName, maxLength: 100, decoration: const InputDecoration(labelText: 'Display name (optional)')),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: type,
-                  decoration: const InputDecoration(labelText: 'Connection type'),
-                  items: const [
-                    'nesting_partner','anchor_partner','primary_partner','secondary_partner','romantic_partner','sexual_partner','queerplatonic_partner','comet_partner','platonic_life_partner','important_connection','custom'
-                  ].map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                  onChanged: (v) => setModalState(() => type = v ?? type),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: const ['active','past','complicated'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                  onChanged: (v) => setModalState(() => status = v ?? status),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: visibility,
-                  decoration: const InputDecoration(labelText: 'Who can see this?'),
-                  items: const ['public','matches_only','private','unnamed_public'].map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                  onChanged: (v) => setModalState(() => visibility = v ?? visibility),
-                ),
-                const SizedBox(height: 12),
-                TextField(controller: note, maxLength: 1000, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: () async {
-                    if (label.text.trim().isEmpty) return;
-                    if (existing == null) {
-                      await _service.createCard(
-                        ownerUid: uid,
-                        label: label.text,
-                        connectionType: type,
-                        displayNameOptional: displayName.text,
-                        status: status,
-                        note: note.text,
-                        visibility: visibility,
-                        sortOrder: sortOrder,
-                      );
-                    } else {
-                      await _service.updateCard(
-                        cardId: existing['id'] as String,
-                        ownerUid: uid,
-                        values: {
-                          'label': label.text.trim(),
-                          'connectionType': type,
-                          'displayNameOptional': displayName.text.trim(),
-                          'status': status,
-                          'note': note.text.trim(),
-                          'visibility': visibility,
-                        },
-                      );
-                    }
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  child: Text(existing == null ? 'Add to my circle' : 'Save changes'),
-                ),
-              ],
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (modalContext) => StatefulBuilder(
+          builder: (modalContext, setModalState) => Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(modalContext).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(modalContext).textTheme.headlineSmall),
+                  const SizedBox(height: 16),
+                  TextField(controller: label, maxLength: 100, decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner')),
+                  const SizedBox(height: 12),
+                  TextField(controller: displayName, maxLength: 100, decoration: const InputDecoration(labelText: 'Display name (optional)')),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: type,
+                    decoration: const InputDecoration(labelText: 'Connection type'),
+                    items: _connectionTypes.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
+                    onChanged: saving ? null : (v) => setModalState(() => type = v ?? type),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: _statuses.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                    onChanged: saving ? null : (v) => setModalState(() => status = v ?? status),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: visibility,
+                    decoration: const InputDecoration(labelText: 'Who can see this?'),
+                    items: _visibilities.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
+                    onChanged: saving ? null : (v) => setModalState(() => visibility = v ?? visibility),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(controller: note, maxLength: 1000, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            if (label.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(modalContext).showSnackBar(
+                                const SnackBar(content: Text('Add a label for this relationship.')),
+                              );
+                              return;
+                            }
+                            setModalState(() => saving = true);
+                            try {
+                              if (existing == null) {
+                                await _service.createCard(
+                                  ownerUid: uid,
+                                  label: label.text,
+                                  connectionType: type,
+                                  displayNameOptional: displayName.text,
+                                  status: status,
+                                  note: note.text,
+                                  visibility: visibility,
+                                  sortOrder: sortOrder,
+                                );
+                              } else {
+                                final cardId = existing['id']?.toString() ?? '';
+                                if (cardId.isEmpty) throw StateError('Missing relationship card ID.');
+                                await _service.updateCard(
+                                  cardId: cardId,
+                                  ownerUid: uid,
+                                  values: {
+                                    'label': label.text.trim(),
+                                    'connectionType': type,
+                                    'displayNameOptional': displayName.text.trim(),
+                                    'status': status,
+                                    'note': note.text.trim(),
+                                    'visibility': visibility,
+                                  },
+                                );
+                              }
+                              if (modalContext.mounted) Navigator.pop(modalContext);
+                            } catch (_) {
+                              if (modalContext.mounted) {
+                                ScaffoldMessenger.of(modalContext).showSnackBar(
+                                  const SnackBar(content: Text('Could not save this relationship. Please try again.')),
+                                );
+                                setModalState(() => saving = false);
+                              }
+                            }
+                          },
+                    child: saving
+                        ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(existing == null ? 'Add to my circle' : 'Save changes'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    } finally {
+      label.dispose();
+      displayName.dispose();
+      note.dispose();
+    }
   }
 
   Future<bool?> _confirmDelete() => showDialog<bool>(
