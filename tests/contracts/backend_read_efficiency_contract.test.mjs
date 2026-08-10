@@ -17,8 +17,10 @@ test('Discover sanitizes malformed limits and batches block checks', () => {
   assert.doesNotMatch(section, /await isBlocked\(uid, doc\.id\)/);
 });
 
-test('connection listing caps fan-out and batches per-connection reads', () => {
+test('connection listing filters active matches before its cap and batches fan-out reads', () => {
   assert.match(profileView, /maxConnectionsPerResponse = 100/);
+  assert.match(profileView, /where\('userAUid', '==', uid\)[\s\S]*?where\('active', '==', true\)[\s\S]*?limit\(maxConnectionsPerResponse\)/);
+  assert.match(profileView, /where\('userBUid', '==', uid\)[\s\S]*?where\('active', '==', true\)[\s\S]*?limit\(maxConnectionsPerResponse\)/);
   assert.match(profileView, /records\.length >= maxConnectionsPerResponse/);
   assert.match(profileView, /db\.getAll\(\.\.\.userRefs\)/);
   assert.match(profileView, /db\.getAll\(\.\.\.profileRefs\)/);
