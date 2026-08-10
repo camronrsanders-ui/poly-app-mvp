@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const index = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
+const safety = fs.readFileSync(path.join(root, 'functions/src/safety.ts'), 'utf8');
 const connectionsScreen = fs.readFileSync(
   path.join(root, 'lib/screens/connections/connections_screen.dart'),
   'utf8',
@@ -37,6 +38,22 @@ test('opening an existing conversation does not rewrite chronology', () => {
     /tx\.(?:set|update)\(ref[\s\S]*createdAt/,
     'Existing conversations must not have createdAt reset when opened.',
   );
+});
+
+test('block and unmatch close chat without pretending a new message was sent', () => {
+  const blockSection = safety.match(/export const blockUser[\s\S]*?export const unblockUser/)?.[0] ?? '';
+  const unmatchSection = safety.match(/export const endConnection[\s\S]*$/)?.[0] ?? '';
+
+  for (const section of [blockSection, unmatchSection]) {
+    assert.match(section, /conversationRef/);
+    assert.match(section, /active:\s*false/);
+    assert.match(section, /endedAt:\s*FieldValue\.serverTimestamp\(\)/);
+    assert.doesNotMatch(
+      section,
+      /lastMessageAt:\s*FieldValue\.serverTimestamp\(\)/,
+      'Ending a connection must preserve the actual last-message timestamp.',
+    );
+  }
 });
 
 test('Connections UI reuses a trusted existing conversation ID before calling creation', () => {
