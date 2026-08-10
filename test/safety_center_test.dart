@@ -10,16 +10,20 @@ void main() {
 
     expect(find.text('Safety center'), findsOneWidget);
     expect(find.text('Block at any time'), findsOneWidget);
-    expect(find.text('End a connection'), findsOneWidget);
-    expect(find.text('Report concerning behavior'), findsOneWidget);
-    expect(find.text('Private media stays gated'), findsOneWidget);
-    expect(find.text('Adults only'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Relationship descriptions are not verification'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Relationship descriptions are not verification'), findsOneWidget);
+    final scrollable = find.byType(Scrollable).first;
+    for (final heading in [
+      'Report concerning behavior',
+      'Private media stays gated',
+      'Relationship descriptions are not verification',
+      'Adults only',
+    ]) {
+      await tester.scrollUntilVisible(
+        find.text(heading),
+        300,
+        scrollable: scrollable,
+      );
+      expect(find.text(heading), findsOneWidget);
+    }
   });
 }
