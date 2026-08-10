@@ -1,5 +1,7 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
+import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {canViewOwnerProfile} from './profile_access';
 
 const db = getFirestore();
 
@@ -45,16 +47,63 @@ function timestampMillis(value: unknown): number | null {
   return candidate?.toMillis?.() ?? null;
 }
 
+function requireOwnerUid(raw: unknown): string {
+  const uid = String(raw ?? '').trim();
+  if (!uid || uid.length > 128 || !/^[A-Za-z0-9_-]+$/.test(uid)) {
+    throw new HttpsError('invalid-argument', 'Invalid profile owner.');
+  }
+  return uid;
+}
+
 export const listMyProfilePhotos = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
     const uid = requireUid(request.auth);
     await Promise.all([assertActive(uid), consumeRateLimit(uid)]);
 
+    const requestedOwner = String(request.data?.ownerUid ?? '').trim();
+    const ownerUid = requestedOwner ? requireOwnerUid(requestedOwner) : uid;
+    const viewingAnotherProfile = ownerUid !== uid;
+
+    if (viewingAnotherProfile && !(await canViewOwnerProfile(db, uid, ownerUid))) {
+      throw new HttpsError('permission-denied', 'Profile photos are unavailable.');
+    }
+
     const snapshot = await db.collection('profile_media')
-      .where('ownerUid', '==', uid)
+      .where('ownerUid', '==', ownerUid)
       .limit(20)
       .get();
+
+    if (viewingAnotherProfile) {
+      const activeDocs = snapshot.docs
+        .filter((doc) => doc.get('status') === 'active')
+        .sort((a, b) => (timestampMillis(b.get('createdAt')) ?? 0) - (timestampMillis(a.get('createdAt')) ?? 0));
+
+      const bucket = getStorage().bucket();
+      const photos = (await Promise.all(activeDocs.map(async (doc) => {
+        const expectedPath = `users/${ownerUid}/profile/${doc.id}.jpg`;
+        const storagePath = String(doc.get('storagePath') ?? '');
+        if (storagePath !== expectedPath) return null;
+        try {
+          const [url] = await bucket.file(storagePath).getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 2 * 60 * 1000,
+          });
+          return {
+            photoId: doc.id,
+            url,
+            expiresInSeconds: 120,
+            createdAtMs: timestampMillis(doc.get('createdAt')),
+          };
+        } catch (_) {
+          // Never expose a raw path or fail the entire profile because one
+          // approved object is temporarily unavailable.
+          return null;
+        }
+      }))).filter((photo): photo is NonNullable<typeof photo> => photo !== null);
+
+      return {photos};
+    }
 
     const photos = snapshot.docs.map((doc) => ({
       photoId: doc.id,
