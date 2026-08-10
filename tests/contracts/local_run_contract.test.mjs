@@ -14,7 +14,9 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /com\.mycompany\.polycircle/);
   assert.match(preflight, /flutter analyze lib/);
   assert.match(preflight, /flutter test/);
+  assert.match(preflight, /npm --prefix functions install/);
   assert.match(preflight, /npm --prefix functions run build/);
+  assert.match(preflight, /npm --prefix functions test/);
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
 });
 
@@ -24,4 +26,13 @@ test('one-command iOS runner is pinned to demo Firebase and explicit emulator ro
   assert.match(iosRunner, /USE_FIREBASE_EMULATORS=true/);
   assert.match(iosRunner, /FIREBASE_EMULATOR_HOST=127\.0\.0\.1/);
   assert.doesNotMatch(iosRunner, /poly-circle-j5v6dy/);
+});
+
+test('one-command iOS runner detects common local setup collisions before Firebase starts', () => {
+  assert.match(iosRunner, /restart-foundation/);
+  assert.match(iosRunner, /lsof/);
+  for (const port of ['4000', '5001', '8080', '9099', '9199']) {
+    assert.match(iosRunner, new RegExp(port));
+  }
+  assert.match(iosRunner, /Close the old emulator\/process first/);
 });
