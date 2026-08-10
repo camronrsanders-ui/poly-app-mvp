@@ -9,7 +9,17 @@ The emulator workflow can run Authentication, Firestore, Cloud Functions, and St
 1. the Flutter build is a debug build; and
 2. `USE_FIREBASE_EMULATORS=true` is supplied as a Dart define.
 
-The default remains production/staging Firebase configuration, so emulator routing cannot silently turn on in a release build.
+The default remains production/staging Firebase configuration, so emulator routing cannot silently turn on in a release build. When emulator mode is active, the app displays a `LOCAL FIREBASE` debug banner.
+
+## Node version
+
+Cloud Functions target Node 22. If `nvm` is installed, run this from the repository root before installing Function dependencies:
+
+```bash
+nvm use
+```
+
+The repository `.nvmrc` pins Node 22. Do not develop the Functions package under Node 26 just because Homebrew installed it globally; npm will warn that it is outside the supported engine.
 
 ## Start the emulators
 
@@ -20,14 +30,36 @@ cd functions
 npm install
 npm run build
 cd ..
-firebase emulators:start --only auth,firestore,functions,storage
+firebase emulators:start --project demo-polycircle --only auth,firestore,functions,storage
 ```
 
 Leave that terminal running. The Emulator Suite UI is configured on port `4000`.
 
+## Seed safe local test data
+
+The seed script has two independent production guards: it requires both Auth and Firestore emulator host variables and it refuses any project ID that does not begin with `demo-`. It is intentionally safe to use only against Firebase emulators.
+
+With the emulators already running, open another terminal and run:
+
+```bash
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+GCLOUD_PROJECT=demo-polycircle \
+npm --prefix functions run seed:emulator
+```
+
+The local fixture login is:
+
+```text
+Email: cam@local.polycircle.test
+Password: LocalOnly123!
+```
+
+The fixture includes two Discover profiles, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle work can continue without a paid deployment.
+
 ## Run the iOS Simulator against local Firebase
 
-Open a second terminal from the repository root:
+Open another terminal from the repository root:
 
 ```bash
 flutter run -d "iPhone 17" --dart-define=USE_FIREBASE_EMULATORS=true
@@ -60,6 +92,8 @@ Debug builds continue to use Firebase App Check debug providers. Do not disable 
 ## Security expectations
 
 Local emulators are for development and automated testing only. Passing emulator tests does not replace staging validation of App Check, IAM, Cloud Functions deployment, indexes, Storage behavior, media processing, account deletion, moderation, or real-device behavior.
+
+Protected-media workflows that depend on real Cloud Storage signing/processing should still be treated as staging release gates even if their Firestore/Functions logic is exercised locally.
 
 ## Before external beta
 
