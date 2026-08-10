@@ -97,6 +97,30 @@ test('profile owner can still read their own full profile document', async () =>
   await assertSucceeds(getDoc(doc(db, 'profiles', 'alice')));
 });
 
+test('active match is readable only by its participants', async () => {
+  await seed([
+    ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
+  ]);
+  const alice = env.authenticatedContext('alice').firestore();
+  const charlie = env.authenticatedContext('charlie').firestore();
+  await assertSucceeds(getDoc(doc(alice, 'matches', 'alice_bob')));
+  await assertFails(getDoc(doc(charlie, 'matches', 'alice_bob')));
+});
+
+test('inactive match history is backend-only even for former participants', async () => {
+  await seed([
+    ['matches', 'alice_bob', {
+      userAUid: 'alice',
+      userBUid: 'bob',
+      active: false,
+      endedReason: 'unmatched',
+      endedAt: new Date(),
+    }],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(getDoc(doc(db, 'matches', 'alice_bob')));
+});
+
 test('like sender can read the like they sent', async () => {
   await seed([
     ['likes', 'alice_bob', {likeId: 'alice_bob', fromUid: 'alice', toUid: 'bob', createdAt: new Date()}],
