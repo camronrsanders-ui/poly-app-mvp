@@ -268,111 +268,159 @@ export const deleteMyAccount = onCall(
     await consumeRateLimit(uid, 'delete_account', 2, 24 * 60 * 60_000);
 
     const userRef = db.collection('users').doc(uid);
-    await userRef.set({accountStatus: 'paused', deletionRequestedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await userRef.set({
+      accountStatus: 'paused',
+      deletionRequestedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
 
-    const [
-      cards, outgoingLikes, incomingLikes, outgoingPasses, incomingPasses,
-      matchesA, matchesB, conversations, sentMessages, outgoingBlocks,
-      incomingBlocks, privateMedia, grantsOwned, grantsReceived, requestsFrom,
-      requestsTo, preferencesAsRecipient, preferencesAsRequester, reportsFrom,
-      reportsAgainst, profileMedia,
-    ] = await Promise.all([
-      db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
-      db.collection('likes').where('fromUid', '==', uid).get(),
-      db.collection('likes').where('toUid', '==', uid).get(),
-      db.collection('profile_passes').where('fromUid', '==', uid).get(),
-      db.collection('profile_passes').where('toUid', '==', uid).get(),
-      db.collection('matches').where('userAUid', '==', uid).get(),
-      db.collection('matches').where('userBUid', '==', uid).get(),
-      db.collection('conversations').where('participantUids', 'array-contains', uid).get(),
-      db.collection('messages').where('senderUid', '==', uid).get(),
-      db.collection('blocks').where('blockerUid', '==', uid).get(),
-      db.collection('blocks').where('blockedUid', '==', uid).get(),
-      db.collection('private_media').where('ownerUid', '==', uid).get(),
-      db.collection('private_media_grants').where('ownerUid', '==', uid).get(),
-      db.collection('private_media_grants').where('recipientUid', '==', uid).get(),
-      db.collection('private_media_requests').where('requesterUid', '==', uid).get(),
-      db.collection('private_media_requests').where('recipientUid', '==', uid).get(),
-      db.collection('private_media_request_preferences').where('recipientUid', '==', uid).get(),
-      db.collection('private_media_request_preferences').where('requesterUid', '==', uid).get(),
-      db.collection('reports').where('reporterUid', '==', uid).get(),
-      db.collection('reports').where('reportedUid', '==', uid).get(),
-      db.collection('profile_media').where('ownerUid', '==', uid).get(),
-    ]);
+    const minimalPendingAccount = () => ({
+      uid,
+      accountStatus: 'paused',
+      deletionRequestedAt: FieldValue.serverTimestamp(),
+    });
 
-    const writer = db.bulkWriter();
-    const seenDeletePaths = new Set<string>();
-    const deleteDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
-      for (const doc of docs) {
-        if (seenDeletePaths.has(doc.ref.path)) continue;
-        seenDeletePaths.add(doc.ref.path);
-        writer.delete(doc.ref);
+    try {
+      const [
+        cards, outgoingLikes, incomingLikes, outgoingPasses, incomingPasses,
+        matchesA, matchesB, conversations, sentMessages, outgoingBlocks,
+        incomingBlocks, privateMedia, grantsOwned, grantsReceived, requestsFrom,
+        requestsTo, preferencesAsRecipient, preferencesAsRequester, reportsFrom,
+        reportsAgainst, profileMedia,
+      ] = await Promise.all([
+        db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
+        db.collection('likes').where('fromUid', '==', uid).get(),
+        db.collection('likes').where('toUid', '==', uid).get(),
+        db.collection('profile_passes').where('fromUid', '==', uid).get(),
+        db.collection('profile_passes').where('toUid', '==', uid).get(),
+        db.collection('matches').where('userAUid', '==', uid).get(),
+        db.collection('matches').where('userBUid', '==', uid).get(),
+        db.collection('conversations').where('participantUids', 'array-contains', uid).get(),
+        db.collection('messages').where('senderUid', '==', uid).get(),
+        db.collection('blocks').where('blockerUid', '==', uid).get(),
+        db.collection('blocks').where('blockedUid', '==', uid).get(),
+        db.collection('private_media').where('ownerUid', '==', uid).get(),
+        db.collection('private_media_grants').where('ownerUid', '==', uid).get(),
+        db.collection('private_media_grants').where('recipientUid', '==', uid).get(),
+        db.collection('private_media_requests').where('requesterUid', '==', uid).get(),
+        db.collection('private_media_requests').where('recipientUid', '==', uid).get(),
+        db.collection('private_media_request_preferences').where('recipientUid', '==', uid).get(),
+        db.collection('private_media_request_preferences').where('requesterUid', '==', uid).get(),
+        db.collection('reports').where('reporterUid', '==', uid).get(),
+        db.collection('reports').where('reportedUid', '==', uid).get(),
+        db.collection('profile_media').where('ownerUid', '==', uid).get(),
+      ]);
+
+      const writer = db.bulkWriter();
+      const seenDeletePaths = new Set<string>();
+      const deleteDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
+        for (const doc of docs) {
+          if (seenDeletePaths.has(doc.ref.path)) continue;
+          seenDeletePaths.add(doc.ref.path);
+          writer.delete(doc.ref);
+        }
+      };
+
+      deleteDocs(cards.docs);
+      deleteDocs(outgoingLikes.docs);
+      deleteDocs(incomingLikes.docs);
+      deleteDocs(outgoingPasses.docs);
+      deleteDocs(incomingPasses.docs);
+      deleteDocs(sentMessages.docs);
+      deleteDocs(outgoingBlocks.docs);
+      deleteDocs(incomingBlocks.docs);
+      deleteDocs(privateMedia.docs);
+      deleteDocs(grantsOwned.docs);
+      deleteDocs(grantsReceived.docs);
+      deleteDocs(requestsFrom.docs);
+      deleteDocs(requestsTo.docs);
+      deleteDocs(preferencesAsRecipient.docs);
+      deleteDocs(preferencesAsRequester.docs);
+      deleteDocs(profileMedia.docs);
+
+      for (const doc of [...matchesA.docs, ...matchesB.docs]) {
+        if (doc.get('active') !== true) continue;
+        writer.set(doc.ref, {
+          active: false,
+          endedAt: FieldValue.serverTimestamp(),
+          endedReason: 'account_deleted',
+        }, {merge: true});
       }
-    };
+      for (const doc of conversations.docs) {
+        if (doc.get('active') !== true) continue;
+        // Connection lifecycle changes must not pretend that a new chat message
+        // happened. Preserve the actual lastMessageAt chronology.
+        writer.set(doc.ref, {
+          active: false,
+          endedAt: FieldValue.serverTimestamp(),
+          endedReason: 'account_deleted',
+        }, {merge: true});
+      }
+      for (const doc of reportsFrom.docs) writer.set(doc.ref, {reporterUid: '[deleted]'}, {merge: true});
+      for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
 
-    deleteDocs(cards.docs);
-    deleteDocs(outgoingLikes.docs);
-    deleteDocs(incomingLikes.docs);
-    deleteDocs(outgoingPasses.docs);
-    deleteDocs(incomingPasses.docs);
-    deleteDocs(sentMessages.docs);
-    deleteDocs(outgoingBlocks.docs);
-    deleteDocs(incomingBlocks.docs);
-    deleteDocs(privateMedia.docs);
-    deleteDocs(grantsOwned.docs);
-    deleteDocs(grantsReceived.docs);
-    deleteDocs(requestsFrom.docs);
-    deleteDocs(requestsTo.docs);
-    deleteDocs(preferencesAsRecipient.docs);
-    deleteDocs(preferencesAsRequester.docs);
-    deleteDocs(profileMedia.docs);
+      writer.delete(db.collection('profiles').doc(uid));
+      for (const action of [
+        'discover', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
+        'block', 'unblock', 'unmatch', 'report',
+        'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
+        'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
+        'private_media_grant', 'private_media_revoke', 'private_media_access',
+        'private_media_report', 'private_media_upload',
+        'profile_photo_upload', 'profile_photo_confirm', 'profile_photo_review',
+        'profile_photo_access', 'profile_photo_delete', 'profile_photo_list',
+      ]) {
+        writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
+      }
+      await writer.close();
 
-    for (const doc of [...matchesA.docs, ...matchesB.docs]) {
-      if (doc.get('active') !== true) continue;
-      writer.set(doc.ref, {
-        active: false,
-        endedAt: FieldValue.serverTimestamp(),
-        endedReason: 'account_deleted',
-      }, {merge: true});
+      // Storage cleanup is privacy-critical. Do not swallow failures and then
+      // delete Authentication, because that would strand private objects with no
+      // user path to retry deletion.
+      const bucket = getStorage().bucket();
+      await Promise.all([
+        bucket.deleteFiles({prefix: `users/${uid}/profile/`}),
+        bucket.deleteFiles({prefix: `users/${uid}/profile_quarantine/`}),
+        bucket.deleteFiles({prefix: `private_media/${uid}/`}),
+        bucket.deleteFiles({prefix: `private_media_quarantine/${uid}/`}),
+      ]);
+
+      // Remove email/onboarding/activity fields before the final Auth deletion.
+      // If the function is interrupted after this point, only a minimal paused
+      // recovery marker remains in Firestore and the user can authenticate again
+      // to retry while the Auth identity still exists.
+      await userRef.set(minimalPendingAccount());
+    } catch (_) {
+      try {
+        await userRef.set(minimalPendingAccount());
+      } catch (_) {
+        // Preserve the original failure. A later authenticated retry remains
+        // possible as long as the earlier pause write succeeded.
+      }
+      throw new HttpsError(
+        'internal',
+        'Account deletion is still pending. Sign in again and retry deletion.',
+      );
     }
-    for (const doc of conversations.docs) {
-      if (doc.get('active') !== true) continue;
-      // Connection lifecycle changes must not pretend that a new chat message
-      // happened. Preserve the actual lastMessageAt chronology.
-      writer.set(doc.ref, {
-        active: false,
-        endedAt: FieldValue.serverTimestamp(),
-        endedReason: 'account_deleted',
-      }, {merge: true});
+
+    try {
+      await getAuth().deleteUser(uid);
+    } catch (error: any) {
+      if (error?.code !== 'auth/user-not-found') {
+        throw new HttpsError(
+          'internal',
+          'Account deletion is still pending. Sign in again and retry deletion.',
+        );
+      }
     }
-    for (const doc of reportsFrom.docs) writer.set(doc.ref, {reporterUid: '[deleted]'}, {merge: true});
-    for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
 
-    writer.delete(db.collection('profiles').doc(uid));
-    for (const action of [
-      'discover', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
-      'block', 'unblock', 'unmatch', 'report',
-      'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
-      'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
-      'private_media_grant', 'private_media_revoke', 'private_media_access',
-      'private_media_report', 'private_media_upload',
-      'profile_photo_upload', 'profile_photo_confirm', 'profile_photo_review',
-      'profile_photo_access', 'profile_photo_delete', 'profile_photo_list',
-    ]) {
-      writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
+    // Auth is gone at this point. A failure to remove this final minimal marker
+    // must not resurrect an account or report deletion as failed to a user who
+    // can no longer authenticate. The tombstone contains no email/profile data.
+    try {
+      await userRef.delete();
+    } catch (_) {
+      console.error('Failed to remove minimal account deletion tombstone after Auth deletion.');
     }
-    await writer.close();
-
-    const bucket = getStorage().bucket();
-    await Promise.all([
-      bucket.deleteFiles({prefix: `users/${uid}/profile/`}).catch(() => undefined),
-      bucket.deleteFiles({prefix: `users/${uid}/profile_quarantine/`}).catch(() => undefined),
-      bucket.deleteFiles({prefix: `private_media/${uid}/`}).catch(() => undefined),
-      bucket.deleteFiles({prefix: `private_media_quarantine/${uid}/`}).catch(() => undefined),
-    ]);
-
-    await userRef.delete();
-    await getAuth().deleteUser(uid);
     return {deleted: true};
   },
 );
