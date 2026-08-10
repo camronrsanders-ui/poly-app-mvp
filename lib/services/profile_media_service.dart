@@ -53,6 +53,36 @@ class ProfileMediaStatus {
   }
 }
 
+class VisibleProfilePhoto {
+  const VisibleProfilePhoto({
+    required this.photoId,
+    required this.url,
+    this.createdAt,
+  });
+
+  final String photoId;
+  final Uri url;
+  final DateTime? createdAt;
+
+  factory VisibleProfilePhoto.fromMap(Map<String, dynamic> data) {
+    final photoId = data['photoId'] as String?;
+    final rawUrl = data['url'] as String?;
+    if (photoId == null || photoId.isEmpty || rawUrl == null || rawUrl.isEmpty) {
+      throw StateError('Visible profile photo response was incomplete.');
+    }
+    final createdAtMs = data['createdAtMs'] is num
+        ? (data['createdAtMs'] as num).toInt()
+        : null;
+    return VisibleProfilePhoto(
+      photoId: photoId,
+      url: Uri.parse(rawUrl),
+      createdAt: createdAtMs == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(createdAtMs),
+    );
+  }
+}
+
 class ProfileMediaService {
   ProfileMediaService({FirebaseFunctions? functions})
       : _functions = functions ?? FirebaseFunctions.instance;
@@ -117,6 +147,17 @@ class ProfileMediaService {
     return raw
         .whereType<Map>()
         .map((item) => ProfileMediaStatus.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  Future<List<VisibleProfilePhoto>> listVisiblePhotos(String ownerUid) async {
+    final callable = _functions.httpsCallable('listMyProfilePhotos');
+    final result = await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    final raw = result.data['photos'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => VisibleProfilePhoto.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
 
