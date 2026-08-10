@@ -47,34 +47,75 @@ function pairId(a: string, b: string): string {
   return [a, b].sort().join('_');
 }
 
-async function pairIsEligible(a: string, b: string): Promise<boolean> {
-  const [userA, userB, blockAB, blockBA, match] = await Promise.all([
-    db.collection('users').doc(a).get(),
-    db.collection('users').doc(b).get(),
-    db.collection('blocks').doc(`${a}_${b}`).get(),
-    db.collection('blocks').doc(`${b}_${a}`).get(),
-    db.collection('matches').doc(pairId(a, b)).get(),
-  ]);
-  return userA.exists
-    && userA.get('accountStatus') === 'active'
-    && userB.exists
-    && userB.get('accountStatus') === 'active'
-    && !blockAB.exists
-    && !blockBA.exists
-    && match.exists
-    && match.get('active') === true;
-}
-
-async function displayName(uid: string): Promise<string> {
-  const profile = await db.collection('profiles').doc(uid).get();
-  return profile.exists ? String(profile.get('displayName') ?? 'Connection').slice(0, 80) : 'Connection';
-}
-
 function millis(value: unknown): number | null {
   if (value && typeof (value as {toMillis?: unknown}).toMillis === 'function') {
     return (value as {toMillis: () => number}).toMillis();
   }
   return null;
+}
+
+type PeerContext = {
+  eligible: Set<string>;
+  displayNames: Map<string, string>;
+};
+
+function peerFromBlock(uid: string, snap: FirebaseFirestore.DocumentSnapshot): string | null {
+  if (!snap.exists) return null;
+  const blockerUid = String(snap.get('blockerUid') ?? '');
+  const blockedUid = String(snap.get('blockedUid') ?? '');
+  if (blockerUid === uid && blockedUid) return blockedUid;
+  if (blockedUid === uid && blockerUid) return blockerUid;
+  return null;
+}
+
+async function loadPeerContext(uid: string, rawPeerUids: string[]): Promise<PeerContext> {
+  const peers = [...new Set(rawPeerUids)]
+    .filter((peerUid) => peerUid.length > 0 && peerUid !== uid)
+    .slice(0, maxRequestsPerDirection * 2);
+  if (peers.length === 0) return {eligible: new Set(), displayNames: new Map()};
+
+  const userRefs = peers.map((peerUid) => db.collection('users').doc(peerUid));
+  const profileRefs = peers.map((peerUid) => db.collection('profiles').doc(peerUid));
+  const blockRefs = peers.flatMap((peerUid) => [
+    db.collection('blocks').doc(`${uid}_${peerUid}`),
+    db.collection('blocks').doc(`${peerUid}_${uid}`),
+  ]);
+  const matchRefs = peers.map((peerUid) => db.collection('matches').doc(pairId(uid, peerUid)));
+
+  const [users, profiles, blocks, matches] = await Promise.all([
+    db.getAll(...userRefs),
+    db.getAll(...profileRefs),
+    db.getAll(...blockRefs),
+    db.getAll(...matchRefs),
+  ]);
+
+  const activePeers = new Set(users
+    .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
+    .map((snap) => snap.id));
+  const blockedPeers = new Set(blocks
+    .map((snap) => peerFromBlock(uid, snap))
+    .filter((peerUid): peerUid is string => peerUid !== null));
+  const matchedPeers = new Set<string>();
+  for (const match of matches) {
+    if (!match.exists || match.get('active') !== true) continue;
+    const userAUid = String(match.get('userAUid') ?? '');
+    const userBUid = String(match.get('userBUid') ?? '');
+    if (userAUid === uid && peers.includes(userBUid)) matchedPeers.add(userBUid);
+    if (userBUid === uid && peers.includes(userAUid)) matchedPeers.add(userAUid);
+  }
+
+  const displayNames = new Map(profiles.map((profile) => {
+    const raw = profile.exists ? profile.get('displayName') : null;
+    const name = typeof raw === 'string' && raw.trim()
+      ? raw.trim().slice(0, 80)
+      : 'Connection';
+    return [profile.id, name];
+  }));
+  const eligible = new Set(peers.filter((peerUid) =>
+    activePeers.has(peerUid) && matchedPeers.has(peerUid) && !blockedPeers.has(peerUid),
+  ));
+
+  return {eligible, displayNames};
 }
 
 export const listMyPrivateMediaRequests = onCall(
@@ -91,25 +132,30 @@ export const listMyPrivateMediaRequests = onCall(
       db.collection('private_media_requests').where('recipientUid', '==', uid).limit(maxRequestsPerDirection).get(),
     ]);
 
-    const items: FirebaseFirestore.DocumentData[] = [];
-    for (const snap of [...outgoing.docs, ...incoming.docs]) {
-      const requesterUid = String(snap.get('requesterUid') ?? '');
-      const recipientUid = String(snap.get('recipientUid') ?? '');
-      if (!requesterUid || !recipientUid) continue;
-      const otherUid = requesterUid === uid ? recipientUid : requesterUid;
-      if (!(await pairIsEligible(uid, otherUid))) continue;
+    const records = [...outgoing.docs, ...incoming.docs]
+      .map((snap) => {
+        const requesterUid = String(snap.get('requesterUid') ?? '');
+        const recipientUid = String(snap.get('recipientUid') ?? '');
+        if (!requesterUid || !recipientUid) return null;
+        const otherUid = requesterUid === uid ? recipientUid : requesterUid;
+        if (!otherUid || otherUid === uid) return null;
+        return {snap, requesterUid, otherUid};
+      })
+      .filter((record): record is NonNullable<typeof record> => record !== null);
 
-      items.push({
+    const context = await loadPeerContext(uid, records.map(({otherUid}) => otherUid));
+    const items = records
+      .filter(({otherUid}) => context.eligible.has(otherUid))
+      .map(({snap, requesterUid, otherUid}) => ({
         requestId: snap.id,
         direction: requesterUid === uid ? 'outgoing' : 'incoming',
         otherUid,
-        otherDisplayName: await displayName(otherUid),
+        otherDisplayName: context.displayNames.get(otherUid) ?? 'Connection',
         status: String(snap.get('status') ?? 'unknown'),
         createdAtMs: millis(snap.get('createdAt')),
         respondedAtMs: millis(snap.get('respondedAt')),
         cancelledAtMs: millis(snap.get('cancelledAt')),
-      });
-    }
+      }));
     return {requests: items};
   },
 );
@@ -125,22 +171,27 @@ export const listMyPrivateMediaShares = onCall(
 
     const grants = await db.collection('private_media_grants')
       .where('ownerUid', '==', ownerUid)
+      .where('active', '==', true)
       .limit(maxGrantsPerListing)
       .get();
-    const shares: FirebaseFirestore.DocumentData[] = [];
-    for (const grant of grants.docs) {
-      if (grant.get('active') !== true) continue;
-      const recipientUid = String(grant.get('recipientUid') ?? '');
-      const mediaId = String(grant.get('mediaId') ?? '');
-      if (!recipientUid || !mediaId || !(await pairIsEligible(ownerUid, recipientUid))) continue;
-      shares.push({
+    const records = grants.docs
+      .map((grant) => ({
+        grant,
+        recipientUid: String(grant.get('recipientUid') ?? ''),
+        mediaId: String(grant.get('mediaId') ?? ''),
+      }))
+      .filter(({recipientUid, mediaId}) => recipientUid.length > 0 && mediaId.length > 0);
+    const context = await loadPeerContext(ownerUid, records.map(({recipientUid}) => recipientUid));
+
+    const shares = records
+      .filter(({recipientUid}) => context.eligible.has(recipientUid))
+      .map(({grant, recipientUid, mediaId}) => ({
         grantId: grant.id,
         mediaId,
         recipientUid,
-        recipientDisplayName: await displayName(recipientUid),
+        recipientDisplayName: context.displayNames.get(recipientUid) ?? 'Connection',
         createdAtMs: millis(grant.get('createdAt')),
-      });
-    }
+      }));
     return {shares};
   },
 );
@@ -156,24 +207,37 @@ export const listMyPrivateMediaInbox = onCall(
 
     const grants = await db.collection('private_media_grants')
       .where('recipientUid', '==', recipientUid)
+      .where('active', '==', true)
       .limit(maxGrantsPerListing)
       .get();
-    const mediaItems: FirebaseFirestore.DocumentData[] = [];
-    for (const grant of grants.docs) {
-      if (grant.get('active') !== true) continue;
-      const ownerUid = String(grant.get('ownerUid') ?? '');
-      const mediaId = String(grant.get('mediaId') ?? '');
-      if (!ownerUid || !mediaId || !(await pairIsEligible(ownerUid, recipientUid))) continue;
+    const records = grants.docs
+      .map((grant) => ({
+        grant,
+        ownerUid: String(grant.get('ownerUid') ?? ''),
+        mediaId: String(grant.get('mediaId') ?? ''),
+      }))
+      .filter(({ownerUid, mediaId}) => ownerUid.length > 0 && mediaId.length > 0);
+    const context = await loadPeerContext(recipientUid, records.map(({ownerUid}) => ownerUid));
+    const eligibleRecords = records.filter(({ownerUid}) => context.eligible.has(ownerUid));
+    if (eligibleRecords.length === 0) return {media: []};
 
-      const media = await db.collection('private_media').doc(mediaId).get();
-      if (!media.exists || media.get('ownerUid') !== ownerUid || media.get('status') !== 'active') continue;
-      mediaItems.push({
+    const mediaRefs = eligibleRecords.map(({mediaId}) => db.collection('private_media').doc(mediaId));
+    const mediaDocs = await db.getAll(...mediaRefs);
+    const mediaById = new Map(mediaDocs.map((media) => [media.id, media]));
+
+    const mediaItems = eligibleRecords
+      .filter(({ownerUid, mediaId}) => {
+        const media = mediaById.get(mediaId);
+        return media?.exists === true
+          && media.get('ownerUid') === ownerUid
+          && media.get('status') === 'active';
+      })
+      .map(({grant, ownerUid, mediaId}) => ({
         mediaId,
         ownerUid,
-        ownerDisplayName: await displayName(ownerUid),
+        ownerDisplayName: context.displayNames.get(ownerUid) ?? 'Connection',
         grantedAtMs: millis(grant.get('createdAt')),
-      });
-    }
+      }));
     return {media: mediaItems};
   },
 );
