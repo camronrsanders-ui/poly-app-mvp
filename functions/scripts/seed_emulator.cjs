@@ -236,9 +236,9 @@ async function seedRelationshipCards() {
   await db.collection('relationship_cards').doc('local-cam-card-1').set({
     ownerUid: 'local-cam',
     label: 'Long-term partner',
-    connectionType: 'Partner',
+    connectionType: 'romantic_partner',
     displayNameOptional: '',
-    status: 'Active',
+    status: 'active',
     note: 'Local-only relationship card used to exercise Circle privacy.',
     visibility: 'unnamed_public',
     sortOrder: 0,
