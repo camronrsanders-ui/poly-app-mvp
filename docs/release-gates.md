@@ -32,6 +32,7 @@ Required:
 - No unrestricted Firestore or Storage rules.
 - Approved Polycircle launcher artwork is installed in both iOS and Android native launcher-icon sets and visually checked at launcher size.
 - Launch/splash branding is checked separately from the launcher icon so correct in-app artwork cannot mask a stale native icon.
+- The branded launcher-icon gate is considered incomplete until the exact approved artwork is confirmed; do not substitute a generated/default icon simply to make the gate green.
 
 ## Gate 2 — Closed beta
 Required in addition to Gate 1:
