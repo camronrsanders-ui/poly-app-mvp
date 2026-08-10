@@ -14,6 +14,10 @@ function requireTargetUid(raw: unknown, currentUid: string): string {
   return uid;
 }
 
+function pairId(a: string, b: string): string {
+  return [a, b].sort().join('_');
+}
+
 async function assertActive(db: FirebaseFirestore.Firestore, uid: string): Promise<void> {
   const user = await db.collection('users').doc(uid).get();
   if (!user.exists || user.get('accountStatus') !== 'active') {
@@ -60,15 +64,46 @@ export const passProfile = onCall(
     // Charge the caller before inspecting the target so arbitrary UID probing
     // cannot bypass the abuse budget.
     await consumeRateLimit(db, uid);
-    await assertActive(db, toUid);
 
+    const callerUserRef = db.collection('users').doc(uid);
+    const targetUserRef = db.collection('users').doc(toUid);
     const passRef = db.collection('profile_passes').doc(`${uid}_${toUid}`);
-    await passRef.set({
-      passId: passRef.id,
-      fromUid: uid,
-      toUid,
-      createdAt: FieldValue.serverTimestamp(),
-    }, {merge: false});
+    const likeRef = db.collection('likes').doc(`${uid}_${toUid}`);
+    const matchRef = db.collection('matches').doc(pairId(uid, toUid));
+
+    await db.runTransaction(async (tx) => {
+      const [callerUser, targetUser, existingLike, existingPass, existingMatch] = await Promise.all([
+        tx.get(callerUserRef),
+        tx.get(targetUserRef),
+        tx.get(likeRef),
+        tx.get(passRef),
+        tx.get(matchRef),
+      ]);
+
+      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Account is not active.');
+      }
+      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Profile is unavailable.');
+      }
+      // Passing is a discovery action, not a connection-ending action. Direct
+      // calls cannot create Pass state for a current or former connection.
+      if (existingMatch.exists) {
+        throw new HttpsError('failed-precondition', 'This profile is not available in discovery.');
+      }
+
+      // Like and Pass both read the opposing state before writing. Firestore
+      // transaction retries therefore make concurrent explicit actions resolve
+      // without leaving both documents behind; the last successful action wins.
+      if (existingLike.exists) tx.delete(likeRef);
+      tx.set(passRef, {
+        passId: passRef.id,
+        fromUid: uid,
+        toUid,
+        createdAt: FieldValue.serverTimestamp(),
+      }, {merge: false});
+      void existingPass;
+    });
 
     return {passed: true};
   },
