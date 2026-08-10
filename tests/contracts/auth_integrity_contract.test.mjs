@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const authService = fs.readFileSync(path.join(root, 'lib/services/auth_service.dart'), 'utf8');
+const profileService = fs.readFileSync(path.join(root, 'lib/services/profile_service.dart'), 'utf8');
 const signupScreen = fs.readFileSync(path.join(root, 'lib/screens/auth/signup_screen.dart'), 'utf8');
 const loginScreen = fs.readFileSync(path.join(root, 'lib/screens/auth/login_screen.dart'), 'utf8');
 const onboarding = fs.readFileSync(path.join(root, 'lib/screens/onboarding/onboarding_screen.dart'), 'utf8');
@@ -20,6 +21,12 @@ test('login validates the trusted account record before completing', () => {
   assert.match(authService, /!account\.exists \|\| account\.data\(\)\?\['accountStatus'\] != 'active'/);
   assert.match(authService, /await _auth\.signOut\(\)/);
   assert.match(authService, /await ref\.update\(/);
+});
+
+test('onboarding completion cannot silently create a partial account document', () => {
+  const section = profileService.match(/Future<void> completeOnboarding[\s\S]*?Future<bool> isOnboardingComplete/)?.[0] ?? '';
+  assert.match(section, /\.doc\(uid\)\.update\(/);
+  assert.doesNotMatch(section, /SetOptions\(merge:\s*true\)/);
 });
 
 test('auth and onboarding async error paths are mounted-safe and recoverable', () => {
