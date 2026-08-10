@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/circle_view_service.dart';
 import '../../services/connection_service.dart';
+import '../../services/profile_media_service.dart';
 import '../../services/safety_service.dart';
 
 class ProfileDetailScreen extends StatefulWidget {
@@ -20,10 +21,20 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   final _connections = ConnectionService();
   final _safety = SafetyService();
   final _circle = CircleViewService();
+  final _profileMedia = ProfileMediaService();
+  late final Future<List<VisibleProfilePhoto>> _photoFuture;
   bool _acting = false;
 
   String get _uid => widget.profile['uid']?.toString() ?? '';
   String _text(String key) => widget.profile[key]?.toString().trim() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _photoFuture = _uid.isEmpty
+        ? Future.value(const <VisibleProfilePhoto>[])
+        : _profileMedia.listVisiblePhotos(_uid);
+  }
 
   List<String> _strings(String key) {
     final raw = widget.profile[key];
@@ -164,6 +175,48 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     );
   }
 
+  Widget _profilePhotos() {
+    return FutureBuilder<List<VisibleProfilePhoto>>(
+      future: _photoFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 110,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final photos = snapshot.data ?? const <VisibleProfilePhoto>[];
+        if (snapshot.hasError || photos.isEmpty) {
+          return const Center(
+            child: CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
+          );
+        }
+        return SizedBox(
+          height: 360,
+          child: PageView.builder(
+            itemCount: photos.length,
+            itemBuilder: (context, index) {
+              final photo = photos[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.network(
+                    photo.url.toString(),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName = _text('displayName').isEmpty ? 'Profile' : _text('displayName');
@@ -200,9 +253,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Center(
-            child: CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
-          ),
+          _profilePhotos(),
           const SizedBox(height: 18),
           Text(
             age == null ? displayName : '$displayName, $age',
