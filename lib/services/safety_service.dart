@@ -39,6 +39,19 @@ class SafetyService {
     await callable.call(<String, dynamic>{'blockedUid': blockedUid});
   }
 
+  Future<List<Map<String, dynamic>>> listBlockedUsers() async {
+    _requireUid();
+    final callable = _functions.httpsCallable('listMyBlocks');
+    final result = await callable.call<Map<String, dynamic>>();
+    final raw = result.data['blocks'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => (item['blockedUid']?.toString() ?? '').isNotEmpty)
+        .toList(growable: false);
+  }
+
   Future<void> reportUser({
     required String reportedUid,
     required String reason,
