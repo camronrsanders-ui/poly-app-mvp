@@ -9,6 +9,10 @@ if [[ "${1:-}" == "--full" ]]; then
   FULL=1
 fi
 
+EXPECTED_FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
+EXPECTED_IOS_BUNDLE_ID="com.mycompany.polycircle"
+EXPECTED_BRANDING_SHA="45ad99e923294cea8d33457c2f4200e82affa10efa5c011cdd691f0bdd392f20"
+
 ok() { printf '✓ %s\n' "$1"; }
 warn() { printf '⚠ %s\n' "$1" >&2; }
 fail() { printf '✗ %s\n' "$1" >&2; exit 1; }
@@ -21,11 +25,17 @@ require_cmd() {
 printf '\nPolycircle development preflight\n'
 printf '===============================\n'
 
+require_cmd bash
 require_cmd flutter
 require_cmd firebase
 require_cmd node
 require_cmd npm
 require_cmd java
+
+for script in tool/*.sh; do
+  bash -n "$script" || fail "Shell syntax check failed for $script"
+done
+ok "development shell scripts parse cleanly"
 
 NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
 if [[ "$NODE_MAJOR" != "22" ]]; then
@@ -50,10 +60,15 @@ if [[ -d ios ]]; then
 
   if command -v plutil >/dev/null 2>&1; then
     BUNDLE_ID="$(plutil -extract BUNDLE_ID raw -o - ios/Runner/GoogleService-Info.plist 2>/dev/null || true)"
-    if [[ -n "$BUNDLE_ID" && "$BUNDLE_ID" != "com.mycompany.polycircle" ]]; then
-      fail "Firebase plist bundle ID is '$BUNDLE_ID'; expected 'com.mycompany.polycircle'."
+    PROJECT_ID="$(plutil -extract PROJECT_ID raw -o - ios/Runner/GoogleService-Info.plist 2>/dev/null || true)"
+    if [[ -n "$BUNDLE_ID" && "$BUNDLE_ID" != "$EXPECTED_IOS_BUNDLE_ID" ]]; then
+      fail "Firebase plist bundle ID is '$BUNDLE_ID'; expected '$EXPECTED_IOS_BUNDLE_ID'."
+    fi
+    if [[ -n "$PROJECT_ID" && "$PROJECT_ID" != "$EXPECTED_FIREBASE_PROJECT_ID" ]]; then
+      fail "Firebase plist project ID is '$PROJECT_ID'; expected '$EXPECTED_FIREBASE_PROJECT_ID'. Emulator and app project IDs would not match."
     fi
     [[ -n "$BUNDLE_ID" ]] && ok "Firebase iOS bundle ID matches Polycircle"
+    [[ -n "$PROJECT_ID" ]] && ok "Firebase iOS project ID matches local runner"
   fi
 
   if [[ -f ios/Runner.xcodeproj/project.pbxproj ]]; then
@@ -63,8 +78,18 @@ if [[ -d ios ]]; then
     ok "No stale iOS 13 deployment target detected"
   fi
 
-  if [[ ! -d ios/Runner/Assets.xcassets/AppIcon.appiconset ]]; then
-    warn "iOS AppIcon asset set is missing. The app can still be debugged, but launcher branding is not ready."
+  IOS_ICON_SET="ios/Runner/Assets.xcassets/AppIcon.appiconset"
+  if [[ ! -d "$IOS_ICON_SET" || ! -f "$IOS_ICON_SET/Contents.json" || ! -f "$IOS_ICON_SET/Icon-App-1024x1024@1x.png" ]]; then
+    warn "Complete iOS AppIcon assets are not present. Run bash tool/install_branding.sh with the approved logo before branded validation."
+  elif [[ -f "$IOS_ICON_SET/.polycircle-source-sha256" ]]; then
+    INSTALLED_BRANDING_SHA="$(tr -d '[:space:]' < "$IOS_ICON_SET/.polycircle-source-sha256")"
+    if [[ "$INSTALLED_BRANDING_SHA" == "$EXPECTED_BRANDING_SHA" ]]; then
+      ok "iOS launcher assets were generated from the approved Polycircle logo"
+    else
+      warn "iOS launcher branding marker does not match the approved logo hash; regenerate branding."
+    fi
+  else
+    warn "iOS launcher assets exist but have no Polycircle source-hash marker; regenerate branding before visual signoff."
   fi
 else
   warn "No ios/ directory in this checkout; native iOS configuration checks were skipped."
