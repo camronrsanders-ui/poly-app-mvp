@@ -18,7 +18,9 @@ class AuthService {
       password: password,
     );
     final user = credential.user;
-    if (user != null) {
+    if (user == null) return credential;
+
+    try {
       await _firestore.collection('users').doc(user.uid).set({
         'uid': user.uid,
         'email': user.email ?? email.trim(),
@@ -27,6 +29,16 @@ class AuthService {
         'lastActiveAt': FieldValue.serverTimestamp(),
         'accountStatus': 'active',
       }, SetOptions(merge: true));
+    } catch (_) {
+      // Account creation is two-system work (Auth + Firestore). If the account
+      // record cannot be created, roll back the brand-new Auth user so the
+      // person is not left signed into an unusable orphan account.
+      try {
+        await user.delete();
+      } catch (_) {
+        await _auth.signOut();
+      }
+      rethrow;
     }
     return credential;
   }
@@ -37,10 +49,24 @@ class AuthService {
       password: password,
     );
     final uid = credential.user?.uid;
-    if (uid != null) {
-      await _firestore.collection('users').doc(uid).set({
+    if (uid == null) return credential;
+
+    try {
+      final ref = _firestore.collection('users').doc(uid);
+      final account = await ref.get();
+      if (!account.exists || account.data()?['accountStatus'] != 'active') {
+        await _auth.signOut();
+        throw StateError('This Polycircle account is unavailable.');
+      }
+      await ref.update({
         'lastActiveAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
+    } catch (_) {
+      // Fail closed when the trusted account record cannot be validated.
+      if (_auth.currentUser?.uid == uid) {
+        await _auth.signOut();
+      }
+      rethrow;
     }
     return credential;
   }
