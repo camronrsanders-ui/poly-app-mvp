@@ -54,13 +54,23 @@ class AuthService {
     try {
       final ref = _firestore.collection('users').doc(uid);
       final account = await ref.get();
-      if (!account.exists || account.data()?['accountStatus'] != 'active') {
+      final data = account.data();
+      final status = data?['accountStatus']?.toString() ?? '';
+      final deletionPending = status == 'paused' && data?['deletionRequestedAt'] != null;
+
+      if (!account.exists || (status != 'active' && !deletionPending)) {
         await _auth.signOut();
         throw StateError('This Polycircle account is unavailable.');
       }
-      await ref.update({
-        'lastActiveAt': FieldValue.serverTimestamp(),
-      });
+
+      if (status == 'active') {
+        await ref.update({
+          'lastActiveAt': FieldValue.serverTimestamp(),
+        });
+      }
+      // A paused account is allowed to remain authenticated only when a trusted
+      // deleteMyAccount attempt previously recorded deletionRequestedAt. The
+      // session gate routes it to deletion recovery, never back into the app.
     } catch (_) {
       // Fail closed when the trusted account record cannot be validated.
       if (_auth.currentUser?.uid == uid) {
