@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Select the Functions runtime in this shell before any npm/Firebase work.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tool/ensure_node22.sh"
+
 DEVICE="${1:-iPhone 17}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
 
