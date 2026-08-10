@@ -6,8 +6,12 @@ No feature is considered release-ready because the UI appears to work. Security,
 Must pass in CI:
 - `flutter pub get`
 - `flutter analyze`
-- Functions TypeScript build
+- Flutter tests
+- Functions TypeScript build and pure behavior tests
+- client/backend security contract tests
 - Firebase Firestore/Storage security tests
+
+Local development may use the Firebase Emulator Suite, but emulator success never substitutes for staging or real-device validation.
 
 ## Gate 1 — Internal alpha
 Required:
@@ -25,7 +29,7 @@ Required:
 
 ## Gate 2 — Closed beta
 Required in addition to Gate 1:
-- Firebase App Check configured and verified.
+- Firebase App Check configured and verified on staging and real devices.
 - Rate limits verified under emulator/staging tests.
 - Crash/error reporting configured without sensitive payload logging.
 - Account pause/delete flows implemented.
@@ -46,8 +50,20 @@ Required in addition to Gate 2:
 - App-store privacy disclosures completed accurately.
 - No P0 security/safety issues open.
 
+## Deferred paid-infrastructure work
+A paid Firebase plan is not required for continued local implementation. Trusted callable development and automated security testing can continue with the production-guarded emulator workflow in `docs/local-development.md`.
+
+The following remain release blockers and must not be marked complete based only on emulator results:
+- deploy Cloud Functions to a real staging project;
+- deploy and validate staging indexes/rules alongside those Functions;
+- validate App Check enforcement against deployed callable endpoints;
+- validate IAM/runtime service accounts and production API permissions;
+- run protected-media signing/processing against real Cloud Storage;
+- run account deletion and moderation end-to-end against staging data;
+- perform real-device iOS/Android acceptance testing.
+
 ## Private Vault gate
-`FeatureFlags.privateVaultEnabled` MUST remain false until GitHub issue #2 is closed and all of the following are verified:
+`FeatureFlags.privateVaultEnabled` and the trusted server-side Private Vault gate MUST remain false until all of the following are verified:
 - trusted upload authorization;
 - quarantine/re-encode/metadata stripping;
 - moderation/safety pipeline;
@@ -59,5 +75,7 @@ Required in addition to Gate 2:
 - age/policy/jurisdiction/app-store review;
 - adversarial access-control tests.
 
+Closing an issue or making the UI visible is never sufficient to enable Private Vault.
+
 ## Merge policy
-`restart-foundation` should not be merged to `main` until Gate 0 passes. Security-sensitive changes should land through reviewed pull requests once the project reaches active development on a computer/CI environment.
+`restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests.
