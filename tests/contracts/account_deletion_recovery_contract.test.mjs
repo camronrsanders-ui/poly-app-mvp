@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(import.meta.dirname, '../..');
 const index = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
 const auth = fs.readFileSync(path.join(root, 'lib/services/auth_service.dart'), 'utf8');
+const accountService = fs.readFileSync(path.join(root, 'lib/services/account_service.dart'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'lib/app.dart'), 'utf8');
 
 const deletion = index.match(/export const deleteMyAccount[\s\S]*?export \{blockUser/)?.[0] ?? '';
@@ -36,6 +37,12 @@ test('client login and session gate permit only deletion-pending paused accounts
   assert.match(app, /status == 'paused' && account\['deletionRequestedAt'\] != null/);
   assert.match(app, /_DeletionRecoveryScreen/);
   assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);
+});
+
+test('deletion client signs out on stale-auth or retryable backend cleanup failure', () => {
+  assert.match(accountService, /on FirebaseFunctionsException catch \(error\)/);
+  assert.match(accountService, /error\.code == 'failed-precondition' \|\| error\.code == 'internal'/);
+  assert.match(accountService, /await _auth\.signOut\(\)/);
 });
 
 test('final Firestore tombstone contains no profile/email data if its deletion fails after Auth removal', () => {
