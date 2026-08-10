@@ -54,34 +54,53 @@ class Profile {
   final String mapVisibility;
 
   factory Profile.fromMap(String uid, Map<String, dynamic> data) {
-    List<String> strings(String key) => List<String>.from(data[key] as List<dynamic>? ?? const []);
+    String stringValue(String key, [String fallback = '']) {
+      final value = data[key];
+      return value is String ? value : fallback;
+    }
+
+    int intValue(String key, int fallback) {
+      final value = data[key];
+      return value is num ? value.toInt() : fallback;
+    }
+
+    bool boolValue(String key, bool fallback) {
+      final value = data[key];
+      return value is bool ? value : fallback;
+    }
+
+    List<String> strings(String key) {
+      final value = data[key];
+      if (value is! List) return const [];
+      return value.whereType<String>().toList(growable: false);
+    }
 
     return Profile(
       uid: uid,
-      displayName: data['displayName'] as String? ?? '',
-      age: (data['age'] as num?)?.toInt() ?? 18,
-      city: data['city'] as String? ?? '',
-      region: data['region'] as String? ?? '',
-      bio: data['bio'] as String? ?? '',
-      headline: data['headline'] as String? ?? '',
-      genderIdentity: data['genderIdentity'] as String? ?? '',
-      pronouns: data['pronouns'] as String? ?? '',
-      orientation: data['orientation'] as String? ?? '',
+      displayName: stringValue('displayName'),
+      age: intValue('age', 18),
+      city: stringValue('city'),
+      region: stringValue('region'),
+      bio: stringValue('bio'),
+      headline: stringValue('headline'),
+      genderIdentity: stringValue('genderIdentity'),
+      pronouns: stringValue('pronouns'),
+      orientation: stringValue('orientation'),
       customIdentityTags: strings('customIdentityTags'),
-      relationshipStructure: data['relationshipStructure'] as String? ?? '',
-      relationshipStatus: data['relationshipStatus'] as String? ?? '',
-      partnered: data['partnered'] as bool? ?? false,
-      openToConnections: data['openToConnections'] as bool? ?? true,
+      relationshipStructure: stringValue('relationshipStructure'),
+      relationshipStatus: stringValue('relationshipStatus'),
+      partnered: boolValue('partnered', false),
+      openToConnections: boolValue('openToConnections', true),
       intentionTags: strings('intentionTags'),
       interests: strings('interests'),
-      lookingForNote: data['lookingForNote'] as String? ?? '',
-      ageMin: (data['ageMin'] as num?)?.toInt() ?? 18,
-      ageMax: (data['ageMax'] as num?)?.toInt() ?? 99,
-      distanceRadius: (data['distanceRadius'] as num?)?.toInt() ?? 50,
+      lookingForNote: stringValue('lookingForNote'),
+      ageMin: intValue('ageMin', 18),
+      ageMax: intValue('ageMax', 99),
+      distanceRadius: intValue('distanceRadius', 50),
       preferredStructures: strings('preferredStructures'),
       preferredIntentions: strings('preferredIntentions'),
-      profileVisibility: data['profileVisibility'] as String? ?? 'public',
-      mapVisibility: data['mapVisibility'] as String? ?? 'matches_only',
+      profileVisibility: stringValue('profileVisibility', 'public'),
+      mapVisibility: stringValue('mapVisibility', 'matches_only'),
     );
   }
 
