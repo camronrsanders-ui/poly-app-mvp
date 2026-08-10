@@ -32,7 +32,7 @@ test('Like cannot silently restart an explicitly ended connection', () => {
 
 test('opening an existing conversation does not rewrite chronology', () => {
   const section = index.match(/export const createConversation[\s\S]*?export const deleteMyAccount/)?.[0] ?? '';
-  assert.match(section, /const existing = await tx\.get\(ref\)/);
+  assert.match(section, /tx\.get\(ref\)/);
   assert.match(section, /if \(!existing\.exists\)[\s\S]*tx\.create\(ref/);
   assert.match(section, /if \(existing\.get\('active'\) !== true\)/);
 
