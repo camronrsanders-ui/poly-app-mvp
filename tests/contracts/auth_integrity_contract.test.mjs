@@ -25,6 +25,14 @@ test('login validates the trusted account record before completing', () => {
   assert.match(authService, /if \(status == 'active'\)[\s\S]*await ref\.update\(/);
 });
 
+test('session gate continuously watches the trusted account record for moderation and deletion changes', () => {
+  assert.match(profileService, /Stream<Map<String, dynamic>\?> watchAccount/);
+  assert.match(profileService, /collection\('users'\)[\s\S]*snapshots\(\)/);
+  assert.match(app, /StreamBuilder<Map<String, dynamic>\?>/);
+  assert.match(app, /stream:\s*_profiles\.watchAccount\(user\.uid\)/);
+  assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);
+});
+
 test('only a trusted pending-deletion marker can bypass normal active-account login', () => {
   assert.match(authService, /status == 'paused' && data\?\['deletionRequestedAt'\] != null/);
   assert.match(app, /final deletionPending = status == 'paused' && account\['deletionRequestedAt'\] != null/);
