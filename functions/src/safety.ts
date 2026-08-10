@@ -220,8 +220,12 @@ export const endConnection = onCall(
         throw new HttpsError('not-found', 'Connection not found.');
       }
 
+      // Always clear stale reciprocal interest, but preserve the original end
+      // metadata when the connection was already closed by an earlier action.
       tx.delete(outgoingLikeRef);
       tx.delete(incomingLikeRef);
+      if (match.get('active') !== true) return;
+
       tx.set(matchRef, {
         active: false,
         endedAt: FieldValue.serverTimestamp(),
@@ -229,7 +233,7 @@ export const endConnection = onCall(
         endedReason: 'unmatched',
       }, {merge: true});
 
-      if (conversation.exists) {
+      if (conversation.exists && conversation.get('active') === true) {
         tx.set(conversationRef, {
           active: false,
           endedAt: FieldValue.serverTimestamp(),
