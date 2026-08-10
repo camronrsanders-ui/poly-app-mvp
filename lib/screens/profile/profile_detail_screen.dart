@@ -9,9 +9,11 @@ class ProfileDetailScreen extends StatefulWidget {
   const ProfileDetailScreen({
     super.key,
     required this.profile,
+    this.showConnectAction = true,
   });
 
   final Map<String, dynamic> profile;
+  final bool showConnectAction;
 
   @override
   State<ProfileDetailScreen> createState() => _ProfileDetailScreenState();
@@ -129,9 +131,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 maxLength: 2000,
                 maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Details (optional)',
-                  hintText: 'Share only what is useful for the safety review.',
-                ),
+                  labelText: 'Details (optional)'),
               ),
             ],
           ),
@@ -347,12 +347,14 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
               );
             },
           ),
-          const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: _acting ? null : _like,
-            icon: const Icon(Icons.favorite_border),
-            label: Text(_acting ? 'Please wait…' : 'Send interest'),
-          ),
+          if (widget.showConnectAction) ...[
+            const SizedBox(height: 28),
+            FilledButton.icon(
+              onPressed: _acting ? null : _like,
+              icon: const Icon(Icons.favorite_border),
+              label: Text(_acting ? 'Please wait…' : 'Send interest'),
+            ),
+          ],
           const SizedBox(height: 28),
         ],
       ),
