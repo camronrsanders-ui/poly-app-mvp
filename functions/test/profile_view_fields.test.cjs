@@ -59,3 +59,25 @@ test('trusted profile view does not synthesize missing optional fields', () => {
     displayName: 'Riley',
   });
 });
+
+test('trusted profile view filters malformed legacy/admin values before cross-user delivery', () => {
+  const view = toProfileView('candidate-3', {
+    displayName: {nested: 'not a string'},
+    age: 12,
+    partnered: 'yes',
+    intentionTags: ['Dating', {nested: true}, 'Dating', '', 7, 'Friendship'],
+    interests: ['Art', null, 'Music'],
+    customIdentityTags: [false, 'Queer'],
+    headline: 'x'.repeat(500),
+    preferredIntentions: ['must stay private'],
+  });
+
+  assert.equal(view.displayName, undefined);
+  assert.equal(view.age, undefined);
+  assert.equal(view.partnered, undefined);
+  assert.deepEqual(view.intentionTags, ['Dating', 'Friendship']);
+  assert.deepEqual(view.interests, ['Art', 'Music']);
+  assert.deepEqual(view.customIdentityTags, ['Queer']);
+  assert.equal(view.headline.length, 160);
+  assert.equal(view.preferredIntentions, undefined);
+});
