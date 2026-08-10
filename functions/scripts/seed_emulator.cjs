@@ -153,8 +153,13 @@ async function seedPerson(person) {
     accountStatus: 'active',
   }, {merge: true});
 
+  // Auth-only fields such as email must never be copied into profiles. Keeping
+  // local fixtures inside the production profile schema ensures owner edits are
+  // still accepted by the real Firestore rules during emulator testing.
+  const {email: _email, ...profile} = person;
   await db.collection('profiles').doc(person.uid).set({
-    ...person,
+    ...profile,
+    customIdentityTags: [],
     ageMin: 18,
     ageMax: 99,
     distanceRadius: 100,
@@ -213,7 +218,6 @@ async function seedExistingConnection() {
 
 async function seedRelationshipCards() {
   await db.collection('relationship_cards').doc('local-cam-card-1').set({
-    cardId: 'local-cam-card-1',
     ownerUid: 'local-cam',
     label: 'Long-term partner',
     connectionType: 'Partner',
