@@ -12,10 +12,15 @@ const privateMediaReportReasons = new Set([
   'other',
 ]);
 
-function requireUid(auth: {uid: string} | undefined): string {
+function requireAuthenticatedUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
-  assertPrivateVaultEnabled();
   return auth.uid;
+}
+
+function requireUid(auth: {uid: string} | undefined): string {
+  const uid = requireAuthenticatedUid(auth);
+  assertPrivateVaultEnabled();
+  return uid;
 }
 
 function requireId(raw: unknown, label: string): string {
@@ -55,31 +60,59 @@ async function consumeRateLimit(uid: string, action: string, max: number, window
   });
 }
 
-async function assertEligiblePair(ownerUid: string, recipientUid: string) {
+function assertEligiblePairSnapshots(
+  ownerUid: string,
+  recipientUid: string,
+  owner: FirebaseFirestore.DocumentSnapshot,
+  recipient: FirebaseFirestore.DocumentSnapshot,
+  ab: FirebaseFirestore.DocumentSnapshot,
+  ba: FirebaseFirestore.DocumentSnapshot,
+  match: FirebaseFirestore.DocumentSnapshot,
+): void {
   if (ownerUid === recipientUid) {
     throw new HttpsError('invalid-argument', 'You cannot share private media with yourself.');
   }
-  await Promise.all([assertActive(ownerUid), assertActive(recipientUid)]);
-
-  const [ab, ba, match] = await Promise.all([
-    db.collection('blocks').doc(`${ownerUid}_${recipientUid}`).get(),
-    db.collection('blocks').doc(`${recipientUid}_${ownerUid}`).get(),
-    db.collection('matches').doc(pairId(ownerUid, recipientUid)).get(),
-  ]);
-
+  if (!owner.exists || owner.get('accountStatus') !== 'active'
+      || !recipient.exists || recipient.get('accountStatus') !== 'active') {
+    throw new HttpsError('permission-denied', 'Private sharing is unavailable.');
+  }
   if (ab.exists || ba.exists) {
     throw new HttpsError('permission-denied', 'Private sharing is unavailable.');
   }
   if (!match.exists || match.get('active') !== true) {
     throw new HttpsError('failed-precondition', 'An active match is required.');
   }
+  const participants = [String(match.get('userAUid') ?? ''), String(match.get('userBUid') ?? '')].sort();
+  const expected = [ownerUid, recipientUid].sort();
+  if (participants[0] !== expected[0] || participants[1] !== expected[1]) {
+    throw new HttpsError('failed-precondition', 'Invalid match state.');
+  }
 }
 
-async function assertAcceptedShareRequest(ownerUid: string, recipientUid: string) {
-  // The viewer requests access from the owner. The owner may share only after
-  // that viewer has explicitly asked and the owner accepted the request.
-  const requestId = `${recipientUid}_${ownerUid}`;
-  const request = await db.collection('private_media_requests').doc(requestId).get();
+async function assertEligiblePair(ownerUid: string, recipientUid: string) {
+  if (ownerUid === recipientUid) {
+    throw new HttpsError('invalid-argument', 'You cannot share private media with yourself.');
+  }
+  const [owner, recipient, ab, ba, match] = await Promise.all([
+    db.collection('users').doc(ownerUid).get(),
+    db.collection('users').doc(recipientUid).get(),
+    db.collection('blocks').doc(`${ownerUid}_${recipientUid}`).get(),
+    db.collection('blocks').doc(`${recipientUid}_${ownerUid}`).get(),
+    db.collection('matches').doc(pairId(ownerUid, recipientUid)).get(),
+  ]);
+  assertEligiblePairSnapshots(ownerUid, recipientUid, owner, recipient, ab, ba, match);
+}
+
+function acceptedRequestId(ownerUid: string, recipientUid: string): string {
+  // The recipient asks the owner for access.
+  return `${recipientUid}_${ownerUid}`;
+}
+
+function requireAcceptedShareRequest(
+  request: FirebaseFirestore.DocumentSnapshot,
+  ownerUid: string,
+  recipientUid: string,
+): void {
   if (!request.exists
       || request.get('requesterUid') !== recipientUid
       || request.get('recipientUid') !== ownerUid
@@ -89,7 +122,6 @@ async function assertAcceptedShareRequest(ownerUid: string, recipientUid: string
       'An accepted private-media request is required before sharing.',
     );
   }
-  return request.ref;
 }
 
 function requireOwnerStoragePath(ownerUid: string, storagePath: string) {
@@ -108,32 +140,45 @@ export const requestPrivateMedia = onCall(
   async (request) => {
     const requesterUid = requireUid(request.auth);
     const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
-    await Promise.all([
-      assertEligiblePair(requesterUid, recipientUid),
-      consumeRateLimit(requesterUid, 'private_media_request', 8, 24 * 60 * 60_000),
-    ]);
+    await assertActive(requesterUid);
+    await consumeRateLimit(requesterUid, 'private_media_request', 8, 24 * 60 * 60_000);
 
-    const preference = await db.collection('private_media_request_preferences')
-      .doc(requestPreferenceId(recipientUid, requesterUid))
-      .get();
-    if (preference.exists && preference.get('doNotAskAgain') === true) {
-      throw new HttpsError('permission-denied', 'This person is not accepting private-media requests from you.');
-    }
-
+    const requesterRef = db.collection('users').doc(requesterUid);
+    const recipientRef = db.collection('users').doc(recipientUid);
+    const abRef = db.collection('blocks').doc(`${requesterUid}_${recipientUid}`);
+    const baRef = db.collection('blocks').doc(`${recipientUid}_${requesterUid}`);
+    const matchRef = db.collection('matches').doc(pairId(requesterUid, recipientUid));
+    const preferenceRef = db.collection('private_media_request_preferences')
+      .doc(requestPreferenceId(recipientUid, requesterUid));
     const requestId = `${requesterUid}_${recipientUid}`;
     const ref = db.collection('private_media_requests').doc(requestId);
-    const existing = await ref.get();
-    if (existing.exists && existing.get('status') === 'pending') {
-      throw new HttpsError('already-exists', 'A private-media request is already pending.');
-    }
 
-    await ref.set({
-      requestId,
-      requesterUid,
-      recipientUid,
-      status: 'pending',
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    await db.runTransaction(async (tx) => {
+      const [requester, recipient, ab, ba, match, preference, existing] = await Promise.all([
+        tx.get(requesterRef),
+        tx.get(recipientRef),
+        tx.get(abRef),
+        tx.get(baRef),
+        tx.get(matchRef),
+        tx.get(preferenceRef),
+        tx.get(ref),
+      ]);
+      assertEligiblePairSnapshots(requesterUid, recipientUid, requester, recipient, ab, ba, match);
+      if (preference.exists && preference.get('doNotAskAgain') === true) {
+        throw new HttpsError('permission-denied', 'This person is not accepting private-media requests from you.');
+      }
+      if (existing.exists && existing.get('status') === 'pending') {
+        throw new HttpsError('already-exists', 'A private-media request is already pending.');
+      }
+
+      tx.set(ref, {
+        requestId,
+        requesterUid,
+        recipientUid,
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
     return {requestId, status: 'pending'};
   },
@@ -149,47 +194,54 @@ export const respondToPrivateMediaRequest = onCall(
     if (!['accepted', 'declined'].includes(decision)) {
       throw new HttpsError('invalid-argument', 'Invalid request decision.');
     }
-    await Promise.all([
-      assertActive(recipientUid),
-      consumeRateLimit(recipientUid, 'private_media_request_response', 30, 60 * 60_000),
-    ]);
+    await assertActive(recipientUid);
+    await consumeRateLimit(recipientUid, 'private_media_request_response', 30, 60 * 60_000);
 
     const ref = db.collection('private_media_requests').doc(requestId);
-    const snap = await ref.get();
-    if (!snap.exists || snap.get('recipientUid') !== recipientUid) {
-      throw new HttpsError('not-found', 'Private-media request not found.');
-    }
-    if (snap.get('status') !== 'pending') {
-      throw new HttpsError('failed-precondition', 'This request is no longer pending.');
-    }
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.get('recipientUid') !== recipientUid) {
+        throw new HttpsError('not-found', 'Private-media request not found.');
+      }
+      if (snap.get('status') !== 'pending') {
+        throw new HttpsError('failed-precondition', 'This request is no longer pending.');
+      }
 
-    const requesterUid = String(snap.get('requesterUid') ?? '');
-    if (!requesterUid) throw new HttpsError('failed-precondition', 'Invalid request state.');
-    await assertEligiblePair(requesterUid, recipientUid);
+      const requesterUid = String(snap.get('requesterUid') ?? '');
+      if (!requesterUid) throw new HttpsError('failed-precondition', 'Invalid request state.');
+      const requesterRef = db.collection('users').doc(requesterUid);
+      const recipientRef = db.collection('users').doc(recipientUid);
+      const abRef = db.collection('blocks').doc(`${requesterUid}_${recipientUid}`);
+      const baRef = db.collection('blocks').doc(`${recipientUid}_${requesterUid}`);
+      const matchRef = db.collection('matches').doc(pairId(requesterUid, recipientUid));
+      const [requester, recipient, ab, ba, match] = await Promise.all([
+        tx.get(requesterRef),
+        tx.get(recipientRef),
+        tx.get(abRef),
+        tx.get(baRef),
+        tx.get(matchRef),
+      ]);
+      assertEligiblePairSnapshots(requesterUid, recipientUid, requester, recipient, ab, ba, match);
 
-    // Apply the response and optional do-not-ask preference atomically so the
-    // user never sees a successful response while their privacy preference was
-    // silently lost to a second write failure.
-    const batch = db.batch();
-    batch.set(ref, {
-      status: decision,
-      respondedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-    if (doNotAskAgain) {
-      batch.set(
-        db.collection('private_media_request_preferences')
-          .doc(requestPreferenceId(recipientUid, requesterUid)),
-        {
-          recipientUid,
-          requesterUid,
-          doNotAskAgain: true,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
-    }
-    await batch.commit();
+      tx.set(ref, {
+        status: decision,
+        respondedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (doNotAskAgain) {
+        tx.set(
+          db.collection('private_media_request_preferences')
+            .doc(requestPreferenceId(recipientUid, requesterUid)),
+          {
+            recipientUid,
+            requesterUid,
+            doNotAskAgain: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+        );
+      }
+    });
 
     // Accepting a request only grants permission to offer/share media later.
     // It never automatically grants access to any existing or future media.
@@ -202,10 +254,8 @@ export const clearPrivateMediaRequestPreference = onCall(
   async (request) => {
     const recipientUid = requireUid(request.auth);
     const requesterUid = requireId(request.data?.requesterUid, 'requesterUid');
-    await Promise.all([
-      assertActive(recipientUid),
-      consumeRateLimit(recipientUid, 'private_media_preference_clear', 30, 60 * 60_000),
-    ]);
+    await assertActive(recipientUid);
+    await consumeRateLimit(recipientUid, 'private_media_preference_clear', 30, 60 * 60_000);
     await db.collection('private_media_request_preferences')
       .doc(requestPreferenceId(recipientUid, requesterUid))
       .delete();
@@ -220,24 +270,40 @@ export const grantPrivateMedia = onCall(
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
     const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
 
-    await Promise.all([
-      assertEligiblePair(ownerUid, recipientUid),
-      consumeRateLimit(ownerUid, 'private_media_grant', 60, 60 * 60_000),
-    ]);
-    const acceptedRequestRef = await assertAcceptedShareRequest(ownerUid, recipientUid);
+    await assertActive(ownerUid);
+    await consumeRateLimit(ownerUid, 'private_media_grant', 60, 60 * 60_000);
 
+    const ownerRef = db.collection('users').doc(ownerUid);
+    const recipientRef = db.collection('users').doc(recipientUid);
+    const abRef = db.collection('blocks').doc(`${ownerUid}_${recipientUid}`);
+    const baRef = db.collection('blocks').doc(`${recipientUid}_${ownerUid}`);
+    const matchRef = db.collection('matches').doc(pairId(ownerUid, recipientUid));
+    const acceptedRequestRef = db.collection('private_media_requests')
+      .doc(acceptedRequestId(ownerUid, recipientUid));
     const mediaRef = db.collection('private_media').doc(mediaId);
-    const media = await mediaRef.get();
-    if (!media.exists || media.get('ownerUid') !== ownerUid || media.get('status') !== 'active') {
-      throw new HttpsError('not-found', 'Private media is unavailable.');
-    }
-
-    const storagePath = String(media.get('storagePath') ?? '');
-    requireOwnerStoragePath(ownerUid, storagePath);
-
     const grantId = `${mediaId}_${recipientUid}`;
-    await Promise.all([
-      db.collection('private_media_grants').doc(grantId).set({
+    const grantRef = db.collection('private_media_grants').doc(grantId);
+
+    await db.runTransaction(async (tx) => {
+      const [owner, recipient, ab, ba, match, acceptedRequest, media, existingGrant] = await Promise.all([
+        tx.get(ownerRef),
+        tx.get(recipientRef),
+        tx.get(abRef),
+        tx.get(baRef),
+        tx.get(matchRef),
+        tx.get(acceptedRequestRef),
+        tx.get(mediaRef),
+        tx.get(grantRef),
+      ]);
+      assertEligiblePairSnapshots(ownerUid, recipientUid, owner, recipient, ab, ba, match);
+      requireAcceptedShareRequest(acceptedRequest, ownerUid, recipientUid);
+      if (!media.exists || media.get('ownerUid') !== ownerUid || media.get('status') !== 'active') {
+        throw new HttpsError('not-found', 'Private media is unavailable.');
+      }
+      const storagePath = String(media.get('storagePath') ?? '');
+      requireOwnerStoragePath(ownerUid, storagePath);
+
+      tx.set(grantRef, {
         mediaId,
         ownerUid,
         recipientUid,
@@ -245,12 +311,12 @@ export const grantPrivateMedia = onCall(
         createdAt: FieldValue.serverTimestamp(),
         revokedAt: null,
         revokedReason: null,
-      }, {merge: true}),
-      acceptedRequestRef.set({
+      }, {merge: existingGrant.exists});
+      tx.set(acceptedRequestRef, {
         lastSharedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true}),
-    ]);
+      }, {merge: true});
+    });
 
     return {grantId};
   },
@@ -259,25 +325,26 @@ export const grantPrivateMedia = onCall(
 export const revokePrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
-    const ownerUid = requireUid(request.auth);
+    // Revocation is intentionally allowed even if the feature kill switch is
+    // OFF. A safety control should never be disabled by a product rollout flag.
+    const ownerUid = requireAuthenticatedUid(request.auth);
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
     const recipientUid = requireId(request.data?.recipientUid, 'recipientUid');
-    await Promise.all([
-      assertActive(ownerUid),
-      consumeRateLimit(ownerUid, 'private_media_revoke', 120, 60 * 60_000),
-    ]);
+    await assertActive(ownerUid);
+    await consumeRateLimit(ownerUid, 'private_media_revoke', 120, 60 * 60_000);
 
     const grantRef = db.collection('private_media_grants').doc(`${mediaId}_${recipientUid}`);
-    const grant = await grantRef.get();
-    if (!grant.exists || grant.get('ownerUid') !== ownerUid || grant.get('recipientUid') !== recipientUid) {
-      throw new HttpsError('not-found', 'Private media grant not found.');
-    }
-
-    await grantRef.set({
-      active: false,
-      revokedAt: FieldValue.serverTimestamp(),
-      revokedReason: 'owner_revoked',
-    }, {merge: true});
+    await db.runTransaction(async (tx) => {
+      const grant = await tx.get(grantRef);
+      if (!grant.exists || grant.get('ownerUid') !== ownerUid || grant.get('recipientUid') !== recipientUid) {
+        throw new HttpsError('not-found', 'Private media grant not found.');
+      }
+      tx.set(grantRef, {
+        active: false,
+        revokedAt: FieldValue.serverTimestamp(),
+        revokedReason: 'owner_revoked',
+      }, {merge: true});
+    });
 
     return {revoked: true};
   },
@@ -305,9 +372,11 @@ export const getPrivateMediaAccess = onCall(
 
     await assertEligiblePair(ownerUid, recipientUid);
 
-    const grant = await db.collection('private_media_grants')
-      .doc(`${mediaId}_${recipientUid}`)
-      .get();
+    const [grant, acceptedRequest] = await Promise.all([
+      db.collection('private_media_grants').doc(`${mediaId}_${recipientUid}`).get(),
+      db.collection('private_media_requests').doc(acceptedRequestId(ownerUid, recipientUid)).get(),
+    ]);
+    requireAcceptedShareRequest(acceptedRequest, ownerUid, recipientUid);
     if (!grant.exists || grant.get('active') !== true || grant.get('ownerUid') !== ownerUid) {
       throw new HttpsError('permission-denied', 'No active private media grant.');
     }
@@ -324,7 +393,9 @@ export const getPrivateMediaAccess = onCall(
 export const reportPrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 15},
   async (request) => {
-    const reporterUid = requireUid(request.auth);
+    // Reporting is a safety operation and stays available during a Vault kill-
+    // switch event; it never grants access or returns private media bytes.
+    const reporterUid = requireAuthenticatedUid(request.auth);
     const mediaId = requireId(request.data?.mediaId, 'mediaId');
     const reason = String(request.data?.reason ?? '').trim();
     const details = String(request.data?.details ?? '').trim();
@@ -334,10 +405,8 @@ export const reportPrivateMedia = onCall(
     if (details.length > 2000) {
       throw new HttpsError('invalid-argument', 'Report details are too long.');
     }
-    await Promise.all([
-      assertActive(reporterUid),
-      consumeRateLimit(reporterUid, 'private_media_report', 8, 24 * 60 * 60_000),
-    ]);
+    await assertActive(reporterUid);
+    await consumeRateLimit(reporterUid, 'private_media_report', 8, 24 * 60 * 60_000);
 
     const media = await db.collection('private_media').doc(mediaId).get();
     if (!media.exists) throw new HttpsError('not-found', 'Private media not found.');
