@@ -19,12 +19,19 @@ test('Firebase emulator routing is explicit, debug-only, and off by default', ()
   assert.match(main, /await configureFirebaseRuntime\(\);/);
 });
 
-test('local seed refuses to run without emulator hosts and a demo project', () => {
+test('local seed requires loopback emulator hosts before it can write anything', () => {
   assert.match(seed, /FIRESTORE_EMULATOR_HOST/);
   assert.match(seed, /FIREBASE_AUTH_EMULATOR_HOST/);
-  assert.match(seed, /if \(!firestoreHost \|\| !authHost\)/);
-  assert.match(seed, /if \(!projectId\.startsWith\('demo-'\)\)/);
-  assert.match(seed, /Refusing to seed non-demo project/);
+  assert.match(seed, /isLoopbackEmulatorHost/);
+  assert.match(seed, /127\\\.0\\\.0\\\.1/);
+  assert.match(seed, /Refusing to seed: emulator hosts must be loopback addresses/);
+});
+
+test('real Polycircle project ID is accepted only with explicit emulator-only acknowledgement', () => {
+  assert.match(seed, /nativeFirebaseProjectId = 'poly-circle-j5v6dy'/);
+  assert.match(seed, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR/);
+  assert.match(seed, /projectId === nativeFirebaseProjectId/);
+  assert.match(seed, /projectId\.startsWith\('demo-'\)/);
 });
 
 test('seeded profile and Circle fixtures stay inside production document schemas', () => {
