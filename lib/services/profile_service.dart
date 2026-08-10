@@ -6,6 +6,11 @@ class ProfileService {
 
   final FirebaseFirestore _firestore;
 
+  Future<Map<String, dynamic>?> getAccount(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    return doc.data();
+  }
+
   Future<Map<String, dynamic>?> getProfile(String uid) async {
     final doc = await _firestore.collection('profiles').doc(uid).get();
     return doc.data();
@@ -39,7 +44,7 @@ class ProfileService {
   }
 
   Future<bool> isOnboardingComplete(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    return doc.data()?['onboardingComplete'] == true;
+    final data = await getAccount(uid);
+    return data?['onboardingComplete'] == true;
   }
 }
