@@ -185,13 +185,20 @@ service cloud.firestore {
         && request.resource.data.participantUids == resource.data.participantUids
         && request.resource.data.active == resource.data.active
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
+        && request.resource.data.lastMessageAt == request.time
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
     }
 
     match /messages/{messageId} {
-      allow create: if signedIn() && request.resource.data.senderUid == request.auth.uid
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'conversationId', 'senderUid', 'text', 'createdAt', 'isDeleted',
+          'messageType', 'readBy'
+        ])
+        && request.resource.data.senderUid == request.auth.uid
         && request.resource.data.messageType == 'text' && request.resource.data.isDeleted == false
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.createdAt == request.time
         && request.resource.data.readBy is list && request.resource.data.readBy.size() == 1
         && request.resource.data.readBy[0] == request.auth.uid
         && isConversationParticipant(request.resource.data.conversationId)
