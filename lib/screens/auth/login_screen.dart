@@ -35,9 +35,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _auth.signIn(email: _email.text, password: _password.text);
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? 'Unable to sign in.');
+      if (mounted) {
+        setState(() => _error = e.message ?? 'Unable to sign in.');
+      }
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -58,7 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? 'Could not send reset email.');
+      if (mounted) {
+        setState(() => _error = e.message ?? 'Could not send reset email.');
+      }
     }
   }
 
@@ -101,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 20),
             FilledButton(onPressed: _busy ? null : _login, child: Text(_busy ? 'Signing in…' : 'Sign in')),
             TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Forgot password?')),
-            TextButton(onPressed: widget.onShowSignUp, child: const Text('New to Polycircle? Create account')),
+            TextButton(onPressed: _busy ? null : widget.onShowSignUp, child: const Text('New to Polycircle? Create account')),
           ],
         ),
       ),
