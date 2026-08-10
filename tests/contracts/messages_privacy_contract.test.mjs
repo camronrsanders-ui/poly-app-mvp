@@ -18,12 +18,13 @@ test('Messages never reads another users full profile document directly', () => 
   assert.doesNotMatch(messagesScreen, /FirebaseFirestore\.instance\.collection\(['"]profiles['"]\)/);
 });
 
-test('Messages resolves participant and conversation list data through the trusted connection view', () => {
+test('Messages resolves participant and conversation list data through the trusted batched connection view', () => {
   assert.match(messagesScreen, /ConnectionService/);
   assert.match(messagesScreen, /loadConnections\(\)/);
   assert.match(connectionService, /httpsCallable\(['"]listMyConnections['"]\)/);
-  assert.match(profileView, /collection\(['"]conversations['"]\)\.doc\(match\.id\)\.get\(\)/);
-  assert.match(profileView, /conversationId:\s*conversationActive \? conversation\.id : null/);
+  assert.match(profileView, /const conversationRefs = records\.map\(\(\{match\}\) => db\.collection\(['"]conversations['"]\)\.doc\(match\.id\)\)/);
+  assert.match(profileView, /db\.getAll\(\.\.\.conversationRefs\)/);
+  assert.match(profileView, /conversationId:\s*conversationActive \? conversation\?\.id : null/);
 });
 
 test('client code does not issue a conversations collection listener', () => {
@@ -32,10 +33,17 @@ test('client code does not issue a conversations collection listener', () => {
   assert.doesNotMatch(messagingService, /collection\(['"]conversations['"]\)[\s\S]*?snapshots\(\)/);
 });
 
-test('full profile documents remain owner-only while Messages uses sanitized connection data', () => {
+test('message send is atomic with the conversation activity update', () => {
+  assert.match(messagingService, /final batch = _firestore\.batch\(\)/);
+  assert.match(messagingService, /batch\.set\(messageRef/);
+  assert.match(messagingService, /batch\.update\(conversationRef/);
+  assert.match(messagingService, /await batch\.commit\(\)/);
+});
+
+test('full profile documents remain owner-only and active-account-only', () => {
   assert.match(
     rules,
-    /match \/profiles\/\{uid\}[\s\S]*?allow read, delete:\s*if isSelf\(uid\);/,
+    /match \/profiles\/\{uid\}[\s\S]*?allow read(?:, delete)?:\s*if isSelf\(uid\) && userIsActive\(uid\);/,
   );
 });
 
