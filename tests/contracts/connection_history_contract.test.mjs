@@ -10,6 +10,10 @@ const connectionsScreen = fs.readFileSync(
   path.join(root, 'lib/screens/connections/connections_screen.dart'),
   'utf8',
 );
+const profileDetail = fs.readFileSync(
+  path.join(root, 'lib/screens/profile/profile_detail_screen.dart'),
+  'utf8',
+);
 
 test('Discover excludes outgoing likes and any current or former match', () => {
   const section = index.match(/export const getDiscoverCandidates[\s\S]*?export const likeProfile/)?.[0] ?? '';
@@ -61,4 +65,12 @@ test('Connections UI reuses a trusted existing conversation ID before calling cr
   const ensureIndex = connectionsScreen.indexOf('ensureConversation(otherUid)');
   assert.ok(existingIndex >= 0 && ensureIndex > existingIndex);
   assert.match(connectionsScreen, /if \(conversationId\.isEmpty\)/);
+});
+
+test('existing connections can reopen the trusted profile view without another Connect action', () => {
+  assert.match(connectionsScreen, /ProfileDetailScreen/);
+  assert.match(connectionsScreen, /showConnectAction:\s*false/);
+  assert.match(connectionsScreen, /PopupMenuItem\(value:\s*'profile',\s*child:\s*Text\('View profile'\)\)/);
+  assert.match(profileDetail, /this\.showConnectAction\s*=\s*true/);
+  assert.match(profileDetail, /if \(widget\.showConnectAction\)/);
 });
