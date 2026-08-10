@@ -28,6 +28,11 @@ function pairId(a: string, b: string): string {
   return [a, b].sort().join('_');
 }
 
+function timestampMillis(value: unknown): number | null {
+  const candidate = value as {toMillis?: () => number} | null | undefined;
+  return candidate?.toMillis?.() ?? null;
+}
+
 async function assertActive(uid: string): Promise<void> {
   const db = getFirestore();
   const snap = await db.collection('users').doc(uid).get();
@@ -193,6 +198,52 @@ export const unblockUser = onCall(
 
     await db.collection('blocks').doc(`${blockerUid}_${blockedUid}`).delete();
     return {blocked: false};
+  },
+);
+
+export const listMyBlocks = onCall(
+  {enforceAppCheck: true, maxInstances: 20},
+  async (request) => {
+    const db = getFirestore();
+    const uid = requireUid(request.auth);
+    await Promise.all([
+      assertActive(uid),
+      enforceRateLimit(uid, 'block_list', 60, 60_000),
+    ]);
+
+    const snapshot = await db.collection('blocks')
+      .where('blockerUid', '==', uid)
+      .limit(200)
+      .get();
+    if (snapshot.empty) return {blocks: []};
+
+    const blockedUids = snapshot.docs
+      .map((doc) => String(doc.get('blockedUid') ?? '').trim())
+      .filter((blockedUid) => blockedUid.length > 0 && blockedUid !== uid);
+    const uniqueUids = [...new Set(blockedUids)].slice(0, 200);
+    const profileRefs = uniqueUids.map((blockedUid) => db.collection('profiles').doc(blockedUid));
+    const profiles = profileRefs.length ? await db.getAll(...profileRefs) : [];
+    const names = new Map(profiles.map((profile) => {
+      const raw = profile.exists ? profile.get('displayName') : null;
+      const displayName = typeof raw === 'string' && raw.trim()
+        ? raw.trim().slice(0, 80)
+        : 'Blocked member';
+      return [profile.id, displayName];
+    }));
+
+    const blocks = snapshot.docs
+      .map((doc) => {
+        const blockedUid = String(doc.get('blockedUid') ?? '').trim();
+        if (!blockedUid || blockedUid === uid) return null;
+        return {
+          blockedUid,
+          displayName: names.get(blockedUid) ?? 'Blocked member',
+          createdAtMs: timestampMillis(doc.get('createdAt')),
+        };
+      })
+      .filter((block): block is NonNullable<typeof block> => block !== null);
+    blocks.sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
+    return {blocks};
   },
 );
 
