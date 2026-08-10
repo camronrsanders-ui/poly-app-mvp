@@ -66,32 +66,34 @@ export const cancelPrivateMediaRequest = onCall(
     const ownerUid = String(requestSnap.get('recipientUid') ?? '');
     if (!ownerUid) throw new HttpsError('failed-precondition', 'Invalid private-media request state.');
 
+    // Query the exact owner/recipient pair before revoking. The old recipient-only
+    // capped query could miss this owner's grants after enough unrelated history
+    // accumulated, causing withdrawn consent to be incomplete.
+    const grants = await db.collection('private_media_grants')
+      .where('ownerUid', '==', ownerUid)
+      .where('recipientUid', '==', requesterUid)
+      .where('active', '==', true)
+      .get();
+
+    const writer = db.bulkWriter();
+    for (const grant of grants.docs) {
+      writer.set(grant.ref, {
+        active: false,
+        revokedAt: FieldValue.serverTimestamp(),
+        revokedReason: 'recipient_cancelled_request',
+      }, {merge: true});
+    }
+    await writer.close();
+
+    // Mark the request cancelled only after every currently-active grant for
+    // the pair has been revoked. A failure leaves the accepted request intact,
+    // making retry semantics explicit instead of reporting false completion.
     await requestRef.set({
       status: 'cancelled',
       cancelledAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
 
-    // Withdrawing the request also withdraws the requester's consent to keep
-    // receiving this owner's private media. Revoke all active grants from that
-    // owner to this requester without exposing grant metadata to the client.
-    const grants = await db.collection('private_media_grants')
-      .where('recipientUid', '==', requesterUid)
-      .limit(250)
-      .get();
-    const writer = db.bulkWriter();
-    let revokedGrantCount = 0;
-    for (const grant of grants.docs) {
-      if (grant.get('ownerUid') !== ownerUid || grant.get('active') !== true) continue;
-      writer.set(grant.ref, {
-        active: false,
-        revokedAt: FieldValue.serverTimestamp(),
-        revocationReason: 'recipient_cancelled_request',
-      }, {merge: true});
-      revokedGrantCount++;
-    }
-    await writer.close();
-
-    return {cancelled: true, revokedGrantCount};
+    return {cancelled: true, revokedGrantCount: grants.size};
   },
 );
