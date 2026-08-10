@@ -27,6 +27,17 @@ test('blocked-member listing returns minimal management metadata only', () => {
   assert.doesNotMatch(section, /bio|orientation|relationshipStructure|lookingForNote|intentionTags/);
 });
 
+test('unblock re-revokes private access before removing the block', () => {
+  const section = safetyBackend.match(/export const unblockUser[\s\S]*?export const listMyBlocks/)?.[0] ?? '';
+  assert.match(section, /const block = await blockRef\.get\(\)/);
+  assert.match(section, /revokePrivateAccessBetween\(blockerUid, blockedUid, 'unblocked_after_block'\)/);
+  assert.match(section, /await blockRef\.delete\(\)/);
+  assert.ok(
+    section.indexOf('revokePrivateAccessBetween') < section.indexOf('await blockRef.delete()'),
+    'private grants must be revoked before the block disappears',
+  );
+});
+
 test('Safety Center can list and unblock without restoring old connections', () => {
   assert.match(safetyService, /httpsCallable\('listMyBlocks'\)/);
   assert.match(safetyCenter, /Manage blocked members/);
