@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: polycircle-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   flutter:
     name: Flutter analyze and test
@@ -44,7 +48,7 @@ jobs:
       - name: Check local emulator seed script
         run: npm run check:seed
       - name: Run pure backend behavior tests
-        run: node --test test/*.test.cjs
+        run: npm test
       - name: Load compiled Functions module
         env:
           GCLOUD_PROJECT: demo-polycircle
@@ -59,6 +63,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check development shell scripts
+        run: bash -n tool/*.sh
       - name: Run static contract tests
         run: node --test tests/contracts/*.test.mjs
 
