@@ -45,17 +45,39 @@ void main() {
       expect(profile.toMap().containsKey('avatarUrl'), isFalse);
     });
 
-    test('uses privacy-conscious defaults for missing fields', () {
+    test('fails closed for missing privacy fields', () {
       final profile = Profile.fromMap('user-2', const {});
 
       expect(profile.age, 18);
       expect(profile.ageMin, 18);
       expect(profile.ageMax, 99);
       expect(profile.distanceRadius, 50);
-      expect(profile.openToConnections, isTrue);
-      expect(profile.profileVisibility, 'public');
-      expect(profile.mapVisibility, 'matches_only');
+      expect(profile.openToConnections, isFalse);
+      expect(profile.profileVisibility, 'hidden');
+      expect(profile.mapVisibility, 'private');
       expect(profile.customIdentityTags, isEmpty);
+    });
+
+    test('ignores malformed legacy list and scalar values instead of crashing', () {
+      final profile = Profile.fromMap('legacy', {
+        'displayName': 42,
+        'age': 'thirty',
+        'partnered': 'yes',
+        'customIdentityTags': ['polyamorous', 7, {'nested': true}],
+        'interests': 'not-a-list',
+        'openToConnections': 'yes',
+        'profileVisibility': 123,
+        'mapVisibility': false,
+      });
+
+      expect(profile.displayName, isEmpty);
+      expect(profile.age, 18);
+      expect(profile.partnered, isFalse);
+      expect(profile.customIdentityTags, ['polyamorous']);
+      expect(profile.interests, isEmpty);
+      expect(profile.openToConnections, isFalse);
+      expect(profile.profileVisibility, 'hidden');
+      expect(profile.mapVisibility, 'private');
     });
   });
 }
