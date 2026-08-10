@@ -31,20 +31,6 @@ class MessagingService {
     return id;
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> watchConversations() {
-    final uid = _requireUid();
-    return _firestore
-        .collection('conversations')
-        .where('participantUids', arrayContains: uid)
-        // Firestore rules intentionally make inactive conversations unreadable.
-        // Include the same constraint in the query so the rules can prove that
-        // every possible result is an active conversation for this participant.
-        .where('active', isEqualTo: true)
-        .orderBy('lastMessageAt', descending: true)
-        .limit(50)
-        .snapshots();
-  }
-
   Stream<QuerySnapshot<Map<String, dynamic>>> watchMessages(String conversationId) {
     _requireUid();
     return _firestore
