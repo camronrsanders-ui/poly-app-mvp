@@ -11,6 +11,10 @@ Must pass in CI:
 - client/backend security contract tests
 - Firebase Firestore/Storage security tests
 
+Before manual simulator/device test cycles, run the local development preflight:
+- `bash tool/dev_preflight.sh`
+- use `bash tool/dev_preflight.sh --full` when the emulator-backed Firestore/Storage adversarial suite should be included.
+
 Local development may use the Firebase Emulator Suite, but emulator success never substitutes for staging or real-device validation.
 
 ## Gate 1 — Internal alpha
@@ -26,6 +30,8 @@ Required:
 - Messaging authorization tested.
 - Block/report tested across direct-ID access attempts.
 - No unrestricted Firestore or Storage rules.
+- Approved Polycircle launcher artwork is installed in both iOS and Android native launcher-icon sets and visually checked at launcher size.
+- Launch/splash branding is checked separately from the launcher icon so correct in-app artwork cannot mask a stale native icon.
 
 ## Gate 2 — Closed beta
 Required in addition to Gate 1:
