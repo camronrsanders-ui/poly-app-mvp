@@ -221,6 +221,9 @@ test('client cannot forge another users block', async () => {
 });
 
 test('client cannot create or delete block state directly', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+  ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(setDoc(doc(db, 'blocks', 'alice_bob'), {
     blockerUid: 'alice',
