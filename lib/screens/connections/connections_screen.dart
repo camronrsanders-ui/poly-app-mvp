@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/connection_service.dart';
 import '../../services/messaging_service.dart';
 import '../messages/chat_screen.dart';
+import '../profile/profile_detail_screen.dart';
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({super.key});
@@ -43,6 +44,21 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
           const SnackBar(content: Text('Could not open this conversation right now.')),
         );
       }
+    }
+  }
+
+  Future<void> _openProfile(Map<String, dynamic> person) async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ProfileDetailScreen(
+          profile: person,
+          showConnectAction: false,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result == 'blocked') {
+      setState(() => _reloadKey = UniqueKey());
     }
   }
 
@@ -124,10 +140,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               trailing: PopupMenuButton<String>(
                 tooltip: 'Connection options',
                 onSelected: (value) {
+                  if (value == 'profile') _openProfile(person);
                   if (value == 'chat') _openChat(context, person);
                   if (value == 'unmatch') _confirmUnmatch(person);
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'profile', child: Text('View profile')),
                   PopupMenuItem(value: 'chat', child: Text('Open chat')),
                   PopupMenuItem(value: 'unmatch', child: Text('End connection')),
                 ],
