@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {after, before, beforeEach, test} from 'node:test';
 import {assertFails, assertSucceeds, initializeTestEnvironment} from '@firebase/rules-unit-testing';
-import {collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where} from 'firebase/firestore';
+import {collection, doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc, where} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -46,6 +46,55 @@ test('participant may read a known active conversation but cannot list the conve
     where('participantUids', 'array-contains', 'alice'),
     where('active', '==', true),
   )));
+});
+
+test('active participant can query messages for one known conversation while a nonparticipant cannot', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'carol', {uid: 'carol', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      conversationId: 'alice_bob',
+      participantUids: ['alice', 'bob'],
+      active: true,
+      createdAt: new Date(Date.now() - 10_000),
+      lastMessageAt: new Date(),
+    }],
+    ['messages', 'message-1', {
+      conversationId: 'alice_bob',
+      senderUid: 'alice',
+      text: 'hello',
+      createdAt: new Date(Date.now() - 5_000),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['alice'],
+    }],
+    ['messages', 'message-2', {
+      conversationId: 'alice_bob',
+      senderUid: 'bob',
+      text: 'hi',
+      createdAt: new Date(),
+      isDeleted: false,
+      messageType: 'text',
+      readBy: ['bob'],
+    }],
+  ]);
+
+  const aliceDb = env.authenticatedContext('alice').firestore();
+  const carolDb = env.authenticatedContext('carol').firestore();
+  const aliceQuery = query(
+    collection(aliceDb, 'messages'),
+    where('conversationId', '==', 'alice_bob'),
+    orderBy('createdAt'),
+  );
+  const carolQuery = query(
+    collection(carolDb, 'messages'),
+    where('conversationId', '==', 'alice_bob'),
+    orderBy('createdAt'),
+  );
+
+  await assertSucceeds(getDocs(aliceQuery));
+  await assertFails(getDocs(carolQuery));
 });
 
 test('participant cannot reactivate an inactive conversation', async () => {
