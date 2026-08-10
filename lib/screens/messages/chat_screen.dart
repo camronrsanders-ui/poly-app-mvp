@@ -25,12 +25,27 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _messages = MessagingService();
   final _safety = SafetyService();
+  final Set<String> _readUpdatesInFlight = {};
   bool _sending = false;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _queueMarkRead(String messageId, List<String> readBy, String uid) {
+    if (readBy.contains(uid) || !_readUpdatesInFlight.add(messageId)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _messages.markRead(messageId);
+      } catch (_) {
+        // A transient failure is safe to retry if a later snapshot/build still
+        // shows the message as unread. Never block rendering on a read receipt.
+      } finally {
+        _readUpdatesInFlight.remove(messageId);
+      }
+    });
   }
 
   Future<void> _send() async {
@@ -192,9 +207,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       final text = data['isDeleted'] == true ? 'Message removed' : (data['text'] as String? ?? '');
                       if (!isMine) {
                         final readBy = List<String>.from(data['readBy'] ?? const []);
-                        if (!readBy.contains(uid)) {
-                          _messages.markRead(doc.id);
-                        }
+                        _queueMarkRead(doc.id, readBy, uid);
                       }
                       return Align(
                         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
