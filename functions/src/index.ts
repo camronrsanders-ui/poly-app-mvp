@@ -361,14 +361,14 @@ export const deleteMyAccount = onCall(
       writer.delete(db.collection('profiles').doc(uid));
       for (const action of [
         'discover', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
-        'block', 'unblock', 'block_list', 'unmatch', 'report',
+        'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',
         'moderation_list', 'moderation_review', 'moderation_account',
         'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
         'private_media_request_list', 'private_media_share_list', 'private_media_inbox_list',
         'private_media_grant', 'private_media_revoke', 'private_media_access',
         'private_media_report', 'private_media_upload',
         'profile_photo_upload', 'profile_photo_confirm', 'profile_photo_review',
-        'profile_photo_access', 'profile_photo_delete', 'profile_photo_list',
+        'profile_photo_access', 'profile_photo_delete', 'profile_photo_list', 'profile_photo_moderation_list',
       ]) {
         writer.delete(db.collection('_rate_limits').doc(`${action}_${uid}`));
       }
@@ -432,6 +432,7 @@ export {
   reviewModerationReport,
   setAccountModerationState,
 } from './moderation';
+export {getMyDataSnapshot} from './data_access';
 export {passProfile} from './discovery_actions';
 export {getCircleForProfile} from './circle_view';
 export {
@@ -464,5 +465,6 @@ export {
   getProfilePhotoAccess,
   deleteProfilePhoto,
 } from './profile_media';
+export {listProfilePhotosForReview} from './profile_media_moderation';
 export {listMyProfilePhotos} from './profile_media_listing';
 export {listMyConnections} from './profile_view';
