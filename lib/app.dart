@@ -7,6 +7,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'services/account_service.dart';
 import 'services/auth_service.dart';
 import 'services/profile_service.dart';
 import 'theme/app_theme.dart';
@@ -46,8 +47,11 @@ class _SessionGateState extends State<_SessionGate> {
   bool _showSignUp = false;
   int _refresh = 0;
 
-  Future<bool> _loadOnboardingStatus(String uid) =>
-      _profiles.isOnboardingComplete(uid).timeout(const Duration(seconds: 10));
+  Future<Map<String, dynamic>> _loadAccountState(String uid) async {
+    final data = await _profiles.getAccount(uid).timeout(const Duration(seconds: 10));
+    if (data == null) throw StateError('Account record is unavailable.');
+    return data;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,21 +74,34 @@ class _SessionGateState extends State<_SessionGate> {
               ? SignUpScreen(onShowLogin: () => setState(() => _showSignUp = false))
               : LoginScreen(onShowSignUp: () => setState(() => _showSignUp = true));
         }
-        return FutureBuilder<bool>(
+        return FutureBuilder<Map<String, dynamic>>(
           key: ValueKey('${user.uid}-$_refresh'),
-          future: _loadOnboardingStatus(user.uid),
-          builder: (context, profileSnapshot) {
-            if (profileSnapshot.connectionState == ConnectionState.waiting) {
+          future: _loadAccountState(user.uid),
+          builder: (context, accountSnapshot) {
+            if (accountSnapshot.connectionState == ConnectionState.waiting) {
               return const _LoadingScreen();
             }
-            if (profileSnapshot.hasError) {
+            if (accountSnapshot.hasError) {
               return _SessionErrorScreen(
                 onRetry: () => setState(() => _refresh++),
                 onSignOut: _auth.signOut,
-                debugError: profileSnapshot.error,
+                debugError: accountSnapshot.error,
               );
             }
-            if (profileSnapshot.data != true) {
+
+            final account = accountSnapshot.data!;
+            final status = account['accountStatus']?.toString() ?? '';
+            final deletionPending = status == 'paused' && account['deletionRequestedAt'] != null;
+            if (deletionPending) {
+              return _DeletionRecoveryScreen(
+                onFinished: _auth.signOut,
+                onSignOut: _auth.signOut,
+              );
+            }
+            if (status != 'active') {
+              return _AccountUnavailableScreen(onSignOut: _auth.signOut);
+            }
+            if (account['onboardingComplete'] != true) {
               return OnboardingScreen(onComplete: () => setState(() => _refresh++));
             }
             return const MainShell();
@@ -100,6 +117,114 @@ class _LoadingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Scaffold(
     body: Center(child: CircularProgressIndicator()),
+  );
+}
+
+class _DeletionRecoveryScreen extends StatefulWidget {
+  const _DeletionRecoveryScreen({required this.onFinished, required this.onSignOut});
+
+  final Future<void> Function() onFinished;
+  final Future<void> Function() onSignOut;
+
+  @override
+  State<_DeletionRecoveryScreen> createState() => _DeletionRecoveryScreenState();
+}
+
+class _DeletionRecoveryScreenState extends State<_DeletionRecoveryScreen> {
+  final _account = AccountService();
+  bool _working = false;
+  String? _error;
+
+  Future<void> _finishDeletion() async {
+    if (_working) return;
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+    try {
+      await _account.deleteMyAccount();
+      await widget.onFinished();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _error = 'Deletion is still pending. Please try again. If your sign-in is no longer recent, sign out and sign back in first.';
+      });
+      if (kDebugMode) debugPrint('Pending account deletion retry failed: $error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.delete_forever_outlined, size: 60),
+              const SizedBox(height: 16),
+              Text('Account deletion is pending', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 10),
+              const Text(
+                'Your account is paused and cannot use Polycircle while deletion cleanup is unfinished. Finish the cleanup below or sign out and sign back in to refresh your security check.',
+                textAlign: TextAlign.center,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Text(_error!, textAlign: TextAlign.center),
+              ],
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _working ? null : _finishDeletion,
+                child: _working
+                    ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Finish deleting my account'),
+              ),
+              TextButton(
+                onPressed: _working ? null : () async => widget.onSignOut(),
+                child: const Text('Sign out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _AccountUnavailableScreen extends StatelessWidget {
+  const _AccountUnavailableScreen({required this.onSignOut});
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 56),
+              const SizedBox(height: 16),
+              Text('This account is unavailable', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              const Text(
+                'This account cannot use Polycircle in its current state.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () async => onSignOut(),
+                child: const Text('Sign out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
 
