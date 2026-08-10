@@ -1,12 +1,12 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
-import {assertPrivateVaultEnabled} from './private_vault_gate';
 
 const db = getFirestore();
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
-  assertPrivateVaultEnabled();
+  // Consent withdrawal is a safety operation. It intentionally remains usable
+  // even when the Private Vault feature kill switch is OFF.
   return auth.uid;
 }
 
@@ -58,17 +58,31 @@ export const cancelPrivateMediaRequest = onCall(
     await Promise.all([assertActive(requesterUid), consumeRateLimit(requesterUid)]);
 
     const requestRef = db.collection('private_media_requests').doc(requestId);
-    const requestSnap = await requestRef.get();
-    if (!requestSnap.exists || requestSnap.get('requesterUid') !== requesterUid) {
-      throw new HttpsError('not-found', 'Private-media request not found.');
-    }
 
-    const ownerUid = String(requestSnap.get('recipientUid') ?? '');
-    if (!ownerUid) throw new HttpsError('failed-precondition', 'Invalid private-media request state.');
+    // The request status is the authoritative recipient-consent gate. Update it
+    // transactionally first. Grant creation reads this same request document in
+    // its transaction, so grant-vs-cancel races cannot commit stale consent.
+    const ownerUid = await db.runTransaction(async (tx) => {
+      const requestSnap = await tx.get(requestRef);
+      if (!requestSnap.exists || requestSnap.get('requesterUid') !== requesterUid) {
+        throw new HttpsError('not-found', 'Private-media request not found.');
+      }
+      const owner = String(requestSnap.get('recipientUid') ?? '');
+      if (!owner) throw new HttpsError('failed-precondition', 'Invalid private-media request state.');
 
-    // Query the exact owner/recipient pair before revoking. The old recipient-only
-    // capped query could miss this owner's grants after enough unrelated history
-    // accumulated, causing withdrawn consent to be incomplete.
+      if (requestSnap.get('status') !== 'cancelled') {
+        tx.set(requestRef, {
+          status: 'cancelled',
+          cancelledAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return owner;
+    });
+
+    // Cleanup is exhaustive and retryable. Even if it encounters a transient
+    // failure, access is already denied by the authoritative cancelled request;
+    // a retry can safely finish removing stale grant state.
     const grants = await db.collection('private_media_grants')
       .where('ownerUid', '==', ownerUid)
       .where('recipientUid', '==', requesterUid)
@@ -84,15 +98,6 @@ export const cancelPrivateMediaRequest = onCall(
       }, {merge: true});
     }
     await writer.close();
-
-    // Mark the request cancelled only after every currently-active grant for
-    // the pair has been revoked. A failure leaves the accepted request intact,
-    // making retry semantics explicit instead of reporting false completion.
-    await requestRef.set({
-      status: 'cancelled',
-      cancelledAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
 
     return {cancelled: true, revokedGrantCount: grants.size};
   },
