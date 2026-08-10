@@ -29,6 +29,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "participantUids", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "active", "order": "ASCENDING"},
         {"fieldPath": "lastMessageAt", "order": "DESCENDING"}
       ]
     },
@@ -37,7 +38,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "conversationId", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"}
+        {"fieldPath": "createdAt", "order": "ASCENDING"}
       ]
     },
     {
