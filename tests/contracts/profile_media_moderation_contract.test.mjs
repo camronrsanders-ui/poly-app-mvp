@@ -8,9 +8,10 @@ const queue = fs.readFileSync(path.join(root, 'functions/src/profile_media_moder
 const review = fs.readFileSync(path.join(root, 'functions/src/profile_media.ts'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
 
-test('profile-photo review queue is moderator-only, App-Check protected, rate-limited, and bounded', () => {
+test('profile-photo review queue is active-moderator-only, App-Check protected, rate-limited, and bounded', () => {
   assert.match(queue, /moderator.*admin.*superadmin/s);
   assert.match(queue, /enforceAppCheck:\s*true/);
+  assert.match(queue, /assertActive\(moderatorUid\)/);
   assert.match(queue, /profile_photo_moderation_list/);
   assert.match(queue, /Math\.min\(Math\.max\(Math\.trunc\(requestedLimit\), 1\), 50\)/);
   assert.match(queue, /where\('status', '==', 'processed_pending_review'\)/);
@@ -35,11 +36,20 @@ test('profile-photo moderation queue returns minimal owner metadata and no raw S
   assert.doesNotMatch(object, /storagePath|contentType|reviewedByUid|rejectionReason/);
 });
 
-test('existing trusted review callable performs final moderation state transition', () => {
-  assert.match(review, /export const reviewProfilePhoto = onCall/);
-  assert.match(review, /moderator.*admin/s);
-  assert.match(review, /processed_pending_review/);
-  assert.match(review, /status:\s*approve \? 'active' : 'rejected'/);
+test('trusted review callable requires an active privileged reviewer and explicit final state', () => {
+  const section = review.match(/export const reviewProfilePhoto = onCall[\s\S]*?export const getProfilePhotoAccess/)?.[0] ?? '';
+  assert.match(section, /moderator.*admin.*superadmin/s);
+  assert.match(section, /assertActive\(reviewerUid\)/);
+  assert.match(section, /processed_pending_review/);
+  assert.match(section, /status:\s*'rejected'/);
+  assert.match(section, /status:\s*'active'/);
+});
+
+test('profile-photo deletion accepts only exact owner quarantine or processed paths', () => {
+  assert.match(review, /function requireOwnedProfileMediaPath/);
+  assert.match(review, /storagePath === `users\/\$\{ownerUid\}\/profile\/\$\{photoId\}\.jpg`/);
+  assert.match(review, /parseQuarantinePath\(storagePath\)/);
+  assert.match(review, /requireOwnedProfileMediaPath\(uid, photoId, storagePath\)/);
 });
 
 test('profile-photo moderation queue is exported by Functions entrypoint', () => {
