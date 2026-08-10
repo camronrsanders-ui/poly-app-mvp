@@ -172,7 +172,7 @@ export const blockUser = onCall(
       if (conversation.exists && conversation.get('active') === true) {
         tx.set(conversationRef, {
           active: false,
-          lastMessageAt: FieldValue.serverTimestamp(),
+          endedAt: FieldValue.serverTimestamp(),
           endedReason: 'blocked',
         }, {merge: true});
       }
@@ -232,7 +232,7 @@ export const endConnection = onCall(
       if (conversation.exists) {
         tx.set(conversationRef, {
           active: false,
-          lastMessageAt: FieldValue.serverTimestamp(),
+          endedAt: FieldValue.serverTimestamp(),
           endedReason: 'unmatched',
         }, {merge: true});
       }
