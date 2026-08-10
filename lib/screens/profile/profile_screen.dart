@@ -16,6 +16,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const _profileVisibilityOptions = ['public', 'hidden', 'matches_only'];
+  static const _mapVisibilityOptions = ['public', 'matches_only', 'private'];
+
   final _profileService = ProfileService();
   final _authService = AuthService();
   final _accountService = AccountService();
@@ -35,6 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _deleting = false;
+  Object? _loadError;
   bool _partnered = false;
   bool _openToConnections = true;
   String _profileVisibility = 'public';
@@ -51,40 +55,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _load();
   }
 
+  String _string(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value is String ? value : '';
+  }
+
+  List<String> _strings(Object? raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  String _choice(Object? raw, List<String> allowed, String fallback) {
+    final value = raw?.toString() ?? '';
+    return allowed.contains(value) ? value : fallback;
+  }
+
   Future<void> _load() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
     try {
-      final data = await _profileService.getProfile(uid) ?? {};
-      _name.text = data['displayName'] as String? ?? '';
-      _age.text = ((data['age'] as num?)?.toInt() ?? 18).toString();
-      _city.text = data['city'] as String? ?? '';
-      _region.text = data['region'] as String? ?? '';
-      _bio.text = data['bio'] as String? ?? '';
-      _headline.text = data['headline'] as String? ?? '';
-      _gender.text = data['genderIdentity'] as String? ?? '';
-      _pronouns.text = data['pronouns'] as String? ?? '';
-      _orientation.text = data['orientation'] as String? ?? '';
-      _relationship.text = data['relationshipStructure'] as String? ?? '';
-      _relationshipStatus.text = data['relationshipStatus'] as String? ?? '';
-      _lookingFor.text = data['lookingForNote'] as String? ?? '';
-      _interests.text = List<String>.from(data['interests'] ?? const []).join(', ');
-      _partnered = data['partnered'] as bool? ?? false;
-      _openToConnections = data['openToConnections'] as bool? ?? true;
-      _profileVisibility = data['profileVisibility'] as String? ?? 'public';
-      _mapVisibility = data['mapVisibility'] as String? ?? 'matches_only';
-      _intentions = List<String>.from(data['intentionTags'] ?? const []);
+      final data = await _profileService.getProfile(uid).timeout(const Duration(seconds: 10)) ?? {};
+      _name.text = _string(data, 'displayName');
+      _age.text = ((data['age'] as num?)?.toInt() ?? 18).clamp(18, 120).toString();
+      _city.text = _string(data, 'city');
+      _region.text = _string(data, 'region');
+      _bio.text = _string(data, 'bio');
+      _headline.text = _string(data, 'headline');
+      _gender.text = _string(data, 'genderIdentity');
+      _pronouns.text = _string(data, 'pronouns');
+      _orientation.text = _string(data, 'orientation');
+      _relationship.text = _string(data, 'relationshipStructure');
+      _relationshipStatus.text = _string(data, 'relationshipStatus');
+      _lookingFor.text = _string(data, 'lookingForNote');
+      _interests.text = _strings(data['interests']).take(20).join(', ');
+      _partnered = data['partnered'] is bool ? data['partnered'] as bool : false;
+      _openToConnections = data['openToConnections'] is bool ? data['openToConnections'] as bool : true;
+      _profileVisibility = _choice(data['profileVisibility'], _profileVisibilityOptions, 'public');
+      _mapVisibility = _choice(data['mapVisibility'], _mapVisibilityOptions, 'matches_only');
+      _intentions = _strings(data['intentionTags'])
+          .where(connectionIntentionOptions.contains)
+          .take(12)
+          .toList(growable: true);
       _preferredStructures
         ..clear()
-        ..addAll(List<String>.from(data['preferredStructures'] ?? const []));
+        ..addAll(_strings(data['preferredStructures']).where(relationshipStructureOptions.contains).take(12));
       _preferredIntentions
         ..clear()
-        ..addAll(List<String>.from(data['preferredIntentions'] ?? const []));
+        ..addAll(_strings(data['preferredIntentions']).where(connectionIntentionOptions.contains).take(12));
 
       final minAge = ((data['ageMin'] as num?)?.toDouble() ?? 18).clamp(18, 120).toDouble();
       final maxAgeRaw = ((data['ageMax'] as num?)?.toDouble() ?? 99).clamp(18, 120).toDouble();
       _ageRange = RangeValues(minAge, maxAgeRaw < minAge ? minAge : maxAgeRaw);
       _distanceRadius = ((data['distanceRadius'] as num?)?.toDouble() ?? 50).clamp(1, 500).toDouble();
+    } catch (error) {
+      _loadError = error;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -192,8 +230,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
       final message = e.code == 'failed-precondition'
-          ? 'For your security, sign out and sign back in before deleting your account.'
-          : 'Account deletion could not be completed. Please try again.';
+          ? 'For your security, sign in again before finishing account deletion.'
+          : e.code == 'internal'
+              ? 'Deletion is paused safely. Sign in again to finish the remaining cleanup.'
+              : 'Account deletion could not be completed. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (mounted) {
@@ -244,6 +284,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 52),
+              const SizedBox(height: 14),
+              Text('Could not load your profile', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              const Text(
+                'Your profile was not changed. Check your connection and try again.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: _load, child: const Text('Try again')),
+            ],
+          ),
+        ),
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
