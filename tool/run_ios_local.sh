@@ -13,6 +13,11 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
   fi
 fi
 
+# Refresh launcher icons automatically whenever the exact approved logo is
+# available locally. Missing artwork is a branding warning, not a reason to
+# block functional emulator testing.
+bash tool/install_branding.sh --if-present
+
 bash tool/dev_preflight.sh
 
 printf '\nStarting Polycircle local Firebase test run\n'
