@@ -160,101 +160,72 @@ service cloud.firestore {
       allow read, delete: if signedIn() && resource.data.fromUid == request.auth.uid;
     }
 
+    // Pass state is intentionally opaque to clients, including its owner. This
+    // prevents another member from learning about it and keeps discovery-state
+    // changes behind the App-Check-protected callable boundary.
     match /profile_passes/{passId} {
-      allow read, create, update, delete: if false;
+      allow read, write: if false;
     }
 
     match /matches/{matchId} {
+      allow read: if signedIn() && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
+        && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid);
       allow create, update, delete: if false;
-      allow read: if signedIn()
-        && resource.data.active == true
-        && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid)
-        && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid);
     }
 
     match /conversations/{conversationId} {
       allow read: if signedIn() && resource.data.active == true
         && request.auth.uid in resource.data.participantUids
+        && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
-      allow update: if signedIn()
-        && resource.data.active == true
-        && request.resource.data.active == resource.data.active
+      allow update: if signedIn() && resource.data.active == true
         && request.auth.uid in resource.data.participantUids
-        && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt']);
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
+        && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
     }
 
     match /messages/{messageId} {
-      allow read: if signedIn()
-        && isConversationParticipant(resource.data.conversationId)
-        && conversationIsActive(resource.data.conversationId)
-        && conversationIsUnblocked(resource.data.conversationId);
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'conversationId', 'senderUid', 'text', 'createdAt', 'isDeleted',
-          'messageType', 'readBy'
-        ])
-        && request.resource.data.senderUid == request.auth.uid
-        && request.resource.data.text is string
-        && request.resource.data.text.size() >= 1
-        && request.resource.data.text.size() <= 2000
-        && request.resource.data.isDeleted == false
-        && request.resource.data.messageType == 'text'
-        && request.resource.data.readBy is list
-        && request.resource.data.readBy.size() == 1
+      allow create: if signedIn() && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.messageType == 'text' && request.resource.data.isDeleted == false
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.readBy is list && request.resource.data.readBy.size() == 1
         && request.resource.data.readBy[0] == request.auth.uid
         && isConversationParticipant(request.resource.data.conversationId)
         && conversationIsActive(request.resource.data.conversationId)
+        && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
         && conversationIsUnblocked(request.resource.data.conversationId);
-      allow update: if signedIn()
-        && isConversationParticipant(resource.data.conversationId)
+      allow read: if signedIn() && isConversationParticipant(resource.data.conversationId)
+        && conversationIsActive(resource.data.conversationId)
+        && conversationIsUnblocked(resource.data.conversationId);
+      allow update: if signedIn() && isConversationParticipant(resource.data.conversationId)
         && conversationIsActive(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
-        && request.resource.data.readBy is list
-        && resource.data.readBy is list
-        && request.resource.data.readBy.size() >= resource.data.readBy.size()
+        && request.resource.data.readBy is list && request.resource.data.readBy.size() <= 2
+        && request.resource.data.readBy.hasAll(resource.data.readBy)
+        && request.resource.data.readBy.hasOnly(conversationParticipants(resource.data.conversationId))
         && request.auth.uid in request.resource.data.readBy;
       allow delete: if false;
     }
 
     match /reports/{reportId} {
-      allow create, update, delete: if false;
       allow read: if signedIn() && resource.data.reporterUid == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
     match /blocks/{blockId} {
-      allow create, update, delete: if false;
       allow read: if signedIn() && resource.data.blockerUid == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
-    match /profile_media/{mediaId} {
-      allow read, write: if false;
-    }
-
-    match /private_media/{mediaId} {
-      allow read, write: if false;
-    }
-
-    match /private_media_grants/{grantId} {
-      allow read, write: if false;
-    }
-
-    match /private_media_requests/{requestId} {
-      allow read, write: if false;
-    }
-
-    match /private_media_request_preferences/{preferenceId} {
-      allow read, write: if false;
-    }
-
-    match /_rate_limits/{limitId} {
-      allow read, write: if false;
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /profile_media/{photoId} { allow read, write: if false; }
+    match /private_media/{mediaId} { allow read, write: if false; }
+    match /private_media_grants/{grantId} { allow read, write: if false; }
+    match /private_media_requests/{requestId} { allow read, write: if false; }
+    match /private_media_request_preferences/{preferenceId} { allow read, write: if false; }
+    match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }
