@@ -37,6 +37,7 @@ async function seed(entries) {
   });
 }
 
+const activeUser = (uid) => ({uid, accountStatus: 'active'});
 const card = (ownerUid, visibility = 'public') => ({
   ownerUid,
   label: 'Partner',
@@ -51,8 +52,9 @@ const card = (ownerUid, visibility = 'public') => ({
   updatedAt: new Date(),
 });
 
-test('Circle owner can directly read their own full card', async () => {
+test('active Circle owner can directly read their own full card', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
     ['relationship_cards', 'card1', card('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -61,6 +63,7 @@ test('Circle owner can directly read their own full card', async () => {
 
 test('unrelated user cannot directly read a public Circle card', async () => {
   await seed([
+    ['users', 'bob', activeUser('bob')],
     ['relationship_cards', 'card1', card('alice', 'public')],
   ]);
   const db = env.authenticatedContext('bob').firestore();
@@ -69,6 +72,8 @@ test('unrelated user cannot directly read a public Circle card', async () => {
 
 test('active match still cannot directly read the owners full Circle card', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
     ['relationship_cards', 'card1', card('alice', 'matches_only')],
     ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
   ]);
@@ -78,6 +83,7 @@ test('active match still cannot directly read the owners full Circle card', asyn
 
 test('Circle owner cannot add unknown privileged fields to a card', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
     ['relationship_cards', 'card1', card('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
