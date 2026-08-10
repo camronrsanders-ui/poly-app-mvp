@@ -11,7 +11,12 @@ command -v git >/dev/null 2>&1 || fail "git is required for the repository secur
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
   || fail "Run this security scan from a Git checkout."
 
-tracked_sensitive="$(git ls-files | grep -E '(^|/)(GoogleService-Info\.plist|google-services\.json|firebase_options\.dart|\.env($|\.)|[^/]*service[-_]?account[^/]*\.json|[^/]*\.p8|[^/]*\.p12|[^/]*\.jks|[^/]*\.keystore|[^/]*\.mobileprovision)$' || true)"
+tracked_sensitive="$(
+  git ls-files \
+    | grep -E '(^|/)(GoogleService-Info\.plist|google-services\.json|firebase_options\.dart|\.env($|\.)|[^/]*service[-_]?account[^/]*\.json|[^/]*\.p8|[^/]*\.p12|[^/]*\.jks|[^/]*\.keystore|[^/]*\.mobileprovision)$' \
+    | grep -Ev '(^|/)\.env\.example$' \
+    || true
+)"
 if [[ -n "$tracked_sensitive" ]]; then
   printf '%s\n' "$tracked_sensitive" >&2
   fail "Environment-specific Firebase/signing/secret material is tracked by git."
