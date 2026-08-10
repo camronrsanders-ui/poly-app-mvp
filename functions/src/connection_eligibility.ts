@@ -1,17 +1,16 @@
 import {HttpsError} from 'firebase-functions/v2/https';
 
-export async function assertCanReceiveNewConnection(
-  db: FirebaseFirestore.Firestore,
-  targetUid: string,
-): Promise<void> {
-  const profile = await db.collection('profiles').doc(targetUid).get();
+export function assertCanReceiveNewConnection(
+  profile: FirebaseFirestore.DocumentSnapshot,
+): void {
   if (!profile.exists) {
     throw new HttpsError('not-found', 'Profile is unavailable.');
   }
 
-  // New interest can only be sent to someone who has explicitly chosen to be
-  // discoverable and open to new connections. Existing matches use their own
-  // trusted lifecycle and are unaffected by this discovery preference.
+  // Callers supply the profile snapshot they read inside the same Firestore
+  // transaction that creates interest/match state. This prevents a target from
+  // hiding their profile or closing new connections in the authorization-to-
+  // write gap.
   if (profile.get('profileVisibility') !== 'public' || profile.get('openToConnections') !== true) {
     throw new HttpsError('permission-denied', 'This profile is not accepting new connections.');
   }
