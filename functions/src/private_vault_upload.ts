@@ -12,10 +12,22 @@ const maxUploadBytes = 10 * 1024 * 1024;
 const maxInputPixels = 40_000_000;
 const terminalStatuses = new Set(['processed_pending_review', 'active', 'rejected', 'removed']);
 
-function requireUid(auth: {uid: string} | undefined): string {
+type TrustedAuth = {uid: string; token?: Record<string, unknown>} | undefined;
+
+function requireUid(auth: TrustedAuth): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   assertPrivateVaultEnabled();
   return auth.uid;
+}
+
+function requireReviewer(auth: TrustedAuth): string {
+  const uid = requireUid(auth);
+  if (auth?.token?.moderator !== true
+      && auth?.token?.admin !== true
+      && auth?.token?.superadmin !== true) {
+    throw new HttpsError('permission-denied', 'Moderator access required.');
+  }
+  return uid;
 }
 
 function requireMediaId(raw: unknown): string {
@@ -59,7 +71,7 @@ async function consumeRateLimit(uid: string, action: string, max: number, window
       return;
     }
     if (count >= max) {
-      throw new HttpsError('resource-exhausted', 'Too many private-media uploads. Try again later.');
+      throw new HttpsError('resource-exhausted', 'Too many private-media requests. Try again later.');
     }
     tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   });
@@ -81,8 +93,10 @@ export const beginPrivateMediaUpload = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const ownerUid = requireUid(request.auth);
-    await assertActive(ownerUid);
-    await consumeRateLimit(ownerUid, 'private_media_upload', 20, 24 * 60 * 60_000);
+    await Promise.all([
+      assertActive(ownerUid),
+      consumeRateLimit(ownerUid, 'private_media_upload', 20, 24 * 60 * 60_000),
+    ]);
 
     if (request.data?.allSubjectsAdults !== true || request.data?.sharingRightsConfirmed !== true) {
       throw new HttpsError(
@@ -130,7 +144,10 @@ export const confirmPrivateMediaUpload = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const ownerUid = requireUid(request.auth);
-    await assertActive(ownerUid);
+    await Promise.all([
+      assertActive(ownerUid),
+      consumeRateLimit(ownerUid, 'private_media_confirm', 60, 60 * 60_000),
+    ]);
     const mediaId = requireMediaId(request.data?.mediaId);
     const ref = db.collection('private_media').doc(mediaId);
     const media = await ref.get();
@@ -295,7 +312,8 @@ export const processPrivateMedia = onObjectFinalized(
         rejectionReason: 'image_processing',
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
-      console.error('Private media processing failed', {ownerUid, mediaId, error});
+      const message = error instanceof Error ? error.message.slice(0, 300) : 'unknown';
+      console.error('Private media processing failed', {mediaId, message});
     }
   },
 );
@@ -303,10 +321,11 @@ export const processPrivateMedia = onObjectFinalized(
 export const reviewPrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 5},
   async (request) => {
-    requireUid(request.auth);
-    if (request.auth?.token?.moderator !== true && request.auth?.token?.admin !== true) {
-      throw new HttpsError('permission-denied', 'Moderator access required.');
-    }
+    const reviewerUid = requireReviewer(request.auth);
+    await Promise.all([
+      assertActive(reviewerUid),
+      consumeRateLimit(reviewerUid, 'private_media_review', 120, 60 * 60_000),
+    ]);
 
     const mediaId = requireMediaId(request.data?.mediaId);
     const decision = String(request.data?.decision ?? '').trim();
@@ -330,7 +349,7 @@ export const reviewPrivateMedia = onCall(
         status: 'rejected',
         rejectionReason: String(request.data?.reason ?? 'moderation').slice(0, 160),
         reviewedAt: FieldValue.serverTimestamp(),
-        reviewedByUid: request.auth!.uid,
+        reviewedByUid: reviewerUid,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
       return {mediaId, status: 'rejected'};
@@ -339,7 +358,7 @@ export const reviewPrivateMedia = onCall(
     await ref.set({
       status: 'active',
       reviewedAt: FieldValue.serverTimestamp(),
-      reviewedByUid: request.auth!.uid,
+      reviewedByUid: reviewerUid,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     return {mediaId, status: 'active'};
@@ -350,7 +369,10 @@ export const listMyPrivateMedia = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const ownerUid = requireUid(request.auth);
-    await assertActive(ownerUid);
+    await Promise.all([
+      assertActive(ownerUid),
+      consumeRateLimit(ownerUid, 'private_media_list', 60, 60_000),
+    ]);
     const snap = await db.collection('private_media')
       .where('ownerUid', '==', ownerUid)
       .limit(100)
