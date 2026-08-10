@@ -42,6 +42,8 @@ for script in tool/*.sh; do
 done
 ok "development shell scripts parse cleanly"
 
+bash tool/security_static_scan.sh
+
 NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
 if [[ "$NODE_MAJOR" != "22" ]]; then
   fail "Node 22 is required for Polycircle Functions. Current Node major is $NODE_MAJOR."
