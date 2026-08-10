@@ -137,6 +137,25 @@ async function loadAcceptedRecipients(ownerUid: string, rawRecipientUids: string
   return accepted;
 }
 
+async function loadAcceptedOwners(recipientUid: string, rawOwnerUids: string[]): Promise<Set<string>> {
+  const owners = [...new Set(rawOwnerUids)]
+    .filter((ownerUid) => ownerUid.length > 0 && ownerUid !== recipientUid)
+    .slice(0, maxGrantsPerListing);
+  if (owners.length === 0) return new Set();
+
+  const requestRefs = owners.map((ownerUid) =>
+    db.collection('private_media_requests').doc(`${recipientUid}_${ownerUid}`));
+  const requests = await db.getAll(...requestRefs);
+  const accepted = new Set<string>();
+  for (const request of requests) {
+    if (!request.exists || request.get('status') !== 'accepted') continue;
+    const requesterUid = String(request.get('requesterUid') ?? '');
+    const ownerUid = String(request.get('recipientUid') ?? '');
+    if (requesterUid === recipientUid && owners.includes(ownerUid)) accepted.add(ownerUid);
+  }
+  return accepted;
+}
+
 export const listMyPrivateMediaRequests = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
@@ -239,15 +258,12 @@ export const listMyPrivateMediaInbox = onCall(
         mediaId: String(grant.get('mediaId') ?? ''),
       }))
       .filter(({ownerUid, mediaId}) => ownerUid.length > 0 && mediaId.length > 0);
-    const context = await loadPeerContext(recipientUid, records.map(({ownerUid}) => ownerUid));
-    const ownerUids = [...new Set(records.map(({ownerUid}) => ownerUid))];
-    const acceptedByOwner = new Map<string, boolean>();
-    await Promise.all(ownerUids.map(async (ownerUid) => {
-      const accepted = await loadAcceptedRecipients(ownerUid, [recipientUid]);
-      acceptedByOwner.set(ownerUid, accepted.has(recipientUid));
-    }));
+    const [context, acceptedOwners] = await Promise.all([
+      loadPeerContext(recipientUid, records.map(({ownerUid}) => ownerUid)),
+      loadAcceptedOwners(recipientUid, records.map(({ownerUid}) => ownerUid)),
+    ]);
     const eligibleRecords = records.filter(({ownerUid}) =>
-      context.eligible.has(ownerUid) && acceptedByOwner.get(ownerUid) === true);
+      context.eligible.has(ownerUid) && acceptedOwners.has(ownerUid));
     if (eligibleRecords.length === 0) return {media: []};
 
     const mediaRefs = eligibleRecords.map(({mediaId}) => db.collection('private_media').doc(mediaId));
