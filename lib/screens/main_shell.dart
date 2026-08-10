@@ -5,6 +5,7 @@ import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
 import 'messages/messages_screen.dart';
 import 'profile/profile_screen.dart';
+import 'safety/safety_center_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -27,7 +28,18 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_titles[_index])),
+      appBar: AppBar(
+        title: Text(_titles[_index]),
+        actions: [
+          IconButton(
+            tooltip: 'Safety center',
+            icon: const Icon(Icons.shield_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SafetyCenterScreen()),
+            ),
+          ),
+        ],
+      ),
       body: IndexedStack(
         index: _index,
         children: const [
