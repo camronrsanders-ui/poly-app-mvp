@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {after, before, beforeEach, test} from 'node:test';
-import {assertFails, initializeTestEnvironment} from '@firebase/rules-unit-testing';
-import {doc, getDoc, setDoc, updateDoc} from 'firebase/firestore';
+import {assertFails, assertSucceeds, initializeTestEnvironment} from '@firebase/rules-unit-testing';
+import {collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -13,8 +13,8 @@ let env;
 async function seed(entries) {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    for (const [collection, id, data] of entries) {
-      await setDoc(doc(db, collection, id), data);
+    for (const [collectionName, id, data] of entries) {
+      await setDoc(doc(db, collectionName, id), data);
     }
   });
 }
@@ -25,6 +25,40 @@ before(async () => {
 
 beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
+
+test('active participant query succeeds only when it includes the active constraint', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'carol', {uid: 'carol', accountStatus: 'active'}],
+    ['conversations', 'alice_bob', {
+      conversationId: 'alice_bob',
+      participantUids: ['alice', 'bob'],
+      active: true,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+    }],
+    ['conversations', 'alice_carol', {
+      conversationId: 'alice_carol',
+      participantUids: ['alice', 'carol'],
+      active: false,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+      endedReason: 'unmatched',
+    }],
+  ]);
+
+  const db = env.authenticatedContext('alice').firestore();
+  await assertSucceeds(getDocs(query(
+    collection(db, 'conversations'),
+    where('participantUids', 'array-contains', 'alice'),
+    where('active', '==', true),
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'conversations'),
+    where('participantUids', 'array-contains', 'alice'),
+  )));
+});
 
 test('participant cannot reactivate an inactive conversation', async () => {
   await seed([
