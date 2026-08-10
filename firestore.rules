@@ -211,14 +211,25 @@ service cloud.firestore {
         && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
+      // A client cannot manufacture conversation activity by updating a clock.
+      // lastMessageAt/lastMessageId may advance only in the same atomic batch as
+      // a new message created by this participant at the same request time.
       allow update: if signedIn() && userIsActive(request.auth.uid)
         && resource.data.active == true
         && request.auth.uid in resource.data.participantUids
         && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && request.resource.data.participantUids == resource.data.participantUids
         && request.resource.data.active == resource.data.active
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'lastMessageId'])
         && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.lastMessageId is string
+        && request.resource.data.lastMessageId.size() > 0
+        && request.resource.data.lastMessageId.size() <= 128
+        && existsAfter(/databases/$(database)/documents/messages/$(request.resource.data.lastMessageId))
+        && getAfter(/databases/$(database)/documents/messages/$(request.resource.data.lastMessageId)).data.conversationId == conversationId
+        && getAfter(/databases/$(database)/documents/messages/$(request.resource.data.lastMessageId)).data.senderUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/messages/$(request.resource.data.lastMessageId)).data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/messages/$(request.resource.data.lastMessageId)).data.isDeleted == false
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
     }
 
@@ -238,7 +249,9 @@ service cloud.firestore {
         && conversationIsActive(request.resource.data.conversationId)
         && conversationUsersActive(request.resource.data.conversationId)
         && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
-        && conversationIsUnblocked(request.resource.data.conversationId);
+        && conversationIsUnblocked(request.resource.data.conversationId)
+        && getAfter(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.lastMessageId == messageId
+        && getAfter(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.lastMessageAt == request.time;
       allow read: if signedIn() && userIsActive(request.auth.uid)
         && isConversationParticipant(resource.data.conversationId)
         && conversationIsActive(resource.data.conversationId)
