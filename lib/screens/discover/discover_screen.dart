@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/connection_service.dart';
@@ -36,7 +37,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         content: Text(matched ? 'You connected 🎉' : 'Interest sent.'),
       ));
       _reload();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Discover like failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not send interest right now.')),
@@ -57,7 +62,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         const SnackBar(content: Text('Passed. This profile will stay out of Discover.')),
       );
       _reload();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Discover pass failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not save that Pass right now.')),
@@ -86,10 +95,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
+          if (kDebugMode) {
+            debugPrint('Discover load failed: ${snapshot.error}');
+            if (snapshot.stackTrace != null) {
+              debugPrintStack(stackTrace: snapshot.stackTrace!);
+            }
+          }
           return _StateMessage(
             icon: Icons.error_outline,
             title: 'Discover is taking a break',
             text: 'We could not load profiles. Check your connection and try again.',
+            debugDetails: kDebugMode ? snapshot.error?.toString() : null,
             action: TextButton(onPressed: _reload, child: const Text('Try again')),
           );
         }
@@ -191,11 +207,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 }
 
 class _StateMessage extends StatelessWidget {
-  const _StateMessage({required this.icon, required this.title, required this.text, required this.action});
+  const _StateMessage({
+    required this.icon,
+    required this.title,
+    required this.text,
+    required this.action,
+    this.debugDetails,
+  });
+
   final IconData icon;
   final String title;
   final String text;
   final Widget action;
+  final String? debugDetails;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -207,6 +231,14 @@ class _StateMessage extends StatelessWidget {
         Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
         const SizedBox(height: 8),
         Text(text, textAlign: TextAlign.center),
+        if (debugDetails != null && debugDetails!.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          SelectableText(
+            debugDetails!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 12),
         action,
       ]),
