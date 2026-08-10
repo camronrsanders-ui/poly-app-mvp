@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 DEVICE="${1:-iPhone 17}"
 
-./tool/dev_preflight.sh
+bash tool/dev_preflight.sh
 
 printf '\nStarting Polycircle local Firebase test run\n'
 printf 'Device: %s\n' "$DEVICE"
