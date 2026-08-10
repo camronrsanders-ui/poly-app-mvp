@@ -25,15 +25,6 @@
       ]
     },
     {
-      "collectionGroup": "conversations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {"fieldPath": "participantUids", "arrayConfig": "CONTAINS"},
-        {"fieldPath": "active", "order": "ASCENDING"},
-        {"fieldPath": "lastMessageAt", "order": "DESCENDING"}
-      ]
-    },
-    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
