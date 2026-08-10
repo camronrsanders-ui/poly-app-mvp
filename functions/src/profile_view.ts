@@ -82,15 +82,24 @@ export const listMyConnections = onCall(
       seen.add(otherUid);
 
       if (await isBlocked(uid, otherUid)) continue;
-      const [user, profile] = await Promise.all([
+      const [user, profile, conversation] = await Promise.all([
         db.collection('users').doc(otherUid).get(),
         db.collection('profiles').doc(otherUid).get(),
+        db.collection('conversations').doc(match.id).get(),
       ]);
       if (!user.exists || user.get('accountStatus') !== 'active' || !profile.exists) continue;
+
+      const conversationActive = conversation.exists && conversation.get('active') === true;
+      const lastMessageAt = conversationActive ? conversation.get('lastMessageAt') : null;
+      const lastMessageAtMs = typeof lastMessageAt?.toMillis === 'function'
+        ? Number(lastMessageAt.toMillis())
+        : null;
 
       output.push({
         ...toProfileView(otherUid, profile.data()!),
         matchId: match.id,
+        conversationId: conversationActive ? conversation.id : null,
+        lastMessageAtMs,
       });
     }
 
