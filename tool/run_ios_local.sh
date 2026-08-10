@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DEVICE="${1:-iPhone 17}"
+FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
 
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   BRANCH="$(git branch --show-current 2>/dev/null || true)"
@@ -22,7 +23,7 @@ bash tool/dev_preflight.sh
 
 printf '\nStarting Polycircle local Firebase test run\n'
 printf 'Device: %s\n' "$DEVICE"
-printf 'Firebase project: demo-polycircle (emulators only)\n\n'
+printf 'Firebase project ID: %s (ALL USED SERVICES ROUTED TO LOCAL EMULATORS)\n\n' "$FIREBASE_PROJECT_ID"
 
 if ! flutter devices | grep -Fq "$DEVICE"; then
   printf "Requested Flutter device '%s' was not found.\n\nAvailable devices:\n" "$DEVICE" >&2
@@ -43,9 +44,14 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-polycircle npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1"
+# The iOS native Firebase configuration already identifies this real project.
+# Firebase requires the app and CLI emulator project IDs to match for
+# cross-service emulator behavior. Every Polycircle service used by this run is
+# explicitly routed to localhost, and the seed script adds a second loopback +
+# opt-in guard before allowing this real project ID in an emulator process.
+RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1"
 
 firebase emulators:exec \
-  --project demo-polycircle \
+  --project "$FIREBASE_PROJECT_ID" \
   --only auth,firestore,functions,storage \
   "$RUN_COMMAND"
