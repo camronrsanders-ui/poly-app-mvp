@@ -131,7 +131,25 @@ Debug builds continue to use Firebase App Check debug providers. Do not disable 
 
 ## Launcher branding
 
-The Flutter/native launcher icon is separate from artwork shown inside the app. Replacing or generating a Polycircle logo does not automatically replace iOS `AppIcon.appiconset` or Android launcher resources. Before a branded test build, the approved square app-icon artwork must be wired into both native launcher-icon sets and checked on a simulator/device; this is tracked separately from runtime Firebase setup.
+The approved master artwork is pinned in `docs/branding.md` by exact source filename and SHA-256 so the dark Polycircle logo cannot be confused with the lighter alternative.
+
+The Flutter/native launcher icon is separate from artwork shown inside the app. Replacing or generating a Polycircle logo does not automatically replace iOS `AppIcon.appiconset` or Android launcher resources.
+
+On the development Mac, place the exact approved PNG in the project root, Downloads, or Desktop under its original filename, or pass its full path explicitly, then run:
+
+```bash
+bash tool/install_branding.sh
+```
+
+or:
+
+```bash
+bash tool/install_branding.sh "/full/path/to/a_logo_for_an_app_named_polycircle_is_displayed.png"
+```
+
+The installer verifies the approved SHA-256 before writing anything. It generates the iOS AppIcon sizes when the native iOS asset catalog is present and Android legacy launcher mipmaps when Android native resources are present. If Android adaptive-icon XML is detected, the script warns instead of pretending that adaptive branding has been visually validated.
+
+After changing launcher icons, rebuild/reinstall the app. Simulator/device launchers can cache an old icon from a previously installed build.
 
 ## Security expectations
 
