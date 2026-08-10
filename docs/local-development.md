@@ -11,7 +11,56 @@ The emulator workflow can run Authentication, Firestore, Cloud Functions, and St
 
 The default remains production/staging Firebase configuration, so emulator routing cannot silently turn on in a release build. When emulator mode is active, the app displays a `LOCAL FIREBASE` debug banner.
 
-## Node version
+## Recommended path before every simulator run
+
+From the repository root, first activate the pinned Functions runtime:
+
+```bash
+nvm use
+```
+
+Then run the development preflight:
+
+```bash
+bash tool/dev_preflight.sh
+```
+
+The preflight checks the required tools/runtime versions, verifies important iOS Firebase settings when the native iOS directory is present, runs Flutter source analysis and tests, builds/tests the Functions package, and runs the client/backend contract suite. For the slower emulator-backed Firestore/Storage security suite, use:
+
+```bash
+bash tool/dev_preflight.sh --full
+```
+
+## One-command iOS local test run
+
+After `nvm use`, the preferred simulator workflow is:
+
+```bash
+bash tool/run_ios_local.sh
+```
+
+That command runs the preflight, starts Authentication/Firestore/Functions/Storage emulators against the production-safe `demo-polycircle` project ID, seeds the local fixture data, launches the iPhone 17 simulator build with explicit emulator routing, and shuts the emulators down when the Flutter run exits.
+
+To target another already-available Flutter device, pass its exact device name:
+
+```bash
+bash tool/run_ios_local.sh "iPhone 17 Pro"
+```
+
+The local fixture login is:
+
+```text
+Email: cam@local.polycircle.test
+Password: LocalOnly123!
+```
+
+The fixture includes two Discover profiles, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle can be exercised without a paid deployment.
+
+## Manual emulator workflow
+
+The steps below remain useful when the emulators need to stay running across multiple app launches.
+
+### Node version
 
 Cloud Functions target Node 22. If `nvm` is installed, run this from the repository root before installing Function dependencies:
 
@@ -21,7 +70,7 @@ nvm use
 
 The repository `.nvmrc` pins Node 22. Do not develop the Functions package under Node 26 just because Homebrew installed it globally; npm will warn that it is outside the supported engine.
 
-## Start the emulators
+### Start the emulators
 
 From the repository root:
 
@@ -35,7 +84,7 @@ firebase emulators:start --project demo-polycircle --only auth,firestore,functio
 
 Leave that terminal running. The Emulator Suite UI is configured on port `4000`.
 
-## Seed safe local test data
+### Seed safe local test data
 
 The seed script has two independent production guards: it requires both Auth and Firestore emulator host variables and it refuses any project ID that does not begin with `demo-`. It is intentionally safe to use only against Firebase emulators.
 
@@ -48,16 +97,7 @@ GCLOUD_PROJECT=demo-polycircle \
 npm --prefix functions run seed:emulator
 ```
 
-The local fixture login is:
-
-```text
-Email: cam@local.polycircle.test
-Password: LocalOnly123!
-```
-
-The fixture includes two Discover profiles, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle work can continue without a paid deployment.
-
-## Run the iOS Simulator against local Firebase
+### Run the iOS Simulator against local Firebase
 
 Open another terminal from the repository root:
 
@@ -88,6 +128,10 @@ flutter run \
 ## App Check
 
 Debug builds continue to use Firebase App Check debug providers. Do not disable App Check enforcement in source code simply to make local development easier. Keep any debug tokens private and never commit them.
+
+## Launcher branding
+
+The Flutter/native launcher icon is separate from artwork shown inside the app. Replacing or generating a Polycircle logo does not automatically replace iOS `AppIcon.appiconset` or Android launcher resources. Before a branded test build, the approved square app-icon artwork must be wired into both native launcher-icon sets and checked on a simulator/device; this is tracked separately from runtime Firebase setup.
 
 ## Security expectations
 
