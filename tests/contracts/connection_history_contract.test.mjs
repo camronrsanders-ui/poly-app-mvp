@@ -60,6 +60,17 @@ test('block and unmatch close chat without pretending a new message was sent', (
   }
 });
 
+test('account deletion preserves last-message chronology and old end history', () => {
+  const section = index.match(/export const deleteMyAccount[\s\S]*?export \{blockUser/)?.[0] ?? '';
+  assert.match(section, /if \(doc\.get\('active'\) !== true\) continue/);
+  assert.match(section, /endedReason:\s*'account_deleted'/);
+  assert.doesNotMatch(
+    section,
+    /lastMessageAt:\s*FieldValue\.serverTimestamp\(\)/,
+    'Account deletion must not create a fake last-message timestamp.',
+  );
+});
+
 test('repeat unmatch does not overwrite the original ended history', () => {
   const section = safety.match(/export const endConnection[\s\S]*$/)?.[0] ?? '';
   const inactiveGuard = section.indexOf("if (match.get('active') !== true) return;");
