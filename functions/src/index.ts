@@ -35,6 +35,21 @@ async function isBlocked(a: string, b: string): Promise<boolean> {
   return ab.exists || ba.exists;
 }
 
+function blockedPeersFromSnapshots(
+  uid: string,
+  snapshots: FirebaseFirestore.DocumentSnapshot[],
+): Set<string> {
+  const blocked = new Set<string>();
+  for (const snap of snapshots) {
+    if (!snap.exists) continue;
+    const blockerUid = String(snap.get('blockerUid') ?? '');
+    const blockedUid = String(snap.get('blockedUid') ?? '');
+    if (blockerUid === uid && blockedUid) blocked.add(blockedUid);
+    if (blockedUid === uid && blockerUid) blocked.add(blockerUid);
+  }
+  return blocked;
+}
+
 async function consumeRateLimit(uid: string, action: string, max: number, windowMs: number) {
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
   const now = Date.now();
@@ -58,7 +73,10 @@ export const getDiscoverCandidates = onCall(
     await assertActive(uid);
     await consumeRateLimit(uid, 'discover', 60, 60_000);
 
-    const limit = Math.min(Math.max(Number(request.data?.limit ?? 20), 1), 40);
+    const requestedLimit = Number(request.data?.limit ?? 20);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 40)
+      : 20;
     const profileSnap = await db.collection('profiles').doc(uid).get();
     if (!profileSnap.exists) throw new HttpsError('failed-precondition', 'Complete your profile first.');
     const requesterProfile = profileSnap.data()!;
@@ -77,11 +95,16 @@ export const getDiscoverCandidates = onCall(
     const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
     const outgoingLikeRefs = candidateIds.map((id) => db.collection('likes').doc(`${uid}_${id}`));
     const matchRefs = candidateIds.map((id) => db.collection('matches').doc(pairId(uid, id)));
-    const [userSnaps, passSnaps, outgoingLikeSnaps, matchSnaps] = await Promise.all([
+    const blockRefs = candidateIds.flatMap((id) => [
+      db.collection('blocks').doc(`${uid}_${id}`),
+      db.collection('blocks').doc(`${id}_${uid}`),
+    ]);
+    const [userSnaps, passSnaps, outgoingLikeSnaps, matchSnaps, blockSnaps] = await Promise.all([
       userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
       passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
       outgoingLikeRefs.length ? db.getAll(...outgoingLikeRefs) : Promise.resolve([]),
       matchRefs.length ? db.getAll(...matchRefs) : Promise.resolve([]),
+      blockRefs.length ? db.getAll(...blockRefs) : Promise.resolve([]),
     ]);
     const active = new Set(userSnaps
       .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
@@ -94,6 +117,7 @@ export const getDiscoverCandidates = onCall(
       .filter((snap) => snap.exists)
       .map((snap) => String(snap.get('toUid') ?? ''))
       .filter((id) => id.length > 0));
+    const blocked = blockedPeersFromSnapshots(uid, blockSnaps);
     // A prior match, including an ended match, keeps the pair out of Discover.
     // Reconnecting after an explicit unmatch needs a future consentful flow
     // rather than silently resurfacing the same person.
@@ -114,9 +138,9 @@ export const getDiscoverCandidates = onCall(
         || passed.has(doc.id)
         || alreadyLiked.has(doc.id)
         || matchedBefore.has(doc.id)
+        || blocked.has(doc.id)
       ) continue;
       if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
-      if (await isBlocked(uid, doc.id)) continue;
       output.push(toProfileView(doc.id, doc.data()));
       if (output.length >= limit) break;
     }
@@ -304,10 +328,22 @@ export const deleteMyAccount = onCall(
     deleteDocs(profileMedia.docs);
 
     for (const doc of [...matchesA.docs, ...matchesB.docs]) {
-      writer.set(doc.ref, {active: false, endedAt: FieldValue.serverTimestamp()}, {merge: true});
+      if (doc.get('active') !== true) continue;
+      writer.set(doc.ref, {
+        active: false,
+        endedAt: FieldValue.serverTimestamp(),
+        endedReason: 'account_deleted',
+      }, {merge: true});
     }
     for (const doc of conversations.docs) {
-      writer.set(doc.ref, {active: false, lastMessageAt: FieldValue.serverTimestamp()}, {merge: true});
+      if (doc.get('active') !== true) continue;
+      // Connection lifecycle changes must not pretend that a new chat message
+      // happened. Preserve the actual lastMessageAt chronology.
+      writer.set(doc.ref, {
+        active: false,
+        endedAt: FieldValue.serverTimestamp(),
+        endedReason: 'account_deleted',
+      }, {merge: true});
     }
     for (const doc of reportsFrom.docs) writer.set(doc.ref, {reporterUid: '[deleted]'}, {merge: true});
     for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
