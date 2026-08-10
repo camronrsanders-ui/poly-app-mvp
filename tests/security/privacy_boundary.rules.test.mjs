@@ -37,6 +37,8 @@ async function seed(entries) {
   });
 }
 
+const activeUser = (uid) => ({uid, accountStatus: 'active'});
+
 const profile = (uid) => ({
   uid,
   displayName: 'Alex',
@@ -69,8 +71,8 @@ const profile = (uid) => ({
 
 test('another user cannot directly read a public full profile document', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
     ['profiles', 'alice', profile('alice')],
   ]);
   const db = env.authenticatedContext('bob').firestore();
@@ -79,8 +81,8 @@ test('another user cannot directly read a public full profile document', async (
 
 test('an active match still cannot read the other users full preference document', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
     ['profiles', 'alice', profile('alice')],
     ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
   ]);
@@ -90,15 +92,18 @@ test('an active match still cannot read the other users full preference document
 
 test('profile owner can still read their own full profile document', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', activeUser('alice')],
     ['profiles', 'alice', profile('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertSucceeds(getDoc(doc(db, 'profiles', 'alice')));
 });
 
-test('active match is readable only by its participants', async () => {
+test('active match is readable only by its active participants', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
+    ['users', 'charlie', activeUser('charlie')],
     ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
   ]);
   const alice = env.authenticatedContext('alice').firestore();
@@ -109,6 +114,8 @@ test('active match is readable only by its participants', async () => {
 
 test('inactive match history is backend-only even for former participants', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
     ['matches', 'alice_bob', {
       userAUid: 'alice',
       userBUid: 'bob',
@@ -121,8 +128,9 @@ test('inactive match history is backend-only even for former participants', asyn
   await assertFails(getDoc(doc(db, 'matches', 'alice_bob')));
 });
 
-test('like sender can read the like they sent', async () => {
+test('active like sender can read the like they sent', async () => {
   await seed([
+    ['users', 'alice', activeUser('alice')],
     ['likes', 'alice_bob', {likeId: 'alice_bob', fromUid: 'alice', toUid: 'bob', createdAt: new Date()}],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -131,6 +139,7 @@ test('like sender can read the like they sent', async () => {
 
 test('like recipient cannot inspect incoming interest before a trusted match exists', async () => {
   await seed([
+    ['users', 'bob', activeUser('bob')],
     ['likes', 'alice_bob', {likeId: 'alice_bob', fromUid: 'alice', toUid: 'bob', createdAt: new Date()}],
   ]);
   const db = env.authenticatedContext('bob').firestore();
