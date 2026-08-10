@@ -12,6 +12,13 @@ function requireModerator(auth: {uid: string; token?: Record<string, unknown>} |
   return auth.uid;
 }
 
+async function assertActive(uid: string): Promise<void> {
+  const user = await db.collection('users').doc(uid).get();
+  if (!user.exists || user.get('accountStatus') !== 'active') {
+    throw new HttpsError('permission-denied', 'Moderator account is not active.');
+  }
+}
+
 async function consumeRateLimit(uid: string, max: number, windowMs: number): Promise<void> {
   const action = 'profile_photo_moderation_list';
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
@@ -50,7 +57,10 @@ export const listProfilePhotosForReview = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const moderatorUid = requireModerator(request.auth);
-    await consumeRateLimit(moderatorUid, 120, 60_000);
+    await Promise.all([
+      assertActive(moderatorUid),
+      consumeRateLimit(moderatorUid, 120, 60_000),
+    ]);
 
     const requestedLimit = Number(request.data?.limit ?? 30);
     const limit = Number.isFinite(requestedLimit)
