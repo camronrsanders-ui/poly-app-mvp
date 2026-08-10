@@ -2,12 +2,24 @@ const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {FieldValue, Timestamp, getFirestore} = require('firebase-admin/firestore');
 
+const nativeFirebaseProjectId = 'poly-circle-j5v6dy';
+
+function isLoopbackEmulatorHost(value) {
+  if (typeof value !== 'string') return false;
+  return /^(?:127\.0\.0\.1|localhost|\[?::1\]?):\d+$/.test(value.trim());
+}
+
 function requireEmulatorEnvironment() {
   const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
   const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
   if (!firestoreHost || !authHost) {
     throw new Error(
       'Refusing to seed: FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST must both be set.',
+    );
+  }
+  if (!isLoopbackEmulatorHost(firestoreHost) || !isLoopbackEmulatorHost(authHost)) {
+    throw new Error(
+      'Refusing to seed: emulator hosts must be loopback addresses (127.0.0.1, localhost, or ::1).',
     );
   }
 
@@ -23,9 +35,13 @@ function requireEmulatorEnvironment() {
     || process.env.GOOGLE_CLOUD_PROJECT
     || firebaseConfig.projectId
     || '';
-  if (!projectId.startsWith('demo-')) {
+
+  const demoProject = projectId.startsWith('demo-');
+  const explicitlyApprovedNativeProject = projectId === nativeFirebaseProjectId
+    && process.env.POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR === 'true';
+  if (!demoProject && !explicitlyApprovedNativeProject) {
     throw new Error(
-      `Refusing to seed non-demo project "${projectId || '[unknown]'}". Use --project demo-polycircle.`,
+      `Refusing to seed project "${projectId || '[unknown]'}". Use a demo-* project, or use the guarded Polycircle local runner for ${nativeFirebaseProjectId}.`,
     );
   }
   return projectId;
@@ -237,7 +253,7 @@ async function main() {
   await seedExistingConnection();
   await seedRelationshipCards();
 
-  console.log('Seeded Polycircle Firebase emulators only.');
+  console.log(`Seeded Polycircle Firebase emulators only for project ${projectId}.`);
   console.log('Login: cam@local.polycircle.test');
   console.log(`Password: ${password}`);
   console.log('Discover fixtures: Alex and Riley. Existing connection: Jordan.');
