@@ -60,6 +60,15 @@ test('block and unmatch close chat without pretending a new message was sent', (
   }
 });
 
+test('repeat unmatch does not overwrite the original ended history', () => {
+  const section = safety.match(/export const endConnection[\s\S]*$/)?.[0] ?? '';
+  const inactiveGuard = section.indexOf("if (match.get('active') !== true) return;");
+  const matchWrite = section.indexOf('tx.set(matchRef');
+  assert.ok(inactiveGuard >= 0 && matchWrite > inactiveGuard,
+    'An already-ended match must return before rewriting end metadata.');
+  assert.match(section, /if \(conversation\.exists && conversation\.get\('active'\) === true\)/);
+});
+
 test('Connections UI reuses a trusted existing conversation ID before calling creation', () => {
   const existingIndex = connectionsScreen.indexOf("person['conversationId']");
   const ensureIndex = connectionsScreen.indexOf('ensureConversation(otherUid)');
