@@ -27,14 +27,6 @@ function pairId(a: string, b: string): string {
   return [a, b].sort().join('_');
 }
 
-async function isBlocked(a: string, b: string): Promise<boolean> {
-  const [ab, ba] = await Promise.all([
-    db.collection('blocks').doc(`${a}_${b}`).get(),
-    db.collection('blocks').doc(`${b}_${a}`).get(),
-  ]);
-  return ab.exists || ba.exists;
-}
-
 function blockedPeersFromSnapshots(
   uid: string,
   snapshots: FirebaseFirestore.DocumentSnapshot[],
@@ -156,23 +148,55 @@ export const likeProfile = onCall(
     if (!toUid || toUid === uid || toUid.length > 128) throw new HttpsError('invalid-argument', 'Invalid target user.');
 
     await assertActive(uid);
-    // Charge the caller before target-specific lookups so invalid/inactive UID
+    // Charge the caller before any target-specific lookup so invalid/inactive UID
     // probing cannot bypass the request budget.
     await consumeRateLimit(uid, 'like', 120, 60 * 60_000);
-    await assertActive(toUid);
-    if (await isBlocked(uid, toUid)) throw new HttpsError('permission-denied', 'Interaction unavailable.');
-    await assertCanReceiveNewConnection(db, toUid);
 
+    const callerUserRef = db.collection('users').doc(uid);
+    const targetUserRef = db.collection('users').doc(toUid);
+    const targetProfileRef = db.collection('profiles').doc(toUid);
+    const outgoingBlockRef = db.collection('blocks').doc(`${uid}_${toUid}`);
+    const incomingBlockRef = db.collection('blocks').doc(`${toUid}_${uid}`);
     const likeRef = db.collection('likes').doc(`${uid}_${toUid}`);
     const reverseRef = db.collection('likes').doc(`${toUid}_${uid}`);
     const matchRef = db.collection('matches').doc(pairId(uid, toUid));
     const passRef = db.collection('profile_passes').doc(`${uid}_${toUid}`);
 
     const matched = await db.runTransaction(async (tx) => {
-      const [reverse, existingMatch] = await Promise.all([
+      // Every document that can invalidate authorization is read in the same
+      // transaction as the Like/Match write. If block/account/profile state
+      // changes concurrently, Firestore retries this transaction against the
+      // new state instead of committing a stale authorization decision.
+      const [
+        callerUser,
+        targetUser,
+        targetProfile,
+        outgoingBlock,
+        incomingBlock,
+        reverse,
+        existingMatch,
+        existingPass,
+      ] = await Promise.all([
+        tx.get(callerUserRef),
+        tx.get(targetUserRef),
+        tx.get(targetProfileRef),
+        tx.get(outgoingBlockRef),
+        tx.get(incomingBlockRef),
         tx.get(reverseRef),
         tx.get(matchRef),
+        tx.get(passRef),
       ]);
+
+      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Account is not active.');
+      }
+      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Interaction unavailable.');
+      }
+      if (outgoingBlock.exists || incomingBlock.exists) {
+        throw new HttpsError('permission-denied', 'Interaction unavailable.');
+      }
+      assertCanReceiveNewConnection(targetProfile);
 
       // Once a connection has explicitly ended, do not let direct callable
       // requests silently reactivate it. A future reconnect feature must define
@@ -181,8 +205,10 @@ export const likeProfile = onCall(
         throw new HttpsError('failed-precondition', 'This previous connection cannot be restarted here.');
       }
 
-      // An explicit Like reverses a previous Pass by this same user.
-      tx.delete(passRef);
+      // Reading the pass before deleting it gives concurrent Like/Pass actions
+      // deterministic transaction-conflict semantics: the last explicit action
+      // that successfully commits wins without leaving both states behind.
+      if (existingPass.exists) tx.delete(passRef);
       tx.set(likeRef, {likeId: likeRef.id, fromUid: uid, toUid, createdAt: FieldValue.serverTimestamp()});
 
       if (existingMatch.exists && existingMatch.get('active') === true) return true;
@@ -210,20 +236,46 @@ export const createConversation = onCall(
     if (!otherUid || otherUid === uid || otherUid.length > 128) throw new HttpsError('invalid-argument', 'Invalid participant.');
 
     await assertActive(uid);
-    // As with likes, charge before inspecting a target account so arbitrary UID
-    // probing cannot bypass the callable budget.
+    // Charge before inspecting a target account so arbitrary UID probing cannot
+    // bypass the callable budget.
     await consumeRateLimit(uid, 'conversation', 30, 60 * 60_000);
-    await assertActive(otherUid);
-    if (await isBlocked(uid, otherUid)) throw new HttpsError('permission-denied', 'Interaction unavailable.');
 
     const id = pairId(uid, otherUid);
-    const match = await db.collection('matches').doc(id).get();
-    if (!match.exists || match.get('active') !== true) throw new HttpsError('failed-precondition', 'An active match is required.');
-
+    const callerUserRef = db.collection('users').doc(uid);
+    const targetUserRef = db.collection('users').doc(otherUid);
+    const outgoingBlockRef = db.collection('blocks').doc(`${uid}_${otherUid}`);
+    const incomingBlockRef = db.collection('blocks').doc(`${otherUid}_${uid}`);
+    const matchRef = db.collection('matches').doc(id);
     const ref = db.collection('conversations').doc(id);
     const participantUids = [uid, otherUid].sort();
+
     await db.runTransaction(async (tx) => {
-      const existing = await tx.get(ref);
+      const [callerUser, targetUser, outgoingBlock, incomingBlock, match, existing] = await Promise.all([
+        tx.get(callerUserRef),
+        tx.get(targetUserRef),
+        tx.get(outgoingBlockRef),
+        tx.get(incomingBlockRef),
+        tx.get(matchRef),
+        tx.get(ref),
+      ]);
+
+      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Account is not active.');
+      }
+      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+        throw new HttpsError('permission-denied', 'Interaction unavailable.');
+      }
+      if (outgoingBlock.exists || incomingBlock.exists) {
+        throw new HttpsError('permission-denied', 'Interaction unavailable.');
+      }
+      if (!match.exists || match.get('active') !== true) {
+        throw new HttpsError('failed-precondition', 'An active match is required.');
+      }
+      const matchParticipants = [String(match.get('userAUid') ?? ''), String(match.get('userBUid') ?? '')].sort();
+      if (matchParticipants[0] !== participantUids[0] || matchParticipants[1] !== participantUids[1]) {
+        throw new HttpsError('internal', 'Match integrity check failed.');
+      }
+
       if (!existing.exists) {
         tx.create(ref, {
           conversationId: id,
