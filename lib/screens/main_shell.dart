@@ -16,6 +16,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  late final List<Widget?> _pages;
 
   static const _titles = [
     'Discover',
@@ -24,6 +25,32 @@ class _MainShellState extends State<MainShell> {
     'Messages',
     'Profile',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = List<Widget?>.filled(_titles.length, null, growable: false);
+    _pages[0] = const DiscoverScreen();
+  }
+
+  Widget _buildPage(int index) {
+    return switch (index) {
+      0 => const DiscoverScreen(),
+      1 => const ConnectionsScreen(),
+      2 => const CircleScreen(),
+      3 => const MessagesScreen(),
+      4 => const ProfileScreen(),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
+  void _selectTab(int value) {
+    if (value == _index) return;
+    setState(() {
+      _index = value;
+      _pages[value] ??= _buildPage(value);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,17 +69,15 @@ class _MainShellState extends State<MainShell> {
       ),
       body: IndexedStack(
         index: _index,
-        children: const [
-          DiscoverScreen(),
-          ConnectionsScreen(),
-          CircleScreen(),
-          MessagesScreen(),
-          ProfileScreen(),
-        ],
+        children: List<Widget>.generate(
+          _pages.length,
+          (index) => _pages[index] ?? const SizedBox.shrink(),
+          growable: false,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
           NavigationDestination(icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt), label: 'Connections'),
