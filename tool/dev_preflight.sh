@@ -76,7 +76,10 @@ flutter analyze lib
 flutter test
 ok "Flutter source checks passed"
 
-npm --prefix functions ci
+# The repository does not yet commit npm lockfiles, so npm ci would fail on a
+# fresh checkout. Keep this aligned with CI until lockfiles are intentionally
+# generated/reviewed and committed.
+npm --prefix functions install
 npm --prefix functions run build
 npm --prefix functions test
 node --test tests/contracts/*.test.mjs
@@ -84,7 +87,7 @@ ok "Functions build/tests and client-backend contracts passed"
 
 if (( FULL == 1 )); then
   printf '\nRunning full Firebase rules suite...\n'
-  npm --prefix tests/security ci
+  npm --prefix tests/security install
   firebase emulators:exec \
     --project demo-polycircle \
     --only firestore,storage \
@@ -94,5 +97,5 @@ fi
 
 printf '\nPreflight passed.\n'
 if (( FULL == 0 )); then
-  printf "For the full emulator-backed security suite, run: ./tool/dev_preflight.sh --full\n"
+  printf "For the full emulator-backed security suite, run: bash tool/dev_preflight.sh --full\n"
 fi
