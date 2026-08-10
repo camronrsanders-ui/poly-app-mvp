@@ -7,7 +7,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import {doc, setDoc, updateDoc} from 'firebase/firestore';
+import {doc, serverTimestamp, setDoc, updateDoc} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -17,9 +17,9 @@ let env;
 const userDoc = (uid, overrides = {}) => ({
   uid,
   email: `${uid}@example.com`,
-  createdAt: new Date(),
+  createdAt: serverTimestamp(),
   onboardingComplete: false,
-  lastActiveAt: new Date(),
+  lastActiveAt: serverTimestamp(),
   accountStatus: 'active',
   ...overrides,
 });
@@ -79,6 +79,14 @@ test('new account document must use the minimal trusted client schema', async ()
   })));
 });
 
+test('new account rejects caller-forged creation and activity timestamps', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await assertFails(setDoc(doc(db, 'users', 'alice'), userDoc('alice', {
+    createdAt: new Date('2000-01-01T00:00:00.000Z'),
+    lastActiveAt: new Date('2000-01-01T00:00:00.000Z'),
+  })));
+});
+
 test('new account cannot skip onboarding during bootstrap', async () => {
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(setDoc(doc(db, 'users', 'alice'), userDoc('alice', {
@@ -87,35 +95,59 @@ test('new account cannot skip onboarding during bootstrap', async () => {
 });
 
 test('onboarding cannot be marked complete until a profile exists', async () => {
-  await adminSeed([['users', 'alice', userDoc('alice')]]);
+  await adminSeed([['users', 'alice', {
+    uid: 'alice',
+    email: 'alice@example.com',
+    createdAt: new Date(),
+    onboardingComplete: false,
+    lastActiveAt: new Date(),
+    accountStatus: 'active',
+  }]]);
   const db = env.authenticatedContext('alice').firestore();
 
   await assertFails(updateDoc(doc(db, 'users', 'alice'), {
     onboardingComplete: true,
-    lastActiveAt: new Date(),
+    lastActiveAt: serverTimestamp(),
   }));
 
   await adminSeed([['profiles', 'alice', profileDoc('alice')]]);
   await assertSucceeds(updateDoc(doc(db, 'users', 'alice'), {
     onboardingComplete: true,
-    lastActiveAt: new Date(),
+    lastActiveAt: serverTimestamp(),
   }));
 });
 
 test('client cannot rewrite account identity or moderation fields', async () => {
-  await adminSeed([['users', 'alice', userDoc('alice')]]);
+  await adminSeed([['users', 'alice', {
+    uid: 'alice',
+    email: 'alice@example.com',
+    createdAt: new Date(),
+    onboardingComplete: false,
+    lastActiveAt: new Date(),
+    accountStatus: 'active',
+  }]]);
   const db = env.authenticatedContext('alice').firestore();
 
-  await assertFails(updateDoc(doc(db, 'users', 'alice'), {email: 'other@example.com'}));
-  await assertFails(updateDoc(doc(db, 'users', 'alice'), {accountStatus: 'banned'}));
-  await assertFails(updateDoc(doc(db, 'users', 'alice'), {uid: 'bob'}));
-  await assertFails(updateDoc(doc(db, 'users', 'alice'), {role: 'moderator'}));
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {email: 'other@example.com', lastActiveAt: serverTimestamp()}));
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {accountStatus: 'banned', lastActiveAt: serverTimestamp()}));
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {uid: 'bob', lastActiveAt: serverTimestamp()}));
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {role: 'moderator', lastActiveAt: serverTimestamp()}));
 });
 
-test('active account can refresh only ordinary activity state', async () => {
-  await adminSeed([['users', 'alice', userDoc('alice')]]);
+test('active account can refresh activity only with server time', async () => {
+  await adminSeed([['users', 'alice', {
+    uid: 'alice',
+    email: 'alice@example.com',
+    createdAt: new Date(),
+    onboardingComplete: false,
+    lastActiveAt: new Date(),
+    accountStatus: 'active',
+  }]]);
   const db = env.authenticatedContext('alice').firestore();
   await assertSucceeds(updateDoc(doc(db, 'users', 'alice'), {
-    lastActiveAt: new Date(),
+    lastActiveAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {
+    lastActiveAt: new Date('2000-01-01T00:00:00.000Z'),
   }));
 });
