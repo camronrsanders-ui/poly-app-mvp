@@ -103,16 +103,24 @@ test('Conversation creation authorizes both accounts, block state, and match in 
   assert.match(section, /Match integrity check failed/);
 });
 
-test('Private Vault remains disabled in both Flutter and trusted backend', () => {
+test('Private Vault stays product-disabled while revocation, cancellation, and reporting remain safety-available', () => {
   const flags = read('lib/config/feature_flags.dart');
   assert.match(flags, /privateVaultEnabled\s*=\s*false/);
   assert.match(vaultGate, /privateVaultServerEnabled\s*=\s*false/);
   assert.match(vaultGate, /assertPrivateVaultEnabled/);
+  assert.match(vault, /function requireUid[\s\S]*assertPrivateVaultEnabled\(\)/);
+  assert.match(vaultListing, /assertPrivateVaultEnabled/);
+  assert.match(vaultUpload, /assertPrivateVaultEnabled/);
+  assert.doesNotMatch(vaultConsent, /assertPrivateVaultEnabled/,
+    'Consent withdrawal must remain available during a Vault kill-switch event');
 
-  for (const source of [vault, vaultConsent, vaultListing, vaultUpload]) {
-    assert.match(source, /assertPrivateVaultEnabled/,
-      'Every callable Private Vault module must enforce the server-side kill switch');
-  }
+  const revoke = vault.match(/export const revokePrivateMedia[\s\S]*?export const getPrivateMediaAccess/)?.[0] ?? '';
+  const report = vault.match(/export const reportPrivateMedia[\s\S]*$/)?.[0] ?? '';
+  assert.match(revoke, /requireAuthenticatedUid\(request\.auth\)/);
+  assert.doesNotMatch(revoke, /requireUid\(request\.auth\)/);
+  assert.match(report, /requireAuthenticatedUid\(request\.auth\)/);
+  assert.doesNotMatch(report, /requireUid\(request\.auth\)/);
+
   assert.match(vaultUpload, /if \(!privateVaultServerEnabled\)/,
     'Storage-triggered Private Vault processing must also honor the server kill switch');
   assert.match(vaultUpload, /rejectionReason:\s*'feature_disabled'/);
@@ -132,37 +140,58 @@ test('Private Vault trusted sharing functions are exported by backend', () => {
   }
 });
 
-test('Private Vault sharing requires an explicit accepted request', () => {
-  assert.match(vault, /async function assertAcceptedShareRequest\b/);
-  assert.match(vault, /grantPrivateMedia[\s\S]*assertAcceptedShareRequest\(ownerUid, recipientUid\)/);
-  assert.match(vault, /request\.get\('status'\)\s*!==\s*'accepted'/);
+test('Private Vault grant transaction requires current accepted consent plus live pair/media state', () => {
+  const section = vault.match(/export const grantPrivateMedia[\s\S]*?export const revokePrivateMedia/)?.[0] ?? '';
+  assert.match(vault, /function requireAcceptedShareRequest\b/);
+  assert.match(section, /db\.runTransaction/);
+  assert.match(section, /tx\.get\(ownerRef\)/);
+  assert.match(section, /tx\.get\(recipientRef\)/);
+  assert.match(section, /tx\.get\(abRef\)/);
+  assert.match(section, /tx\.get\(baRef\)/);
+  assert.match(section, /tx\.get\(matchRef\)/);
+  assert.match(section, /tx\.get\(acceptedRequestRef\)/);
+  assert.match(section, /tx\.get\(mediaRef\)/);
+  assert.match(section, /tx\.get\(grantRef\)/);
+  assert.match(section, /requireAcceptedShareRequest\(acceptedRequest, ownerUid, recipientUid\)/);
+  assert.match(section, /tx\.set\(grantRef/);
 });
 
-test('Private Vault request response and privacy preference commit atomically', () => {
+test('Private Vault request response and optional privacy preference commit atomically with pair authorization', () => {
   const section = vault.match(/export const respondToPrivateMediaRequest[\s\S]*?export const clearPrivateMediaRequestPreference/)?.[0] ?? '';
-  assert.match(section, /const batch = db\.batch\(\)/);
-  assert.match(section, /batch\.set\(ref/);
+  assert.match(section, /db\.runTransaction/);
+  assert.match(section, /tx\.get\(ref\)/);
+  assert.match(section, /assertEligiblePairSnapshots/);
+  assert.match(section, /tx\.set\(ref/);
   assert.match(section, /private_media_request_preferences/);
-  assert.match(section, /await batch\.commit\(\)/);
 });
 
-test('Private Vault recipient withdrawal revokes the exact pair exhaustively before cancellation completes', () => {
+test('Private Vault recipient withdrawal makes cancelled request authoritative before exhaustive grant cleanup', () => {
   assert.match(vaultConsent, /export const cancelPrivateMediaRequest\b/);
   assert.match(index, /export \{cancelPrivateMediaRequest\} from '.\/private_vault_consent'/);
+  assert.match(vaultConsent, /db\.runTransaction/);
+  assert.match(vaultConsent, /status:\s*'cancelled'/);
   assert.match(vaultConsent, /where\('ownerUid', '==', ownerUid\)/);
   assert.match(vaultConsent, /where\('recipientUid', '==', requesterUid\)/);
   assert.match(vaultConsent, /where\('active', '==', true\)/);
   assert.doesNotMatch(vaultConsent, /\.limit\(/);
   assert.match(vaultConsent, /revokedReason:\s*'recipient_cancelled_request'/);
   assert.match(vaultConsent, /active:\s*false/);
-  const revokeIndex = vaultConsent.indexOf('const writer = db.bulkWriter()');
   const cancelIndex = vaultConsent.indexOf("status: 'cancelled'");
-  assert.ok(revokeIndex >= 0 && cancelIndex >= 0 && revokeIndex < cancelIndex,
-    'Consent withdrawal must revoke grants before marking the request cancelled');
+  const grantQueryIndex = vaultConsent.indexOf("db.collection('private_media_grants')");
+  assert.ok(cancelIndex >= 0 && grantQueryIndex > cancelIndex,
+    'Authoritative consent cancellation must commit before grant cleanup begins');
   assert.match(index, /'private_media_request_cancel'/);
 });
 
-test('Private Vault listings batch authorization reads instead of N+1 peer lookups', () => {
+test('Private Vault access requires both an active grant and still-accepted consent', () => {
+  const section = vault.match(/export const getPrivateMediaAccess[\s\S]*?export const reportPrivateMedia/)?.[0] ?? '';
+  assert.match(section, /private_media_grants/);
+  assert.match(section, /private_media_requests/);
+  assert.match(section, /requireAcceptedShareRequest\(acceptedRequest, ownerUid, recipientUid\)/);
+  assert.match(section, /grant\.get\('active'\) !== true/);
+});
+
+test('Private Vault listings batch authorization and consent reads instead of N+1 peer lookups', () => {
   for (const name of [
     'listMyPrivateMediaRequests',
     'listMyPrivateMediaShares',
@@ -172,10 +201,13 @@ test('Private Vault listings batch authorization reads instead of N+1 peer looku
     assert.match(index, new RegExp(`export \\{[^}]*\\b${name}\\b[^}]*\\} from './private_vault_listing'`), `${name} is not re-exported from index.ts`);
   }
   assert.match(vaultListing, /async function loadPeerContext/);
+  assert.match(vaultListing, /async function loadAcceptedRecipients/);
+  assert.match(vaultListing, /async function loadAcceptedOwners/);
   assert.match(vaultListing, /db\.getAll\(\.\.\.userRefs\)/);
   assert.match(vaultListing, /db\.getAll\(\.\.\.profileRefs\)/);
   assert.match(vaultListing, /db\.getAll\(\.\.\.blockRefs\)/);
   assert.match(vaultListing, /db\.getAll\(\.\.\.matchRefs\)/);
+  assert.match(vaultListing, /db\.getAll\(\.\.\.requestRefs\)/);
   assert.doesNotMatch(vaultListing, /async function pairIsEligible|async function displayName/);
 });
 
@@ -206,9 +238,12 @@ test('Private Vault upload pipeline stays trusted, consent-gated, rate-limited, 
   assert.match(vaultUpload, /assertActive\(reviewerUid\)/);
 });
 
-test('Private Vault owner revocation is active-account gated and records one canonical reason field', () => {
+test('Private Vault owner revocation is active-account gated, transaction-safe, and records one canonical reason field', () => {
   const section = vault.match(/export const revokePrivateMedia[\s\S]*?export const getPrivateMediaAccess/)?.[0] ?? '';
+  assert.match(section, /requireAuthenticatedUid\(request\.auth\)/);
   assert.match(section, /assertActive\(ownerUid\)/);
+  assert.match(section, /db\.runTransaction/);
+  assert.match(section, /tx\.get\(grantRef\)/);
   assert.match(section, /revokedReason:\s*'owner_revoked'/);
   assert.doesNotMatch(section, /revocationReason/);
 });
