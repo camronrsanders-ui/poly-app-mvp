@@ -37,12 +37,22 @@ ui-debug.log
 *.pem
 *.p12
 *.p8
+*.cer
+*.mobileprovision
 *.jks
 *.keystore
 service-account*.json
 serviceAccount*.json
 *service-account-key*.json
 secrets/
+
+# Environment-specific Firebase client configuration. These identifiers are not
+# treated as server secrets, but keeping real project files local prevents an
+# accidental production/staging project binding from being committed during
+# development. Release CI should inject the intended environment explicitly.
+ios/Runner/GoogleService-Info.plist
+android/app/google-services.json
+lib/firebase_options.dart
 
 # OS
 .DS_Store
