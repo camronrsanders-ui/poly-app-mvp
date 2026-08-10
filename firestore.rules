@@ -39,6 +39,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
     }
 
+    function conversationUsersActive(conversationId) {
+      return conversationExists(conversationId)
+        && conversationParticipants(conversationId).size() == 2
+        && userIsActive(conversationParticipants(conversationId)[0])
+        && userIsActive(conversationParticipants(conversationId)[1]);
+    }
+
     function validUser(data, uid) {
       return data.keys().hasOnly([
           'uid', 'email', 'createdAt', 'onboardingComplete', 'lastActiveAt',
@@ -109,6 +116,8 @@ service cloud.firestore {
       allow create: if isSelf(uid)
         && validUser(request.resource.data, uid)
         && request.resource.data.onboardingComplete == false;
+      // Self-read remains available for session/deletion-recovery routing even
+      // when a trusted backend has paused the account.
       allow read: if isSelf(uid);
       allow update: if isSelf(uid)
         && request.resource.data.keys().hasOnly([
@@ -136,28 +145,35 @@ service cloud.firestore {
     // Full profile documents include discovery preferences. Other users receive
     // privacy-safe profile views through trusted callable Functions instead.
     match /profiles/{uid} {
-      allow create: if isSelf(uid) && validProfile(request.resource.data, uid);
-      allow update: if isSelf(uid) && validProfile(request.resource.data, uid)
+      allow create: if isSelf(uid) && userIsActive(uid)
+        && validProfile(request.resource.data, uid);
+      allow update: if isSelf(uid) && userIsActive(uid)
+        && validProfile(request.resource.data, uid)
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow read, delete: if isSelf(uid);
+      allow read, delete: if isSelf(uid) && userIsActive(uid);
     }
 
     // Full Circle cards can contain optional names and free-text notes. Only the
-    // owner may read them directly; other members use a trusted redacted view.
+    // active owner may read them directly; other members use a trusted redacted view.
     match /relationship_cards/{cardId} {
-      allow create: if signedIn() && validRelationshipCard(request.resource.data, request.auth.uid);
-      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+      allow create: if signedIn() && userIsActive(request.auth.uid)
+        && validRelationshipCard(request.resource.data, request.auth.uid);
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.ownerUid == request.auth.uid
         && validRelationshipCard(request.resource.data, request.auth.uid)
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.ownerUid == request.auth.uid;
     }
 
     match /likes/{likeId} {
       allow create, update: if false;
       // A user can inspect only likes they sent. Incoming interest remains hidden
       // until trusted backend matching creates an active match.
-      allow read, delete: if signedIn() && resource.data.fromUid == request.auth.uid;
+      allow read, delete: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.fromUid == request.auth.uid;
     }
 
     // Pass state is intentionally opaque to clients, including its owner. This
@@ -168,20 +184,25 @@ service cloud.firestore {
     }
 
     match /matches/{matchId} {
-      allow read: if signedIn() && resource.data.active == true
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.active == true
+        && userIsActive(resource.data.userAUid) && userIsActive(resource.data.userBUid)
         && !blockedEitherWay(resource.data.userAUid, resource.data.userBUid)
         && (resource.data.userAUid == request.auth.uid || resource.data.userBUid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
     match /conversations/{conversationId} {
-      allow read: if signedIn() && resource.data.active == true
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.active == true
         && request.auth.uid in resource.data.participantUids
         && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && !blockedEitherWay(resource.data.participantUids[0], resource.data.participantUids[1]);
       allow create, delete: if false;
-      allow update: if signedIn() && resource.data.active == true
+      allow update: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.active == true
         && request.auth.uid in resource.data.participantUids
+        && userIsActive(resource.data.participantUids[0]) && userIsActive(resource.data.participantUids[1])
         && request.resource.data.participantUids == resource.data.participantUids
         && request.resource.data.active == resource.data.active
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
@@ -190,7 +211,7 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      allow create: if signedIn()
+      allow create: if signedIn() && userIsActive(request.auth.uid)
         && request.resource.data.keys().hasOnly([
           'conversationId', 'senderUid', 'text', 'createdAt', 'isDeleted',
           'messageType', 'readBy'
@@ -203,13 +224,18 @@ service cloud.firestore {
         && request.resource.data.readBy[0] == request.auth.uid
         && isConversationParticipant(request.resource.data.conversationId)
         && conversationIsActive(request.resource.data.conversationId)
+        && conversationUsersActive(request.resource.data.conversationId)
         && request.resource.data.readBy.hasOnly(conversationParticipants(request.resource.data.conversationId))
         && conversationIsUnblocked(request.resource.data.conversationId);
-      allow read: if signedIn() && isConversationParticipant(resource.data.conversationId)
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && isConversationParticipant(resource.data.conversationId)
         && conversationIsActive(resource.data.conversationId)
+        && conversationUsersActive(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId);
-      allow update: if signedIn() && isConversationParticipant(resource.data.conversationId)
+      allow update: if signedIn() && userIsActive(request.auth.uid)
+        && isConversationParticipant(resource.data.conversationId)
         && conversationIsActive(resource.data.conversationId)
+        && conversationUsersActive(resource.data.conversationId)
         && conversationIsUnblocked(resource.data.conversationId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
         && request.resource.data.readBy is list && request.resource.data.readBy.size() <= 2
@@ -220,14 +246,20 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow read: if signedIn() && resource.data.reporterUid == request.auth.uid;
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.reporterUid == request.auth.uid;
       allow create, update, delete: if false;
     }
 
     match /blocks/{blockId} {
-      allow read: if signedIn() && resource.data.blockerUid == request.auth.uid;
+      allow read: if signedIn() && userIsActive(request.auth.uid)
+        && resource.data.blockerUid == request.auth.uid;
       allow create, update, delete: if false;
     }
+
+    // Moderator identity/notes are never directly client-readable. Trusted
+    // moderation callables use Admin SDK access after custom-claim checks.
+    match /report_moderation/{reportId} { allow read, write: if false; }
 
     match /profile_media/{photoId} { allow read, write: if false; }
     match /private_media/{mediaId} { allow read, write: if false; }
