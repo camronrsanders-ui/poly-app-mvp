@@ -1,0 +1,30 @@
+name: Polycircle Dependency Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["restart-foundation", "main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: polycircle-dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functions-production-dependencies:
+    name: Functions production dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependency graph without running package scripts
+        working-directory: functions
+        run: npm install --ignore-scripts
+      - name: Fail on high or critical production dependency advisories
+        working-directory: functions
+        run: npm audit --omit=dev --audit-level=high
