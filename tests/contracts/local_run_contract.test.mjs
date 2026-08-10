@@ -20,12 +20,14 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
 });
 
-test('one-command iOS runner is pinned to demo Firebase and explicit emulator routing', () => {
-  assert.match(iosRunner, /demo-polycircle/);
+test('one-command iOS runner matches the native Firebase project while routing every used backend service locally', () => {
+  assert.match(iosRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+  assert.match(iosRunner, /--project "\$FIREBASE_PROJECT_ID"/);
   assert.match(iosRunner, /--only auth,firestore,functions,storage/);
   assert.match(iosRunner, /USE_FIREBASE_EMULATORS=true/);
   assert.match(iosRunner, /FIREBASE_EMULATOR_HOST=127\.0\.0\.1/);
-  assert.doesNotMatch(iosRunner, /poly-circle-j5v6dy/);
+  assert.match(iosRunner, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true/);
+  assert.doesNotMatch(iosRunner, /firebase deploy/);
 });
 
 test('one-command iOS runner detects common local setup collisions before Firebase starts', () => {
@@ -35,4 +37,8 @@ test('one-command iOS runner detects common local setup collisions before Fireba
     assert.match(iosRunner, new RegExp(port));
   }
   assert.match(iosRunner, /Close the old emulator\/process first/);
+});
+
+test('one-command iOS runner refreshes approved branding when the source artwork is available', () => {
+  assert.match(iosRunner, /install_branding\.sh --if-present/);
 });
