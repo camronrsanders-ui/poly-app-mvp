@@ -22,6 +22,12 @@ after(async () => {
   await env.cleanup();
 });
 
+async function seedActiveUser(uid) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users', uid), {uid, accountStatus: 'active'});
+  });
+}
+
 test('client cannot create reports directly', async () => {
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(setDoc(doc(db, 'reports', 'report1'), {
@@ -35,7 +41,8 @@ test('client cannot create reports directly', async () => {
   }));
 });
 
-test('reporter can read a report created by trusted backend', async () => {
+test('active reporter can read a report created by trusted backend', async () => {
+  await seedActiveUser('alice');
   await env.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), 'reports', 'report1'), {
       reportId: 'report1',
