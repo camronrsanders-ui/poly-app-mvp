@@ -81,6 +81,13 @@ function requireProcessedPath(ownerUid: string, photoId: string, storagePath: st
   }
 }
 
+function requireOwnedProfileMediaPath(ownerUid: string, photoId: string, storagePath: string) {
+  if (storagePath === `users/${ownerUid}/profile/${photoId}.jpg`) return;
+  const quarantine = parseQuarantinePath(storagePath);
+  if (quarantine?.uid === ownerUid && quarantine.photoId === photoId) return;
+  throw new HttpsError('failed-precondition', 'Invalid profile media path.');
+}
+
 async function canViewOwnerProfile(requesterUid: string, ownerUid: string): Promise<boolean> {
   if (requesterUid === ownerUid) return true;
   await Promise.all([assertActive(requesterUid), assertActive(ownerUid)]);
@@ -277,7 +284,8 @@ export const processProfilePhoto = onObjectFinalized(
     } catch (error) {
       await source.delete({ignoreNotFound: true});
       await ref.set({status: 'rejected', rejectionReason: 'image_processing', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-      console.error('Profile photo processing failed', {uid, photoId, error});
+      const message = error instanceof Error ? error.message.slice(0, 300) : 'unknown';
+      console.error('Profile photo processing failed', {photoId, message});
     }
   },
 );
@@ -286,8 +294,13 @@ export const reviewProfilePhoto = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
     const reviewerUid = requireUid(request.auth);
-    await consumeRateLimit(reviewerUid, 'profile_photo_review', 120, 60 * 60_000);
-    if (request.auth?.token?.moderator !== true && request.auth?.token?.admin !== true) {
+    await Promise.all([
+      assertActive(reviewerUid),
+      consumeRateLimit(reviewerUid, 'profile_photo_review', 120, 60 * 60_000),
+    ]);
+    if (request.auth?.token?.moderator !== true
+        && request.auth?.token?.admin !== true
+        && request.auth?.token?.superadmin !== true) {
       throw new HttpsError('permission-denied', 'Moderator access required.');
     }
     const photoId = requirePhotoId(request.data?.photoId);
@@ -372,10 +385,7 @@ export const deleteProfilePhoto = onCall(
     }
 
     const storagePath = String(photo.get('storagePath') ?? '');
-    const expectedPrefix = `users/${uid}/`;
-    if (!storagePath.startsWith(expectedPrefix) || storagePath.includes('..')) {
-      throw new HttpsError('failed-precondition', 'Invalid profile media path.');
-    }
+    requireOwnedProfileMediaPath(uid, photoId, storagePath);
 
     await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
     await ref.delete();
