@@ -66,24 +66,41 @@ test('Account deletion requires explicit DELETE confirmation from the trusted cl
   assert.match(index, /confirmation\s*\?\?\s*''\)\s*!==\s*'DELETE'/);
 });
 
-test('Trusted like flow respects the targets discoverability preference', () => {
+test('Trusted Like authorizes target state inside the same transaction as Like and Match writes', () => {
   assert.match(connectionEligibility, /profileVisibility'\)\s*!==\s*'public'/);
   assert.match(connectionEligibility, /openToConnections'\)\s*!==\s*true/);
-  assert.match(index, /assertCanReceiveNewConnection\(db, toUid\)/);
+  assert.doesNotMatch(connectionEligibility, /collection\(|getFirestore/,
+    'Eligibility helper must validate a transaction-read snapshot, not perform an independent lookup');
 
-  const likeSection = index.match(/export const likeProfile[\s\S]*?export const createConversation/)?.[0] ?? '';
-  const rateIndex = likeSection.indexOf("consumeRateLimit(uid, 'like'");
-  const targetLookupIndex = likeSection.indexOf('assertActive(toUid)');
-  assert.ok(rateIndex >= 0 && targetLookupIndex >= 0 && rateIndex < targetLookupIndex,
-    'Like attempts must be rate-limited before target-specific account lookups');
+  const section = index.match(/export const likeProfile[\s\S]*?export const createConversation/)?.[0] ?? '';
+  const rateIndex = section.indexOf("consumeRateLimit(uid, 'like'");
+  const targetReadIndex = section.indexOf('tx.get(targetUserRef)');
+  assert.ok(rateIndex >= 0 && targetReadIndex >= 0 && rateIndex < targetReadIndex,
+    'Like attempts must be rate-limited before target-specific reads');
+  assert.match(section, /tx\.get\(callerUserRef\)/);
+  assert.match(section, /tx\.get\(targetUserRef\)/);
+  assert.match(section, /tx\.get\(targetProfileRef\)/);
+  assert.match(section, /tx\.get\(outgoingBlockRef\)/);
+  assert.match(section, /tx\.get\(incomingBlockRef\)/);
+  assert.match(section, /tx\.get\(reverseRef\)/);
+  assert.match(section, /tx\.get\(matchRef\)/);
+  assert.match(section, /tx\.get\(passRef\)/);
+  assert.match(section, /assertCanReceiveNewConnection\(targetProfile\)/);
 });
 
-test('Conversation creation rate-limits before target-specific lookups', () => {
+test('Conversation creation authorizes both accounts, block state, and match in its write transaction', () => {
   const section = index.match(/export const createConversation[\s\S]*?export const deleteMyAccount/)?.[0] ?? '';
   const rateIndex = section.indexOf("consumeRateLimit(uid, 'conversation'");
-  const targetLookupIndex = section.indexOf('assertActive(otherUid)');
-  assert.ok(rateIndex >= 0 && targetLookupIndex >= 0 && rateIndex < targetLookupIndex,
-    'Conversation attempts must be rate-limited before target-specific account lookups');
+  const targetReadIndex = section.indexOf('tx.get(targetUserRef)');
+  assert.ok(rateIndex >= 0 && targetReadIndex >= 0 && rateIndex < targetReadIndex,
+    'Conversation attempts must be rate-limited before target-specific reads');
+  assert.match(section, /tx\.get\(callerUserRef\)/);
+  assert.match(section, /tx\.get\(targetUserRef\)/);
+  assert.match(section, /tx\.get\(outgoingBlockRef\)/);
+  assert.match(section, /tx\.get\(incomingBlockRef\)/);
+  assert.match(section, /tx\.get\(matchRef\)/);
+  assert.match(section, /tx\.get\(ref\)/);
+  assert.match(section, /Match integrity check failed/);
 });
 
 test('Private Vault remains disabled in both Flutter and trusted backend', () => {
