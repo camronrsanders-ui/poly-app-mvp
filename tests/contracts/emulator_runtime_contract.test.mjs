@@ -27,6 +27,14 @@ test('local seed refuses to run without emulator hosts and a demo project', () =
   assert.match(seed, /Refusing to seed non-demo project/);
 });
 
+test('seeded profile and Circle fixtures stay inside production document schemas', () => {
+  assert.match(seed, /const \{email: _email, \.\.\.profile\} = person;/);
+  assert.doesNotMatch(
+    seed.match(/collection\('relationship_cards'\)[\s\S]*?\n  \}\);/)?.[0] ?? '',
+    /cardId:/,
+  );
+});
+
 test('Functions local tooling is pinned to Node 22 and exposes the seed command', () => {
   assert.equal(nvmrc, '22');
   assert.equal(functionsPackage.engines.node, '22');
