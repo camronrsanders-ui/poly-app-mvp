@@ -18,8 +18,8 @@ jobs:
     name: Flutter analyze and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
@@ -37,8 +37,8 @@ jobs:
       run:
         working-directory: functions
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Install dependencies
@@ -59,12 +59,14 @@ jobs:
     name: Client/backend security contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Check development shell scripts
         run: bash -n tool/*.sh
+      - name: Scan repository for committed secrets and unsafe client paths
+        run: bash tool/security_static_scan.sh
       - name: Run static contract tests
         run: node --test tests/contracts/*.test.mjs
 
@@ -72,11 +74,11 @@ jobs:
     name: Firebase security rules
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '21'
