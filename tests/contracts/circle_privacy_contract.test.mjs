@@ -28,10 +28,10 @@ test('unnamed public cards redact optional names and free-text notes', () => {
   assert.match(circle, /!redactIdentity && typeof data\.note/);
 });
 
-test('full relationship-card documents are owner-only in Firestore', () => {
+test('full relationship-card documents are owner-only and active-account-only in Firestore', () => {
   assert.match(
     rules,
-    /match \/relationship_cards\/\{cardId\}[\s\S]*?allow read:\s*if signedIn\(\) && resource\.data\.ownerUid == request\.auth\.uid;/,
+    /match \/relationship_cards\/\{cardId\}[\s\S]*?allow read:\s*if signedIn\(\) && userIsActive\(request\.auth\.uid\)[\s\S]*?&& resource\.data\.ownerUid == request\.auth\.uid;/,
   );
 });
 
