@@ -196,7 +196,17 @@ export const unblockUser = onCall(
     const blockedUid = requireTargetUid(request.data?.blockedUid, blockerUid);
     await Promise.all([assertActive(blockerUid), enforceRateLimit(blockerUid, 'unblock')]);
 
-    await db.collection('blocks').doc(`${blockerUid}_${blockedUid}`).delete();
+    const blockRef = db.collection('blocks').doc(`${blockerUid}_${blockedUid}`);
+    const block = await blockRef.get();
+    if (!block.exists || block.get('blockerUid') !== blockerUid || block.get('blockedUid') !== blockedUid) {
+      throw new HttpsError('not-found', 'Block not found.');
+    }
+
+    // A previous block may have persisted while its secondary private-access
+    // cleanup failed. Revoke again before removing the block so an unblock can
+    // never make a stale grant usable without fresh consent.
+    await revokePrivateAccessBetween(blockerUid, blockedUid, 'unblocked_after_block');
+    await blockRef.delete();
     return {blocked: false};
   },
 );
