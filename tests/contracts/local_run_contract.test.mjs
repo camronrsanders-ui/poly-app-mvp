@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(import.meta.dirname, '../..');
 const preflight = fs.readFileSync(path.join(root, 'tool/dev_preflight.sh'), 'utf8');
 const iosRunner = fs.readFileSync(path.join(root, 'tool/run_ios_local.sh'), 'utf8');
+const iosRepair = fs.readFileSync(path.join(root, 'tool/ensure_ios_runtime.sh'), 'utf8');
 
 test('development preflight checks the runtime versions and app source before simulator testing', () => {
   assert.match(preflight, /Node 22 is required/);
@@ -41,4 +42,13 @@ test('one-command iOS runner detects common local setup collisions before Fireba
 
 test('one-command iOS runner refreshes approved branding when the source artwork is available', () => {
   assert.match(iosRunner, /install_branding\.sh --if-present/);
+});
+
+test('one-command iOS runner repairs an incomplete or stale native iOS shell before validation', () => {
+  assert.match(iosRunner, /ensure_ios_runtime\.sh/);
+  assert.match(iosRepair, /flutter create --platforms=ios \./);
+  assert.match(iosRepair, /GoogleService-Info\.plist/);
+  assert.match(iosRepair, /IPHONEOS_DEPLOYMENT_TARGET/);
+  assert.match(iosRepair, /15\.0/);
+  assert.match(iosRepair, /preserved GoogleService-Info\.plist/);
 });
