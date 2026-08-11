@@ -18,6 +18,11 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
   fi
 fi
 
+# Repair the native iOS shell before any deeper validation. Flutter project
+# regeneration may restore a stale 13.0 deployment target, so this also keeps
+# the target at the Firebase-compatible iOS 15.0 floor automatically.
+bash tool/ensure_ios_runtime.sh
+
 # Refresh launcher icons automatically whenever the exact approved logo is
 # available locally. Missing artwork is a branding warning, not a reason to
 # block functional emulator testing.
