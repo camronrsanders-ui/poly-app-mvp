@@ -53,13 +53,13 @@ bash tool/run_android_local.sh
 
 The runner refuses to start when `android/` or `android/app/google-services.json` is missing. It reuses the guarded local seed workflow and routes the Android emulator client to the host machine at `10.0.2.2` while keeping the seed process itself loopback-only.
 
-If the connected Flutter device has a different name, pass the exact device name:
+With no argument, the runner uses `flutter devices --machine` and automatically selects the first connected Android target rather than relying on a display name such as `Android Emulator`, which varies between emulator images and machines. To target a specific Android device, pass either its exact Flutter device ID or exact Flutter device name:
 
 ```bash
 bash tool/run_android_local.sh "emulator-5554"
 ```
 
-Use `flutter devices` to determine the exact identifier/name available on the test machine.
+Use `flutter devices` to inspect the available identifiers/names. The runner rejects a requested iOS/desktop/web target even if its name happens to match, so Android local routing cannot accidentally launch on the wrong platform.
 
 ## Build validation required before manual testing
 
