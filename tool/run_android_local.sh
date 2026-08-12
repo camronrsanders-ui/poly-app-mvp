@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Select the Functions runtime in this shell before any npm/Firebase work.
+# Select the Functions/Firebase runtimes in this shell before any npm/Firebase work.
 # shellcheck disable=SC1091
 source "$ROOT_DIR/tool/ensure_node22.sh"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE="${1:-Android Emulator}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
@@ -33,11 +35,7 @@ if [[ ! -f android/app/google-services.json ]]; then
   exit 1
 fi
 
-# Refresh launcher icons automatically whenever the exact approved logo is
-# available locally. Missing artwork is a branding warning, not a reason to
-# block functional emulator testing.
 bash tool/install_branding.sh --if-present
-
 bash tool/dev_preflight.sh
 
 printf '\nStarting Polycircle Android local Firebase test run\n'
@@ -64,9 +62,6 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-# The seed script runs on the development Mac and therefore remains restricted
-# to loopback. The Android emulator reaches those same local emulator services
-# through 10.0.2.2, supplied only to the Flutter client.
 RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=$ANDROID_HOST"
 
 firebase emulators:exec \
