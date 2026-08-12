@@ -44,11 +44,28 @@ class _MainShellState extends State<MainShell> {
     };
   }
 
+  bool _refreshOnEntry(int index) => index == 1 || index == 3;
+
   void _selectTab(int value) {
-    if (value == _index) return;
+    if (value == _index) {
+      if (_refreshOnEntry(value)) {
+        setState(() => _pages[value] = _buildPage(value));
+      }
+      return;
+    }
+
     setState(() {
       _index = value;
-      _pages[value] ??= _buildPage(value);
+
+      // Connections and Messages reflect security-sensitive relationship state.
+      // Rebuild them whenever the user enters the tab so an ended/blocked
+      // connection cannot remain visible from an IndexedStack cache after the
+      // trusted backend has already revoked access.
+      if (_refreshOnEntry(value)) {
+        _pages[value] = _buildPage(value);
+      } else {
+        _pages[value] ??= _buildPage(value);
+      }
     });
   }
 
