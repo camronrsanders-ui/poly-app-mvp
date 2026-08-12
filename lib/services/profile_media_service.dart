@@ -1,18 +1,23 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../config/firebase_runtime.dart';
+
 class ProfileMediaUpload {
   const ProfileMediaUpload({
     required this.photoId,
-    required this.uploadUrl,
     required this.requiredContentType,
+    required this.uploadTransport,
+    this.uploadUrl,
   });
 
   final String photoId;
-  final Uri uploadUrl;
+  final Uri? uploadUrl;
   final String requiredContentType;
+  final String uploadTransport;
 }
 
 class ProfileMediaStatus {
@@ -96,15 +101,28 @@ class ProfileMediaService {
     });
     final data = result.data;
     final photoId = data['photoId'] as String?;
-    final uploadUrl = data['uploadUrl'] as String?;
+    final rawUploadUrl = data['uploadUrl'] as String?;
     final requiredContentType = data['requiredContentType'] as String?;
-    if (photoId == null || uploadUrl == null || requiredContentType == null) {
+    final uploadTransport = data['uploadTransport'] as String? ?? 'signed_url';
+    if (photoId == null || requiredContentType == null) {
       throw StateError('Profile photo upload authorization was incomplete.');
+    }
+    if (uploadTransport != 'signed_url' &&
+        uploadTransport != 'emulator_confirm_callable') {
+      throw StateError('Profile photo upload transport was invalid.');
+    }
+    if (uploadTransport == 'signed_url' &&
+        (rawUploadUrl == null || rawUploadUrl.isEmpty)) {
+      throw StateError('Profile photo upload URL was missing.');
+    }
+    if (uploadTransport == 'emulator_confirm_callable' && !useFirebaseEmulators) {
+      throw StateError('Emulator profile photo transport is disabled in this build.');
     }
     return ProfileMediaUpload(
       photoId: photoId,
-      uploadUrl: Uri.parse(uploadUrl),
+      uploadUrl: rawUploadUrl == null ? null : Uri.parse(rawUploadUrl),
       requiredContentType: requiredContentType,
+      uploadTransport: uploadTransport,
     );
   }
 
@@ -117,9 +135,26 @@ class ProfileMediaService {
       throw ArgumentError('Photo must be 10 MB or smaller.');
     }
 
+    if (authorization.uploadTransport == 'emulator_confirm_callable') {
+      if (!useFirebaseEmulators) {
+        throw StateError('Local profile photo upload is disabled in this build.');
+      }
+      final callable = _functions.httpsCallable('confirmProfilePhotoUpload');
+      await callable.call<Map<String, dynamic>>({
+        'photoId': authorization.photoId,
+        'contentType': authorization.requiredContentType,
+        'emulatorBytesBase64': base64Encode(bytes),
+      });
+      return;
+    }
+
+    final uploadUrl = authorization.uploadUrl;
+    if (uploadUrl == null) {
+      throw StateError('Profile photo upload URL was missing.');
+    }
     final client = HttpClient();
     try {
-      final request = await client.putUrl(authorization.uploadUrl);
+      final request = await client.putUrl(uploadUrl);
       request.headers.contentType = ContentType.parse(authorization.requiredContentType);
       request.contentLength = bytes.length;
       request.add(bytes);
