@@ -9,6 +9,17 @@ cd "$ROOT_DIR"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/tool/ensure_node22.sh"
 
+# Homebrew's openjdk@21 is keg-only on macOS. /usr/bin/java can exist even when
+# macOS cannot locate a usable JDK, so prefer the known Homebrew JDK when it is
+# installed instead of relying on the system Java shim.
+if command -v brew >/dev/null 2>&1; then
+  JAVA21_PREFIX="$(brew --prefix openjdk@21 2>/dev/null || true)"
+  if [[ -n "$JAVA21_PREFIX" && -x "$JAVA21_PREFIX/bin/java" ]]; then
+    export JAVA_HOME="$JAVA21_PREFIX/libexec/openjdk.jdk/Contents/Home"
+    export PATH="$JAVA21_PREFIX/bin:$PATH"
+  fi
+fi
+
 FULL=0
 if [[ "${1:-}" == "--full" ]]; then
   FULL=1
@@ -50,9 +61,8 @@ if [[ "$NODE_MAJOR" != "22" ]]; then
 fi
 ok "Node 22 active"
 
-# macOS ships /usr/bin/java even when no usable Java runtime is installed.
-# Therefore command -v java is not enough: execute java -version and report a
-# deterministic remediation instead of letting `set -e` terminate silently.
+# Execute Java rather than trusting command -v: macOS ships /usr/bin/java as a
+# launcher shim even when no runtime is registered.
 JAVA_VERSION_OUTPUT=""
 if ! JAVA_VERSION_OUTPUT="$(java -version 2>&1)"; then
   JAVA_FIRST_LINE="${JAVA_VERSION_OUTPUT%%$'\n'*}"
