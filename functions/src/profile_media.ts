@@ -380,6 +380,12 @@ export const reviewProfilePhoto = onCall(
       throw new HttpsError('failed-precondition', 'Photo is not awaiting review.');
     }
     const ownerUid = String(photo.get('ownerUid') ?? '');
+    if (!ownerUid) {
+      throw new HttpsError('failed-precondition', 'Photo owner is invalid.');
+    }
+    if (ownerUid === reviewerUid) {
+      throw new HttpsError('permission-denied', 'Reviewers cannot review their own profile photos.');
+    }
     const storagePath = String(photo.get('storagePath') ?? '');
     requireProcessedPath(ownerUid, photoId, storagePath);
 
