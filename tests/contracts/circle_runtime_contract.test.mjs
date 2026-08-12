@@ -30,3 +30,10 @@ test('Circle mutations surface failures instead of producing uncaught UI actions
   assert.match(circle, /That Circle change could not be saved/);
   assert.match(circle, /Could not save this relationship/);
 });
+
+test('Circle modal does not own manually-disposed text controllers across route teardown', () => {
+  assert.doesNotMatch(circle, /TextEditingController/);
+  assert.match(circle, /TextFormField\(/);
+  assert.match(circle, /initialValue: label/);
+  assert.match(circle, /onChanged: \(value\) => label = value/);
+});
