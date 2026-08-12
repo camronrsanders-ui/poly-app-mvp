@@ -4,21 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Keep the runtime selection inside this script so opening a new terminal does
-# not accidentally run Functions tooling with an incompatible global Node.
+# Keep runtime selection inside this script so opening a new terminal does not
+# accidentally run Functions/Firebase tooling with incompatible globals.
 # shellcheck disable=SC1091
 source "$ROOT_DIR/tool/ensure_node22.sh"
-
-# Homebrew's openjdk@21 is keg-only on macOS. /usr/bin/java can exist even when
-# macOS cannot locate a usable JDK, so prefer the known Homebrew JDK when it is
-# installed instead of relying on the system Java shim.
-if command -v brew >/dev/null 2>&1; then
-  JAVA21_PREFIX="$(brew --prefix openjdk@21 2>/dev/null || true)"
-  if [[ -n "$JAVA21_PREFIX" && -x "$JAVA21_PREFIX/bin/java" ]]; then
-    export JAVA_HOME="$JAVA21_PREFIX/libexec/openjdk.jdk/Contents/Home"
-    export PATH="$JAVA21_PREFIX/bin:$PATH"
-  fi
-fi
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tool/ensure_java21.sh"
 
 FULL=0
 if [[ "${1:-}" == "--full" ]]; then
@@ -61,14 +52,7 @@ if [[ "$NODE_MAJOR" != "22" ]]; then
 fi
 ok "Node 22 active"
 
-# Execute Java rather than trusting command -v: macOS ships /usr/bin/java as a
-# launcher shim even when no runtime is registered.
-JAVA_VERSION_OUTPUT=""
-if ! JAVA_VERSION_OUTPUT="$(java -version 2>&1)"; then
-  JAVA_FIRST_LINE="${JAVA_VERSION_OUTPUT%%$'\n'*}"
-  [[ -n "$JAVA_FIRST_LINE" ]] || JAVA_FIRST_LINE="java -version returned a non-zero exit status"
-  fail "Java command exists but no usable runtime is available: $JAVA_FIRST_LINE. Install Java 21 (macOS/Homebrew: brew install openjdk@21), then retry."
-fi
+JAVA_VERSION_OUTPUT="$(java -version 2>&1)" || fail "Java 21 or newer must be executable after runtime activation."
 JAVA_VERSION_RAW="${JAVA_VERSION_OUTPUT%%$'\n'*}"
 JAVA_MAJOR="$(printf '%s' "$JAVA_VERSION_RAW" | sed -E 's/.*version "([0-9]+).*/\1/' || true)"
 if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]]; then
@@ -127,9 +111,6 @@ flutter analyze lib
 flutter test
 ok "Flutter source checks passed"
 
-# The repository does not yet commit npm lockfiles, so npm ci would fail on a
-# fresh checkout. Keep this aligned with CI until lockfiles are intentionally
-# generated/reviewed and committed.
 npm --prefix functions install
 npm --prefix functions run build
 npm --prefix functions test
