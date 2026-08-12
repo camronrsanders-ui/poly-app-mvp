@@ -122,6 +122,33 @@ Product direction:
 
 Implementation should be staged: first establish the graph data/view model and privacy-safe layout tests; then a static interactive prototype; then motion/gesture behavior; then dense/multi-circle expansion; then accessibility/performance and real-device polish. Do not rush this into the current foundation merely for visual novelty.
 
+### Community Learning & Support Hub
+Polycircle should help people understand relationships and care for themselves and their communities, not only help them find connections. Add a clearly accessible public resource area built around **Learn, Grow, Connect, and Get Help**. Core educational/safety material should be useful without requiring a match or active relationship and, where technically practical, critical safety information should remain accessible without relying on personalized account data.
+
+Product direction:
+- **Relationship dictionary:** plain-language, respectful definitions for polyamory, ethical/consensual non-monogamy, monogamish, relationship anarchy, metamour, compersion, nesting partner, anchor partner, kitchen-table polyamory, parallel polyamory, hierarchy/prescriptive hierarchy, boundaries, agreements, consent, safer-sex terminology, and other evolving community language.
+- Definitions should educate rather than prescribe a single correct relationship model. Where terminology is contested or community usage varies, say so rather than presenting opinion as universal fact.
+- **Relationship learning:** practical guides for communication, boundaries versus rules, jealousy and insecurity, consent, conflict repair, expectations, introducing partners/metamours, check-ins, ending relationships respectfully, reconnecting, and building healthy relationship agreements.
+- **Growth tools:** optional conversation prompts, relationship check-in questions, boundary/needs reflection prompts, and educational exercises. These should support conversation rather than claim to replace counseling or professional care.
+- **Safety & Get Help:** prominent routes to emergency/safety information, domestic or intimate-partner violence resources, sexual-assault resources, crisis support, LGBTQ+ support, and other vetted community services where appropriate.
+- Safety resources must distinguish immediate emergency help from general educational material and must not depend on another Polycircle user granting access.
+- Resource links/phone information must have source, region, and review-date metadata so stale safety information can be identified and maintained. Do not hard-code unverified crisis information merely to fill the section.
+- Allow future localization by country/region because emergency numbers, laws, organizations, terminology, and available services differ.
+- **Community resources:** eventually include vetted books, organizations, support groups, educational sites, sexual-health resources, and community services. Inclusion must not imply an endorsement that has not actually been reviewed.
+- Keep educational content separated from user-generated advice so authoritative/vetted material is visually identifiable.
+- Make the hub searchable and organized enough that a person unfamiliar with poly/ENM language can find an answer without already knowing the correct term.
+- Design for accessibility, readable language, and discreet access to safety information.
+- Avoid collecting sensitive telemetry about which crisis/safety resources an individual opens unless there is a clearly justified, privacy-reviewed need.
+
+Editorial/maintenance requirements:
+- Establish source and review standards before publishing safety-critical content.
+- Track `lastReviewed`/region/source metadata for externally maintained resources.
+- Have terminology and educational content reviewed periodically because language and community norms evolve.
+- Clearly distinguish education from medical, legal, mental-health, or emergency professional advice.
+- Build the initial content as maintainable structured data rather than scattering definitions and resource URLs throughout UI code.
+
+Long-term product principle: Polycircle should not position itself as an authority that dictates how people must love. It should give people understandable language, safer tools, trustworthy resources, and thoughtful product mechanics that help them **love, grow, and connect** with greater communication, consent, and care.
+
 ## Later Releases
 - verified linked partners/mutual relationship confirmation
 - groups/community spaces
