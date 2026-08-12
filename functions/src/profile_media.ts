@@ -88,6 +88,25 @@ function requireOwnedProfileMediaPath(ownerUid: string, photoId: string, storage
   throw new HttpsError('failed-precondition', 'Invalid profile media path.');
 }
 
+function runningInFunctionsEmulator(): boolean {
+  return process.env.FUNCTIONS_EMULATOR === 'true';
+}
+
+function requireEmulatorUploadBytes(raw: unknown): Buffer {
+  const value = String(raw ?? '').trim();
+  if (!value || value.length > Math.ceil(maxUploadBytes * 4 / 3) + 16) {
+    throw new HttpsError('invalid-argument', 'Invalid local profile photo payload.');
+  }
+  if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
+    throw new HttpsError('invalid-argument', 'Invalid local profile photo payload.');
+  }
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.length <= 0 || bytes.length > maxUploadBytes || bytes.toString('base64') !== value) {
+    throw new HttpsError('invalid-argument', 'Invalid local profile photo payload.');
+  }
+  return bytes;
+}
+
 async function canViewOwnerProfile(requesterUid: string, ownerUid: string): Promise<boolean> {
   if (requesterUid === ownerUid) return true;
   await Promise.all([assertActive(requesterUid), assertActive(ownerUid)]);
@@ -117,15 +136,24 @@ export const beginProfilePhotoUpload = onCall(
     const photoId = randomUUID();
     const extension = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1];
     const storagePath = `users/${uid}/${quarantinePrefix}/${photoId}.${extension}`;
-    const file = getStorage().bucket().file(storagePath);
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    const [uploadUrl] = await file.getSignedUrl({
-      version: 'v4',
-      action: 'write',
-      expires: expiresAt,
-      contentType,
-    });
+    // Local emulators do not have a service-account private key, so V4 signed
+    // URLs cannot be generated there. Production remains on signed URLs; local
+    // QA sends the bytes back through the same App-Check-protected confirm
+    // callable, which writes via the trusted Admin SDK only in emulator mode.
+    let uploadUrl: string | null = null;
+    let uploadTransport = 'signed_url';
+    if (runningInFunctionsEmulator()) {
+      uploadTransport = 'emulator_confirm_callable';
+    } else {
+      [uploadUrl] = await getStorage().bucket().file(storagePath).getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: expiresAt,
+        contentType,
+      });
+    }
 
     await db.collection('profile_media').doc(photoId).set({
       photoId,
@@ -137,7 +165,13 @@ export const beginProfilePhotoUpload = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return {photoId, uploadUrl, expiresInSeconds: 600, requiredContentType: contentType};
+    return {
+      photoId,
+      uploadUrl,
+      uploadTransport,
+      expiresInSeconds: 600,
+      requiredContentType: contentType,
+    };
   },
 );
 
@@ -172,6 +206,26 @@ export const confirmProfilePhotoUpload = onCall(
       throw new HttpsError('failed-precondition', 'Invalid profile media path.');
     }
 
+    const emulatorBytes = request.data?.emulatorBytesBase64;
+    if (emulatorBytes != null) {
+      if (!runningInFunctionsEmulator()) {
+        throw new HttpsError('permission-denied', 'Local profile photo upload is unavailable.');
+      }
+      const suppliedContentType = requireContentType(request.data?.contentType);
+      if (suppliedContentType !== expectedContentType) {
+        throw new HttpsError('invalid-argument', 'Profile photo content type changed.');
+      }
+      const bytes = requireEmulatorUploadBytes(emulatorBytes);
+      await getStorage().bucket().file(storagePath).save(bytes, {
+        resumable: false,
+        contentType: expectedContentType,
+        metadata: {
+          cacheControl: 'private, no-store',
+          metadata: {ownerUid: uid, photoId, localEmulatorUpload: 'true'},
+        },
+      });
+    }
+
     const file = getStorage().bucket().file(storagePath);
     const [exists] = await file.exists();
     if (!exists) {
@@ -192,14 +246,26 @@ export const confirmProfilePhotoUpload = onCall(
       throw new HttpsError('invalid-argument', 'Uploaded image failed validation.');
     }
 
-    await ref.set({
-      status: 'pending_processing',
-      uploadedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      sizeBytes: size,
-    }, {merge: true});
+    let status = 'pending_processing';
+    await db.runTransaction(async (tx) => {
+      const latest = await tx.get(ref);
+      const latestStatus = String(latest.get('status') ?? '');
+      if (terminalStatuses.has(latestStatus) || latestStatus === 'pending_processing') {
+        status = latestStatus;
+        return;
+      }
+      if (latestStatus !== 'awaiting_upload') {
+        throw new HttpsError('failed-precondition', 'Upload is not awaiting confirmation.');
+      }
+      tx.set(ref, {
+        status: 'pending_processing',
+        uploadedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        sizeBytes: size,
+      }, {merge: true});
+    });
 
-    return {photoId, status: 'pending_processing'};
+    return {photoId, status};
   },
 );
 
