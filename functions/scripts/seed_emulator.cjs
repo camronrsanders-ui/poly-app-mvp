@@ -135,6 +135,28 @@ const people = [
     interests: ['Games', 'Photography', 'Travel'],
     lookingForNote: 'Already connected in this local fixture.',
   },
+  {
+    uid: 'local-moderator',
+    email: 'moderator@local.polycircle.test',
+    displayName: 'Local Moderator',
+    age: 30,
+    city: 'Boston',
+    region: 'MA',
+    headline: 'Local moderation QA only',
+    bio: 'Hidden emulator-only staff fixture for trusted moderation testing.',
+    genderIdentity: '',
+    pronouns: '',
+    orientation: '',
+    relationshipStructure: '',
+    relationshipStatus: '',
+    partnered: false,
+    openToConnections: false,
+    intentionTags: [],
+    interests: [],
+    lookingForNote: '',
+    profileVisibility: 'hidden',
+    authClaims: {moderator: true},
+  },
 ];
 
 async function upsertAuthUser(person) {
@@ -156,6 +178,9 @@ async function upsertAuthUser(person) {
       disabled: false,
     });
   }
+  // Explicitly set (or clear) claims on every seed so stale local privileges
+  // cannot survive between fixture revisions.
+  await auth.setCustomUserClaims(person.uid, person.authClaims ?? {});
 }
 
 async function seedPerson(person) {
@@ -169,10 +194,10 @@ async function seedPerson(person) {
     accountStatus: 'active',
   }, {merge: true});
 
-  // Auth-only fields such as email must never be copied into profiles. Keeping
-  // local fixtures inside the production profile schema ensures owner edits are
-  // still accepted by the real Firestore rules during emulator testing.
-  const {email: _email, ...profile} = person;
+  // Auth-only fields such as email and staff claims must never be copied into
+  // profiles. Keeping local fixtures inside the production profile schema
+  // ensures owner edits are still accepted by the real Firestore rules.
+  const {email: _email, authClaims: _authClaims, ...profile} = person;
   await db.collection('profiles').doc(person.uid).set({
     ...profile,
     customIdentityTags: [],
@@ -181,7 +206,7 @@ async function seedPerson(person) {
     distanceRadius: 100,
     preferredStructures: [],
     preferredIntentions: [],
-    profileVisibility: 'public',
+    profileVisibility: person.profileVisibility ?? 'public',
     mapVisibility: 'private',
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -254,8 +279,9 @@ async function main() {
   await seedRelationshipCards();
 
   console.log(`Seeded Polycircle Firebase emulators only for project ${projectId}.`);
-  console.log('Login: cam@local.polycircle.test');
-  console.log(`Password: ${password}`);
+  console.log('Member login: cam@local.polycircle.test');
+  console.log('Moderator login: moderator@local.polycircle.test');
+  console.log(`Local-only password: ${password}`);
   console.log('Discover fixtures: Alex and Riley. Existing connection: Jordan.');
 }
 
