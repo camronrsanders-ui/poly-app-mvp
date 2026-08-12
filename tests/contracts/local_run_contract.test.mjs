@@ -16,7 +16,8 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /ensure_java21\.sh/);
   assert.match(preflight, /GoogleService-Info\.plist/);
   assert.match(preflight, /com\.mycompany\.polycircle/);
-  assert.match(preflight, /flutter analyze lib/);
+  assert.match(preflight, /flutter analyze(?:\r?\n|$)/);
+  assert.doesNotMatch(preflight, /flutter analyze lib/);
   assert.match(preflight, /flutter test/);
   assert.match(preflight, /npm --prefix functions install/);
   assert.match(preflight, /npm --prefix functions run build/);
