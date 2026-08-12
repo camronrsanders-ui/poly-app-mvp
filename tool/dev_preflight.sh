@@ -50,7 +50,11 @@ if [[ "$NODE_MAJOR" != "22" ]]; then
 fi
 ok "Node 22 active"
 
-JAVA_VERSION_RAW="$(java -version 2>&1 | head -n 1)"
+# Avoid piping java -version through head while pipefail is enabled. Some Java
+# runtimes emit multiple lines and can receive SIGPIPE after head exits, which
+# previously caused an otherwise-successful preflight to terminate here.
+JAVA_VERSION_OUTPUT="$(java -version 2>&1)"
+JAVA_VERSION_RAW="${JAVA_VERSION_OUTPUT%%$'\n'*}"
 JAVA_MAJOR="$(printf '%s' "$JAVA_VERSION_RAW" | sed -E 's/.*version "([0-9]+).*/\1/' || true)"
 if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]]; then
   warn "Could not determine Java major version from: $JAVA_VERSION_RAW"
