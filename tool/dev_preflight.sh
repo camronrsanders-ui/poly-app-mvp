@@ -136,7 +136,9 @@ fi
 
 printf '\nRunning source checks...\n'
 flutter pub get
-flutter analyze lib
+# Match the CI analyzer scope so a local preflight cannot pass while CI would
+# fail on tests, generated-adjacent Dart files, or other analyzed project code.
+flutter analyze
 flutter test
 ok "Flutter source checks passed"
 
