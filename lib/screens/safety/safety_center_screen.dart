@@ -1,6 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../config/firebase_runtime.dart';
+import '../../services/profile_photo_moderation_service.dart';
 import '../../services/safety_service.dart';
+import 'profile_photo_moderation_screen.dart';
 
 class SafetyCenterScreen extends StatelessWidget {
   const SafetyCenterScreen({super.key});
@@ -36,6 +40,53 @@ class SafetyCenterScreen extends StatelessWidget {
     );
   }
 
+  Widget _localModeratorEntry(BuildContext context) {
+    if (!kDebugMode || !useFirebaseEmulators) return const SizedBox.shrink();
+    return FutureBuilder<bool>(
+      future: ProfilePhotoModerationService().hasLocalModeratorAccess(),
+      builder: (context, snapshot) {
+        if (snapshot.data != true) return const SizedBox.shrink();
+        return Card(
+          margin: const EdgeInsets.only(bottom: 18),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.admin_panel_settings_outlined),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Local moderator QA',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Visible only in a debug emulator session with a trusted moderator claim. It is not a production member feature.',
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ProfilePhotoModerationScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.photo_filter_outlined),
+                  label: const Text('Review pending profile photos'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,6 +103,7 @@ class SafetyCenterScreen extends StatelessWidget {
             'Polycircle is built for consensual adult connections. A match never means consent to sexual messages, intimate media, meeting in person, or continued contact.',
           ),
           const SizedBox(height: 20),
+          _localModeratorEntry(context),
           _section(
             context,
             icon: Icons.block,
