@@ -1,8 +1,11 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import sharp from 'sharp';
 
 const db = getFirestore();
+const maxInputPixels = 40_000_000;
+const maxLocalPreviewBytes = 2 * 1024 * 1024;
 
 function requireModerator(auth: {uid: string; token?: Record<string, unknown>} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -53,6 +56,47 @@ function requireProcessedPath(ownerUid: string, photoId: string, storagePath: st
   return storagePath === `users/${ownerUid}/profile/${photoId}.jpg`;
 }
 
+function runningInFunctionsEmulator(): boolean {
+  return process.env.FUNCTIONS_EMULATOR === 'true';
+}
+
+async function buildPreview(storagePath: string): Promise<{
+  previewUrl: string | null;
+  previewBytesBase64: string | null;
+  expiresInSeconds: number;
+}> {
+  const file = getStorage().bucket().file(storagePath);
+  if (runningInFunctionsEmulator()) {
+    // The local emulator has no service-account signing key. Keep QA on the
+    // trusted callable path by returning only a bounded, re-encoded thumbnail
+    // to an authenticated moderator. This branch can never run in production.
+    const [input] = await file.download();
+    const preview = await sharp(input, {limitInputPixels: maxInputPixels})
+      .rotate()
+      .resize({width: 900, height: 900, fit: 'inside', withoutEnlargement: true})
+      .jpeg({quality: 75, mozjpeg: true})
+      .toBuffer();
+    if (preview.length <= 0 || preview.length > maxLocalPreviewBytes) {
+      throw new HttpsError('internal', 'Local moderation preview exceeded its safety bound.');
+    }
+    return {
+      previewUrl: null,
+      previewBytesBase64: preview.toString('base64'),
+      expiresInSeconds: 0,
+    };
+  }
+
+  const [previewUrl] = await file.getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 2 * 60 * 1000,
+  });
+  return {
+    previewUrl,
+    previewBytesBase64: null,
+    expiresInSeconds: 120,
+  };
+}
+
 export const listProfilePhotosForReview = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
@@ -94,16 +138,12 @@ export const listProfilePhotosForReview = onCall(
     }));
 
     const photos = await Promise.all(valid.map(async ({doc, ownerUid, storagePath}) => {
-      const [previewUrl] = await getStorage().bucket().file(storagePath).getSignedUrl({
-        action: 'read',
-        expires: Date.now() + 2 * 60 * 1000,
-      });
+      const preview = await buildPreview(storagePath);
       return {
         photoId: doc.id,
         ownerUid,
         ownerDisplayName: displayNameByUid.get(ownerUid) ?? 'Member',
-        previewUrl,
-        expiresInSeconds: 120,
+        ...preview,
         createdAtMs: timestampMillis(doc.get('createdAt')),
         processedAtMs: timestampMillis(doc.get('processedAt')),
       };
