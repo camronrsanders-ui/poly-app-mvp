@@ -29,6 +29,14 @@ jobs:
         run: flutter analyze
       - name: Run Flutter tests
         run: flutter test
+      - name: Build Android debug APK when native host is present
+        shell: bash
+        run: |
+          if [[ -d android ]]; then
+            flutter build apk --debug
+          else
+            echo "::notice::Android native host is not committed yet; debug APK build gate will activate automatically when android/ is added."
+          fi
 
   functions:
     name: Functions build, test and load
