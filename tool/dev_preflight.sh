@@ -105,6 +105,35 @@ else
   warn "No ios/ directory in this checkout; native iOS configuration checks were skipped."
 fi
 
+if [[ -d android ]]; then
+  [[ -f android/app/google-services.json ]] \
+    || fail "android/app/google-services.json is missing. The Android app will not initialize Firebase correctly."
+
+  ANDROID_GRADLE_FILE=""
+  if [[ -f android/app/build.gradle.kts ]]; then
+    ANDROID_GRADLE_FILE="android/app/build.gradle.kts"
+  elif [[ -f android/app/build.gradle ]]; then
+    ANDROID_GRADLE_FILE="android/app/build.gradle"
+  else
+    fail "Android app Gradle configuration is missing (expected android/app/build.gradle.kts or android/app/build.gradle)."
+  fi
+
+  ANDROID_PROJECT_ID="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); process.stdout.write(j.project_info?.project_id || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
+  if [[ -z "$ANDROID_PROJECT_ID" ]]; then
+    fail "Could not read project_info.project_id from android/app/google-services.json."
+  elif [[ "$ANDROID_PROJECT_ID" != "$EXPECTED_FIREBASE_PROJECT_ID" ]]; then
+    fail "Android Firebase project ID is '$ANDROID_PROJECT_ID'; expected '$EXPECTED_FIREBASE_PROJECT_ID'. Emulator and app project IDs would not match."
+  fi
+  ok "Firebase Android project ID matches local runner"
+
+  if ! grep -Fq 'com.google.gms.google-services' "$ANDROID_GRADLE_FILE"; then
+    fail "Google Services Gradle plugin is not applied in $ANDROID_GRADLE_FILE. Firebase Android configuration would not be packaged."
+  fi
+  ok "Android Google Services Gradle plugin configured"
+else
+  warn "No android/ directory in this checkout; Android APK/device validation remains blocked until the native Flutter host is generated and configured."
+fi
+
 printf '\nRunning source checks...\n'
 flutter pub get
 flutter analyze lib
