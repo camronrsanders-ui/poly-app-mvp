@@ -7,11 +7,13 @@ const root = path.resolve(import.meta.dirname, '../..');
 const preflight = fs.readFileSync(path.join(root, 'tool/dev_preflight.sh'), 'utf8');
 const iosRunner = fs.readFileSync(path.join(root, 'tool/run_ios_local.sh'), 'utf8');
 const iosRepair = fs.readFileSync(path.join(root, 'tool/ensure_ios_runtime.sh'), 'utf8');
+const javaRuntime = fs.readFileSync(path.join(root, 'tool/ensure_java21.sh'), 'utf8');
 const androidRunner = fs.readFileSync(path.join(root, 'tool/run_android_local.sh'), 'utf8');
 
 test('development preflight checks the runtime versions and app source before simulator testing', () => {
   assert.match(preflight, /Node 22 is required/);
   assert.match(preflight, /Java 21 or newer/);
+  assert.match(preflight, /ensure_java21\.sh/);
   assert.match(preflight, /GoogleService-Info\.plist/);
   assert.match(preflight, /com\.mycompany\.polycircle/);
   assert.match(preflight, /flutter analyze lib/);
@@ -22,8 +24,16 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
 });
 
+test('Java runtime helper activates Homebrew Java 21 in the caller environment', () => {
+  assert.match(javaRuntime, /brew --prefix openjdk@21/);
+  assert.match(javaRuntime, /export JAVA_HOME=/);
+  assert.match(javaRuntime, /export PATH=/);
+  assert.match(javaRuntime, /major >= 21/);
+});
+
 test('one-command iOS runner matches the native Firebase project while routing every used backend service locally', () => {
   assert.match(iosRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+  assert.match(iosRunner, /ensure_java21\.sh/);
   assert.match(iosRunner, /--project "\$FIREBASE_PROJECT_ID"/);
   assert.match(iosRunner, /--only auth,firestore,functions,storage/);
   assert.match(iosRunner, /USE_FIREBASE_EMULATORS=true/);
@@ -58,6 +68,7 @@ test('one-command Android runner refuses incomplete native configuration and kee
   assert.match(androidRunner, /\[\[ ! -d android \]\]/);
   assert.match(androidRunner, /android\/app\/google-services\.json/);
   assert.match(androidRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+  assert.match(androidRunner, /ensure_java21\.sh/);
   assert.match(androidRunner, /ANDROID_HOST="10\.0\.2\.2"/);
   assert.match(androidRunner, /--only auth,firestore,functions,storage/);
   assert.match(androidRunner, /USE_FIREBASE_EMULATORS=true/);
