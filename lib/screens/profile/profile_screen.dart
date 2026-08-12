@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/discovery_options.dart';
@@ -75,6 +78,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return allowed.contains(value) ? value : fallback;
   }
 
+  bool _shouldRetryProfileLoad(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is FirebaseException) {
+      return const {
+        'aborted',
+        'cancelled',
+        'deadline-exceeded',
+        'internal',
+        'unavailable',
+        'unknown',
+      }.contains(error.code);
+    }
+    return false;
+  }
+
+  Future<Map<String, dynamic>?> _loadProfileWithRetry(String uid) async {
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await _profileService
+            .getProfile(uid)
+            .timeout(const Duration(seconds: 8));
+      } catch (error) {
+        debugPrint('Profile load attempt $attempt/3 failed: $error');
+        if (attempt == 3 || !_shouldRetryProfileLoad(error)) rethrow;
+        await Future<void>.delayed(
+          Duration(milliseconds: attempt == 1 ? 300 : 700),
+        );
+      }
+    }
+    throw StateError('Profile load retry loop ended unexpectedly.');
+  }
+
   Future<void> _load() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -88,7 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
     try {
-      final data = await _profileService.getProfile(uid).timeout(const Duration(seconds: 10)) ?? {};
+      final data = await _loadProfileWithRetry(uid) ?? {};
       _name.text = _string(data, 'displayName');
       _age.text = ((data['age'] as num?)?.toInt() ?? 18).clamp(18, 120).toString();
       _city.text = _string(data, 'city');
