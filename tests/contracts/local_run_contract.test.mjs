@@ -24,6 +24,16 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
 });
 
+test('development preflight validates Android native Firebase wiring when the host exists', () => {
+  assert.match(preflight, /android\/app\/google-services\.json/);
+  assert.match(preflight, /project_info\?\.project_id/);
+  assert.match(preflight, /EXPECTED_FIREBASE_PROJECT_ID/);
+  assert.match(preflight, /android\/app\/build\.gradle\.kts/);
+  assert.match(preflight, /android\/app\/build\.gradle/);
+  assert.match(preflight, /com\.google\.gms\.google-services/);
+  assert.match(preflight, /Android APK\/device validation remains blocked/);
+});
+
 test('Java runtime helper activates Homebrew Java 21 in the caller environment', () => {
   assert.match(javaRuntime, /brew --prefix openjdk@21/);
   assert.match(javaRuntime, /export JAVA_HOME=/);
