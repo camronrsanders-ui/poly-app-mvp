@@ -50,14 +50,19 @@ if [[ "$NODE_MAJOR" != "22" ]]; then
 fi
 ok "Node 22 active"
 
-# Avoid piping java -version through head while pipefail is enabled. Some Java
-# runtimes emit multiple lines and can receive SIGPIPE after head exits, which
-# previously caused an otherwise-successful preflight to terminate here.
-JAVA_VERSION_OUTPUT="$(java -version 2>&1)"
+# macOS ships /usr/bin/java even when no usable Java runtime is installed.
+# Therefore command -v java is not enough: execute java -version and report a
+# deterministic remediation instead of letting `set -e` terminate silently.
+JAVA_VERSION_OUTPUT=""
+if ! JAVA_VERSION_OUTPUT="$(java -version 2>&1)"; then
+  JAVA_FIRST_LINE="${JAVA_VERSION_OUTPUT%%$'\n'*}"
+  [[ -n "$JAVA_FIRST_LINE" ]] || JAVA_FIRST_LINE="java -version returned a non-zero exit status"
+  fail "Java command exists but no usable runtime is available: $JAVA_FIRST_LINE. Install Java 21 (macOS/Homebrew: brew install openjdk@21), then retry."
+fi
 JAVA_VERSION_RAW="${JAVA_VERSION_OUTPUT%%$'\n'*}"
 JAVA_MAJOR="$(printf '%s' "$JAVA_VERSION_RAW" | sed -E 's/.*version "([0-9]+).*/\1/' || true)"
 if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]]; then
-  warn "Could not determine Java major version from: $JAVA_VERSION_RAW"
+  fail "Could not determine a supported Java major version from: $JAVA_VERSION_RAW. Polycircle local Firebase emulators require Java 21 or newer."
 elif (( JAVA_MAJOR < 21 )); then
   fail "Java 21 or newer is required for our emulator test setup. Current major is $JAVA_MAJOR."
 else
