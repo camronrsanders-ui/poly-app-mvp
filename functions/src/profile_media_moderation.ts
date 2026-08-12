@@ -143,7 +143,9 @@ export const listProfilePhotosForReview = onCall(
         photoId: doc.id,
         ownerUid,
         ownerDisplayName: displayNameByUid.get(ownerUid) ?? 'Member',
-        ...preview,
+        previewUrl: preview.previewUrl,
+        previewBytesBase64: preview.previewBytesBase64,
+        expiresInSeconds: preview.expiresInSeconds,
         createdAtMs: timestampMillis(doc.get('createdAt')),
         processedAtMs: timestampMillis(doc.get('processedAt')),
       };
