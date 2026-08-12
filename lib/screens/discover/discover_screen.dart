@@ -24,7 +24,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     _future = _discovery.loadCandidates();
   }
 
-  void _reload() => setState(() => _future = _discovery.loadCandidates());
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _future = _discovery.loadCandidates();
+    });
+  }
 
   Future<void> _like(Map<String, dynamic> profile) async {
     final uid = profile['uid'] as String?;
