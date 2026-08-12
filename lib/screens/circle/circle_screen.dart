@@ -185,119 +185,129 @@ class _CircleScreenState extends State<CircleScreen> {
     Map<String, dynamic>? existing,
     required int sortOrder,
   }) async {
-    final label = TextEditingController(text: '${existing?['label'] ?? ''}');
-    final displayName = TextEditingController(text: '${existing?['displayNameOptional'] ?? ''}');
-    final note = TextEditingController(text: '${existing?['note'] ?? ''}');
+    var label = '${existing?['label'] ?? ''}';
+    var displayName = '${existing?['displayNameOptional'] ?? ''}';
+    var note = '${existing?['note'] ?? ''}';
     var type = _safeChoice(existing?['connectionType'], _connectionTypes, 'romantic_partner');
     var status = _safeChoice(existing?['status'], _statuses, 'active');
     var visibility = _safeChoice(existing?['visibility'], _visibilities, 'matches_only');
     var saving = false;
 
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (modalContext) => StatefulBuilder(
-          builder: (modalContext, setModalState) => Padding(
-            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(modalContext).viewInsets.bottom + 20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(modalContext).textTheme.headlineSmall),
-                  const SizedBox(height: 16),
-                  TextField(controller: label, maxLength: 100, decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner')),
-                  const SizedBox(height: 12),
-                  TextField(controller: displayName, maxLength: 100, decoration: const InputDecoration(labelText: 'Display name (optional)')),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: type,
-                    decoration: const InputDecoration(labelText: 'Connection type'),
-                    items: _connectionTypes.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                    onChanged: saving ? null : (v) => setModalState(() => type = v ?? type),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: status,
-                    decoration: const InputDecoration(labelText: 'Status'),
-                    items: _statuses.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                    onChanged: saving ? null : (v) => setModalState(() => status = v ?? status),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: visibility,
-                    decoration: const InputDecoration(labelText: 'Who can see this?'),
-                    items: _visibilities.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                    onChanged: saving ? null : (v) => setModalState(() => visibility = v ?? visibility),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(controller: note, maxLength: 1000, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: saving
-                        ? null
-                        : () async {
-                            if (label.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(modalContext).showSnackBar(
-                                const SnackBar(content: Text('Add a label for this relationship.')),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (modalContext) => StatefulBuilder(
+        builder: (modalContext, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(modalContext).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(modalContext).textTheme.headlineSmall),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: label,
+                  maxLength: 100,
+                  onChanged: (value) => label = value,
+                  decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: displayName,
+                  maxLength: 100,
+                  onChanged: (value) => displayName = value,
+                  decoration: const InputDecoration(labelText: 'Display name (optional)'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: type,
+                  decoration: const InputDecoration(labelText: 'Connection type'),
+                  items: _connectionTypes.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
+                  onChanged: saving ? null : (v) => setModalState(() => type = v ?? type),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: status,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: _statuses.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                  onChanged: saving ? null : (v) => setModalState(() => status = v ?? status),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: visibility,
+                  decoration: const InputDecoration(labelText: 'Who can see this?'),
+                  items: _visibilities.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
+                  onChanged: saving ? null : (v) => setModalState(() => visibility = v ?? visibility),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: note,
+                  maxLength: 1000,
+                  maxLines: 3,
+                  onChanged: (value) => note = value,
+                  decoration: const InputDecoration(labelText: 'Note (optional)'),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          if (label.trim().isEmpty) {
+                            ScaffoldMessenger.of(modalContext).showSnackBar(
+                              const SnackBar(content: Text('Add a label for this relationship.')),
+                            );
+                            return;
+                          }
+                          setModalState(() => saving = true);
+                          try {
+                            if (existing == null) {
+                              await _service.createCard(
+                                ownerUid: uid,
+                                label: label,
+                                connectionType: type,
+                                displayNameOptional: displayName,
+                                status: status,
+                                note: note,
+                                visibility: visibility,
+                                sortOrder: sortOrder,
                               );
-                              return;
+                            } else {
+                              final cardId = existing['id']?.toString() ?? '';
+                              if (cardId.isEmpty) throw StateError('Missing relationship card ID.');
+                              await _service.updateCard(
+                                cardId: cardId,
+                                ownerUid: uid,
+                                values: {
+                                  'label': label.trim(),
+                                  'connectionType': type,
+                                  'displayNameOptional': displayName.trim(),
+                                  'status': status,
+                                  'note': note.trim(),
+                                  'visibility': visibility,
+                                },
+                              );
                             }
-                            setModalState(() => saving = true);
-                            try {
-                              if (existing == null) {
-                                await _service.createCard(
-                                  ownerUid: uid,
-                                  label: label.text,
-                                  connectionType: type,
-                                  displayNameOptional: displayName.text,
-                                  status: status,
-                                  note: note.text,
-                                  visibility: visibility,
-                                  sortOrder: sortOrder,
-                                );
-                              } else {
-                                final cardId = existing['id']?.toString() ?? '';
-                                if (cardId.isEmpty) throw StateError('Missing relationship card ID.');
-                                await _service.updateCard(
-                                  cardId: cardId,
-                                  ownerUid: uid,
-                                  values: {
-                                    'label': label.text.trim(),
-                                    'connectionType': type,
-                                    'displayNameOptional': displayName.text.trim(),
-                                    'status': status,
-                                    'note': note.text.trim(),
-                                    'visibility': visibility,
-                                  },
-                                );
-                              }
-                              if (modalContext.mounted) Navigator.pop(modalContext);
-                            } catch (_) {
-                              if (modalContext.mounted) {
-                                ScaffoldMessenger.of(modalContext).showSnackBar(
-                                  const SnackBar(content: Text('Could not save this relationship. Please try again.')),
-                                );
-                                setModalState(() => saving = false);
-                              }
+                            if (modalContext.mounted) Navigator.pop(modalContext);
+                          } catch (_) {
+                            if (modalContext.mounted) {
+                              ScaffoldMessenger.of(modalContext).showSnackBar(
+                                const SnackBar(content: Text('Could not save this relationship. Please try again.')),
+                              );
+                              setModalState(() => saving = false);
                             }
-                          },
-                    child: saving
-                        ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(existing == null ? 'Add to my circle' : 'Save changes'),
-                  ),
-                ],
-              ),
+                          }
+                        },
+                  child: saving
+                      ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(existing == null ? 'Add to my circle' : 'Save changes'),
+                ),
+              ],
             ),
           ),
         ),
-      );
-    } finally {
-      label.dispose();
-      displayName.dispose();
-      note.dispose();
-    }
+      ),
+    );
   }
 
   Future<bool?> _confirmDelete() => showDialog<bool>(
