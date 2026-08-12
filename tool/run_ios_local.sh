@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Select the Functions runtime in this shell before any npm/Firebase work.
+# Select the Functions/Firebase runtimes in this shell before any npm/Firebase work.
 # shellcheck disable=SC1091
 source "$ROOT_DIR/tool/ensure_node22.sh"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE="${1:-iPhone 17}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
@@ -26,11 +28,6 @@ printf '\nStarting Polycircle local Firebase test run\n'
 printf 'Requested device: %s\n' "$DEVICE"
 printf 'Firebase project ID: %s (ALL USED SERVICES ROUTED TO LOCAL EMULATORS)\n\n' "$FIREBASE_PROJECT_ID"
 
-# CoreSimulator is the source of truth for a booted iOS simulator. Flutter's
-# device discovery can throw an unrelated discovery exception while still
-# printing the simulator, so relying on the exit status or display-name parsing
-# can produce a false "device not found" failure. Resolve the booted simulator
-# to its stable UDID and pass that directly to Flutter.
 DEVICE_ID=""
 if command -v xcrun >/dev/null 2>&1; then
   DEVICE_ID="$(xcrun simctl list devices booted 2>/dev/null | awk -v device="$DEVICE" '
@@ -47,9 +44,6 @@ if command -v xcrun >/dev/null 2>&1; then
   ')"
 fi
 
-# Fallback for non-iOS targets or if simctl cannot resolve the requested name.
-# Capture Flutter output without trusting its exit code because local device
-# enumeration can succeed even when a separate discovery path fails.
 if [[ -z "$DEVICE_ID" ]]; then
   DEVICES_OUTPUT="$(flutter devices 2>&1 || true)"
   while IFS= read -r line; do
