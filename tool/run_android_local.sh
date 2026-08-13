@@ -12,7 +12,14 @@ source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE_REQUEST="${1:-}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
-ANDROID_HOST="10.0.2.2"
+ANDROID_HOST="${POLYCIRCLE_ANDROID_FIREBASE_HOST:-10.0.2.2}"
+EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data"
+mkdir -p "$EMULATOR_STATE_DIR"
+
+EMULATOR_STATE_ARGS=("--export-on-exit=$EMULATOR_STATE_DIR")
+if [[ -f "$EMULATOR_STATE_DIR/firebase-export-metadata.json" ]]; then
+  EMULATOR_STATE_ARGS=("--import=$EMULATOR_STATE_DIR" "--export-on-exit=$EMULATOR_STATE_DIR")
+fi
 
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   BRANCH="$(git branch --show-current 2>/dev/null || true)"
@@ -23,15 +30,14 @@ fi
 
 if [[ ! -d android ]]; then
   printf "Android native project is missing.\n" >&2
-  printf "Generate/commit the Flutter Android host before using this runner.\n" >&2
-  printf "See docs/android-development.md for the guarded preparation steps.\n" >&2
+  printf "Run: bash tool/bootstrap_android_host.sh\n" >&2
   exit 1
 fi
 
 if [[ ! -f android/app/google-services.json ]]; then
   printf "Android Firebase configuration is missing: android/app/google-services.json\n" >&2
-  printf "Register/verify the Android app for the Polycircle Firebase project before testing.\n" >&2
-  printf "Do not copy an unrelated Firebase config into this repository.\n" >&2
+  printf "Download the config for package com.example.polycircle from the Polycircle Firebase project and place it there locally.\n" >&2
+  printf "The file is intentionally git-ignored; do not commit it.\n" >&2
   exit 1
 fi
 
@@ -46,11 +52,11 @@ process.stdin.on("data", (chunk) => { input += chunk; });
 process.stdin.on("end", () => {
   let devices = [];
   try { devices = JSON.parse(input || "[]"); } catch (_) { process.exit(2); }
-  const request = process.env.DEVICE_REQUEST || "";
+  const request = (process.env.DEVICE_REQUEST || "").toLowerCase();
   const android = devices.filter((device) => String(device.targetPlatform || "").startsWith("android"));
   const selected = request
-    ? android.find((device) => device.id === request || device.name === request)
-    : android[0];
+    ? android.find((device) => String(device.id || "").toLowerCase() === request || String(device.name || "").toLowerCase() === request)
+    : (android.find((device) => device.emulator === true) || android[0]);
   if (selected?.id) process.stdout.write(selected.id);
 });
 ' 2>/dev/null || true)"
@@ -59,10 +65,19 @@ if [[ -z "$DEVICE_ID" ]]; then
   if [[ -n "$DEVICE_REQUEST" ]]; then
     printf "Requested Android Flutter device '%s' was not found.\n\nAvailable devices:\n" "$DEVICE_REQUEST" >&2
   else
-    printf "No Android Flutter device was found. Start/connect an Android emulator/device first.\n\nAvailable devices:\n" >&2
+    printf "No Android Flutter device was found. Start an Android emulator first.\n\nAvailable devices:\n" >&2
   fi
   flutter devices >&2 || true
   exit 1
+fi
+
+if command -v adb >/dev/null 2>&1 && [[ "$ANDROID_HOST" == "10.0.2.2" ]]; then
+  IS_EMULATOR="$(adb -s "$DEVICE_ID" shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r' || true)"
+  if [[ -n "$IS_EMULATOR" && "$IS_EMULATOR" != "1" ]]; then
+    printf "Device '%s' does not appear to be an Android Emulator.\n" "$DEVICE_ID" >&2
+    printf "The default 10.0.2.2 Firebase bridge is emulator-only. Physical-device routing is a separate test path.\n" >&2
+    exit 1
+  fi
 fi
 
 printf '\nStarting Polycircle Android local Firebase test run\n'
@@ -88,4 +103,5 @@ RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \
   --only auth,firestore,functions,storage \
+  "${EMULATOR_STATE_ARGS[@]}" \
   "$RUN_COMMAND"
