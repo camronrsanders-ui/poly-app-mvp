@@ -7,6 +7,8 @@ Must pass in CI:
 - `flutter pub get`
 - `flutter analyze`
 - Flutter tests
+- iOS simulator debug build regression
+- Android debug APK build when the native Android host is present
 - Functions TypeScript build and pure behavior tests
 - client/backend security contract tests
 - Firebase Firestore/Storage security tests, including inactive-account and moderation-internal boundaries
