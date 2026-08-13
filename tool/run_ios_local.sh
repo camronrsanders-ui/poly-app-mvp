@@ -12,6 +12,13 @@ source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE="${1:-iPhone 17}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
+EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data"
+mkdir -p "$EMULATOR_STATE_DIR"
+
+EMULATOR_STATE_ARGS=("--export-on-exit=$EMULATOR_STATE_DIR")
+if [[ -f "$EMULATOR_STATE_DIR/firebase-export-metadata.json" ]]; then
+  EMULATOR_STATE_ARGS=("--import=$EMULATOR_STATE_DIR" "--export-on-exit=$EMULATOR_STATE_DIR")
+fi
 
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   BRANCH="$(git branch --show-current 2>/dev/null || true)"
@@ -84,4 +91,5 @@ RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \
   --only auth,firestore,functions,storage \
+  "${EMULATOR_STATE_ARGS[@]}" \
   "$RUN_COMMAND"

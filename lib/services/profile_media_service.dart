@@ -72,7 +72,10 @@ class VisibleProfilePhoto {
   factory VisibleProfilePhoto.fromMap(Map<String, dynamic> data) {
     final photoId = data['photoId'] as String?;
     final rawUrl = data['url'] as String?;
-    if (photoId == null || photoId.isEmpty || rawUrl == null || rawUrl.isEmpty) {
+    if (photoId == null ||
+        photoId.isEmpty ||
+        rawUrl == null ||
+        rawUrl.isEmpty) {
       throw StateError('Visible profile photo response was incomplete.');
     }
     final createdAtMs = data['createdAtMs'] is num
@@ -115,8 +118,10 @@ class ProfileMediaService {
         (rawUploadUrl == null || rawUploadUrl.isEmpty)) {
       throw StateError('Profile photo upload URL was missing.');
     }
-    if (uploadTransport == 'emulator_confirm_callable' && !useFirebaseEmulators) {
-      throw StateError('Emulator profile photo transport is disabled in this build.');
+    if (uploadTransport == 'emulator_confirm_callable' &&
+        !useFirebaseEmulators) {
+      throw StateError(
+          'Emulator profile photo transport is disabled in this build.');
     }
     return ProfileMediaUpload(
       photoId: photoId,
@@ -137,7 +142,8 @@ class ProfileMediaService {
 
     if (authorization.uploadTransport == 'emulator_confirm_callable') {
       if (!useFirebaseEmulators) {
-        throw StateError('Local profile photo upload is disabled in this build.');
+        throw StateError(
+            'Local profile photo upload is disabled in this build.');
       }
       final callable = _functions.httpsCallable('confirmProfilePhotoUpload');
       await callable.call<Map<String, dynamic>>({
@@ -155,13 +161,15 @@ class ProfileMediaService {
     final client = HttpClient();
     try {
       final request = await client.putUrl(uploadUrl);
-      request.headers.contentType = ContentType.parse(authorization.requiredContentType);
+      request.headers.contentType =
+          ContentType.parse(authorization.requiredContentType);
       request.contentLength = bytes.length;
       request.add(bytes);
       final response = await request.close();
       await response.drain<void>();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('Profile photo upload failed (${response.statusCode}).');
+        throw HttpException(
+            'Profile photo upload failed (${response.statusCode}).');
       }
     } finally {
       client.close(force: true);
@@ -170,7 +178,8 @@ class ProfileMediaService {
 
   Future<String> confirmUpload(String photoId) async {
     final callable = _functions.httpsCallable('confirmProfilePhotoUpload');
-    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    final result =
+        await callable.call<Map<String, dynamic>>({'photoId': photoId});
     return result.data['status'] as String? ?? 'pending_processing';
   }
 
@@ -181,24 +190,28 @@ class ProfileMediaService {
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => ProfileMediaStatus.fromMap(Map<String, dynamic>.from(item)))
+        .map((item) =>
+            ProfileMediaStatus.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
 
   Future<List<VisibleProfilePhoto>> listVisiblePhotos(String ownerUid) async {
     final callable = _functions.httpsCallable('listMyProfilePhotos');
-    final result = await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    final result =
+        await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
     final raw = result.data['photos'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => VisibleProfilePhoto.fromMap(Map<String, dynamic>.from(item)))
+        .map((item) =>
+            VisibleProfilePhoto.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
 
   Future<Uri> getAccessUrl(String photoId) async {
     final callable = _functions.httpsCallable('getProfilePhotoAccess');
-    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    final result =
+        await callable.call<Map<String, dynamic>>({'photoId': photoId});
     final url = result.data['url'] as String?;
     if (url == null || url.isEmpty) {
       throw StateError('Profile photo access response was incomplete.');
@@ -208,7 +221,8 @@ class ProfileMediaService {
 
   Future<void> deletePhoto(String photoId) async {
     final callable = _functions.httpsCallable('deleteProfilePhoto');
-    final result = await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    final result =
+        await callable.call<Map<String, dynamic>>({'photoId': photoId});
     if (result.data['deleted'] != true) {
       throw StateError('Profile photo was not deleted.');
     }

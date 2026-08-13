@@ -57,3 +57,11 @@ lib/firebase_options.dart
 # OS
 .DS_Store
 Thumbs.db
+
+# Local Firebase configuration
+.firebaseRC
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Local Firebase emulator data
+.local/

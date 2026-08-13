@@ -432,6 +432,48 @@ export const getProfilePhotoAccess = onCall(
       throw new HttpsError('permission-denied', 'Profile photo is unavailable.');
     }
 
+    // Local Firebase emulators do not have the service-account signing key
+    // required for V4 signed URLs. Production continues to use signed URLs;
+    // local QA uses an emulator-only Firebase download token.
+    if (runningInFunctionsEmulator()) {
+      const bucket = getStorage().bucket();
+      const file = bucket.file(storagePath);
+      const token = randomUUID();
+
+      const [currentMetadata] = await file.getMetadata();
+      await file.setMetadata({
+        metadata: {
+          ...(currentMetadata.metadata ?? {}),
+          firebaseStorageDownloadTokens: token,
+        },
+      });
+
+      const requestedHost = String(
+        request.data?.emulatorHost ?? '127.0.0.1',
+      ).trim();
+
+      const emulatorHost =
+        requestedHost === '127.0.0.1' ||
+        requestedHost === 'localhost' ||
+        requestedHost === '10.0.2.2'
+          ? requestedHost
+          : '127.0.0.1';
+
+      const encodedBucket = encodeURIComponent(bucket.name);
+      const encodedPath = encodeURIComponent(storagePath);
+      const encodedToken = encodeURIComponent(token);
+
+      const url =
+        `http://${emulatorHost}:9199/v0/b/${encodedBucket}/o/` +
+        `${encodedPath}?alt=media&token=${encodedToken}`;
+
+      return {
+        url,
+        expiresInSeconds: 0,
+        emulatorOnly: true,
+      };
+    }
+
     const [url] = await getStorage().bucket().file(storagePath).getSignedUrl({
       action: 'read',
       expires: Date.now() + 2 * 60 * 1000,

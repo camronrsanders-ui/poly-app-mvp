@@ -4,7 +4,7 @@ import 'circle/circle_screen.dart';
 import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
 import 'messages/messages_screen.dart';
-import 'profile/profile_screen.dart';
+import 'profile/self_profile_screen.dart';
 import 'safety/safety_center_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -39,12 +39,12 @@ class _MainShellState extends State<MainShell> {
       1 => const ConnectionsScreen(),
       2 => const CircleScreen(),
       3 => const MessagesScreen(),
-      4 => const ProfileScreen(),
+      4 => const SelfProfileScreen(),
       _ => const SizedBox.shrink(),
     };
   }
 
-  bool _refreshOnEntry(int index) => index == 1 || index == 3;
+  bool _refreshOnEntry(int index) => index == 1 || index == 3 || index == 4;
 
   void _selectTab(int value) {
     if (value == _index) {
@@ -96,11 +96,26 @@ class _MainShellState extends State<MainShell> {
         selectedIndex: _index,
         onDestinationSelected: _selectTab,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
-          NavigationDestination(icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt), label: 'Connections'),
-          NavigationDestination(icon: Icon(Icons.hub_outlined), selectedIcon: Icon(Icons.hub), label: 'Circle'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Messages'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+              icon: Icon(Icons.explore_outlined),
+              selectedIcon: Icon(Icons.explore),
+              label: 'Discover'),
+          NavigationDestination(
+              icon: Icon(Icons.people_alt_outlined),
+              selectedIcon: Icon(Icons.people_alt),
+              label: 'Connections'),
+          NavigationDestination(
+              icon: Icon(Icons.hub_outlined),
+              selectedIcon: Icon(Icons.hub),
+              label: 'Circle'),
+          NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline),
+              selectedIcon: Icon(Icons.chat_bubble),
+              label: 'Messages'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile'),
         ],
       ),
     );
