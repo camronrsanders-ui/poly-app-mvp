@@ -210,8 +210,11 @@ class ProfileMediaService {
 
   Future<Uri> getAccessUrl(String photoId) async {
     final callable = _functions.httpsCallable('getProfilePhotoAccess');
-    final result =
-        await callable.call<Map<String, dynamic>>({'photoId': photoId});
+    final payload = <String, dynamic>{'photoId': photoId};
+    if (useFirebaseEmulators) {
+      payload['emulatorHost'] = firebaseEmulatorHost;
+    }
+    final result = await callable.call<Map<String, dynamic>>(payload);
     final url = result.data['url'] as String?;
     if (url == null || url.isEmpty) {
       throw StateError('Profile photo access response was incomplete.');
