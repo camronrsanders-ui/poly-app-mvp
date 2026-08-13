@@ -9,6 +9,7 @@ This document is the durable project record for major engineering, security, rel
 - Git commits remain the authoritative record of exact code changes.
 - `docs/development-roadmap.md` remains the implementation/product roadmap.
 - `docs/post-launch-product-vision.md` remains the after-plan for longer-term product/business work.
+- `docs/business/investor-readiness-plan.md` remains the working business/fundraising/acquisition-readiness plan.
 - Security-sensitive values, credentials, signing secrets, tokens, private keys, or personal user data must never be copied into this record.
 - Private Vault remains OFF until its documented release gates are explicitly satisfied.
 - Do not record a feature as shipped merely because it appears in planning documentation.
@@ -85,13 +86,24 @@ Long-term pillars:
 
 These are future product/business-positioning principles. They do not override current engineering priorities.
 
+## Business-development record
+
+### 2026-08-13 — Investor and acquisition readiness begins
+- Added `docs/business/investor-readiness-plan.md` as the working business-development plan.
+- Established two operating perspectives for future work: **Product Engineer** for reliability/security/execution and **Founder / Entrepreneur** for market evidence, positioning, distribution, monetization, partnerships, fundraising, and enterprise value.
+- The business plan is intended to support multiple options: independent growth, outside investment, strategic partnerships, or eventual acquisition interest.
+- Investor-readiness work will include the executive summary, sourced market research, competitive landscape, customer discovery, go-to-market strategy, monetization, traction/KPIs, financial model, funding strategy, buyer landscape, corporate/IP readiness, data-room preparation, pitch materials, and diligence records.
+- Category leaders such as Grindr can be studied for lessons in distribution, retention, monetization, network effects, brand strength, and strategic value, but Polycircle should not be positioned as a copy. Its investment story should be built around its distinct relationship-lifecycle product thesis.
+- Business work remains secondary to current app stability, security, Android/iOS testing, and release readiness.
+
 ## Current document map
 
 - `docs/development-roadmap.md` — implementation roadmap and future feature direction.
 - `docs/post-launch-product-vision.md` — longer-term product/business after-plan.
+- `docs/business/investor-readiness-plan.md` — working business plan, investor preparation, fundraising, and acquisition-readiness roadmap.
 - `docs/project-record.md` — durable high-level record of decisions, major maintenance work, test outcomes, and blockers.
 - Android/iOS/security/release documentation — operational details and platform-specific procedures remain in their dedicated documents rather than being duplicated here.
 
 ## Maintenance convention
 
-For future substantial maintenance cycles, append or update this record when there is a durable change worth preserving: a significant regression/fix, platform-readiness milestone, release/security decision, major blocker, or product-direction decision. Routine successful CI reruns do not need individual permanent entries unless they validate a meaningful milestone.
+For future substantial maintenance cycles, append or update this record when there is a durable change worth preserving: a significant regression/fix, platform-readiness milestone, release/security decision, major blocker, product-direction decision, or material business-readiness milestone. Routine successful CI reruns do not need individual permanent entries unless they validate a meaningful milestone.
