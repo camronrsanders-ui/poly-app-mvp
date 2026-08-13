@@ -38,6 +38,20 @@ jobs:
             echo "::notice::Android native host is not committed yet; debug APK build gate will activate automatically when android/ is added."
           fi
 
+  ios-regression:
+    name: iOS simulator build regression
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Build iOS simulator app
+        run: flutter build ios --simulator --debug
+
   functions:
     name: Functions build, test and load
     runs-on: ubuntu-latest
