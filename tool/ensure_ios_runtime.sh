@@ -13,6 +13,7 @@ command -v flutter >/dev/null 2>&1 || fail "flutter is required but was not foun
 PLIST="ios/Runner/GoogleService-Info.plist"
 PROJECT_FILE="ios/Runner.xcodeproj/project.pbxproj"
 INFO_PLIST="ios/Runner/Info.plist"
+EXPECTED_IOS_BUNDLE_ID="com.mycompany.polycircle"
 
 backup_plist=""
 cleanup() {
@@ -41,6 +42,28 @@ fi
 
 [[ -f "$PROJECT_FILE" ]] || fail "iOS Xcode project is still incomplete after repair: $PROJECT_FILE missing."
 [[ -f "$INFO_PLIST" ]] || fail "iOS Runner Info.plist is still missing after repair."
+
+# Flutter project regeneration may reset the native bundle identifier to the
+# template default. Keep the Xcode host aligned with the Firebase iOS app that
+# Polycircle already validated for local development.
+python3 - <<'PY'
+from pathlib import Path
+
+project = Path('ios/Runner.xcodeproj/project.pbxproj')
+text = project.read_text(encoding='utf-8')
+updated = text.replace('com.example.polycircle.RunnerTests', 'com.mycompany.polycircle.RunnerTests')
+updated = updated.replace('com.example.polycircle', 'com.mycompany.polycircle')
+if updated != text:
+    project.write_text(updated, encoding='utf-8')
+PY
+
+if grep -Fq 'PRODUCT_BUNDLE_IDENTIFIER = com.example.polycircle' "$PROJECT_FILE"; then
+  fail "Template iOS bundle identifier remains in $PROJECT_FILE."
+fi
+if ! grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = $EXPECTED_IOS_BUNDLE_ID;" "$PROJECT_FILE"; then
+  fail "Polycircle iOS bundle identifier '$EXPECTED_IOS_BUNDLE_ID' was not found in $PROJECT_FILE."
+fi
+ok "iOS bundle identifier matches the Polycircle Firebase app"
 
 # Flutter project regeneration may reset the native deployment target to 13.0,
 # while the Firebase Apple SDK packages used by Polycircle require iOS 15+.
