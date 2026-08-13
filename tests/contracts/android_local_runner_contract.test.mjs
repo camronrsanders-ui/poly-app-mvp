@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const runner = fs.readFileSync(path.join(root, 'tool/run_android_local.sh'), 'utf8');
+const bootstrap = fs.readFileSync(path.join(root, 'tool/bootstrap_android_host.sh'), 'utf8');
 
 test('Android local runner resolves an actual Android Flutter device', () => {
   assert.match(runner, /flutter devices --machine/);
@@ -27,4 +28,12 @@ test('Android local runner keeps emulator routing and project guards intact', ()
   assert.match(runner, /FIREBASE_EMULATOR_HOST=\$ANDROID_HOST/);
   assert.match(runner, /if \[\[ ! -d android \]\]/);
   assert.match(runner, /android\/app\/google-services\.json/);
+});
+
+test('Android bootstrap and Firebase guidance stay on the established Polycircle app ID', () => {
+  assert.match(bootstrap, /ANDROID_ORG="com\.mycompany"/);
+  assert.match(bootstrap, /ANDROID_APP_ID="com\.mycompany\.polycircle"/);
+  assert.match(runner, /package com\.mycompany\.polycircle/);
+  assert.doesNotMatch(bootstrap, /com\.example\.polycircle/);
+  assert.doesNotMatch(runner, /package com\.example\.polycircle/);
 });
