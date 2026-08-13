@@ -80,7 +80,7 @@ test('one-command Android runner refuses incomplete native configuration and kee
   assert.match(androidRunner, /android\/app\/google-services\.json/);
   assert.match(androidRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
   assert.match(androidRunner, /ensure_java21\.sh/);
-  assert.match(androidRunner, /ANDROID_HOST="10\.0\.2\.2"/);
+  assert.match(androidRunner, /ANDROID_HOST="\$\{POLYCIRCLE_ANDROID_FIREBASE_HOST:-10\.0\.2\.2\}"/);
   assert.match(androidRunner, /--only auth,firestore,functions,storage/);
   assert.match(androidRunner, /USE_FIREBASE_EMULATORS=true/);
   assert.match(androidRunner, /FIREBASE_EMULATOR_HOST=\$ANDROID_HOST/);
