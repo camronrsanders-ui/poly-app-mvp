@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Android currently mirrors the iOS development identifier. We can migrate both
-# platforms to a production identifier together before store release.
-ANDROID_ORG="com.example"
-ANDROID_APP_ID="com.example.polycircle"
+# Keep Android aligned with the existing Firebase/iOS development identifier.
+# Any production identifier migration must be done deliberately across both
+# native platforms and Firebase registrations together.
+ANDROID_ORG="com.mycompany"
+ANDROID_APP_ID="com.mycompany.polycircle"
 
 # shellcheck disable=SC1091
 source "$ROOT_DIR/tool/ensure_java21.sh"
