@@ -49,6 +49,8 @@ jobs:
           cache: true
       - name: Install Flutter dependencies
         run: flutter pub get
+      - name: Normalize and validate iOS native host
+        run: bash tool/ensure_ios_runtime.sh
       - name: Build iOS simulator app
         run: flutter build ios --simulator --debug
 
