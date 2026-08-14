@@ -31,7 +31,9 @@ if [[ ! -f "$PROJECT_FILE" || ! -f "$INFO_PLIST" ]]; then
     cp "$PLIST" "$backup_plist"
   fi
 
-  flutter create --platforms=ios .
+  # Generate a Polycircle-native bundle namespace at creation time so a repaired
+  # host does not briefly inherit Flutter's com.example template identity.
+  flutter create --platforms=ios --org com.mycompany .
 
   if [[ -n "$backup_plist" && -f "$backup_plist" ]]; then
     mkdir -p "$(dirname "$PLIST")"
@@ -43,9 +45,8 @@ fi
 [[ -f "$PROJECT_FILE" ]] || fail "iOS Xcode project is still incomplete after repair: $PROJECT_FILE missing."
 [[ -f "$INFO_PLIST" ]] || fail "iOS Runner Info.plist is still missing after repair."
 
-# Flutter project regeneration may reset the native bundle identifier to the
-# template default. Keep the Xcode host aligned with the Firebase iOS app that
-# Polycircle already validated for local development.
+# Older/generated project shells may still carry the Flutter template bundle
+# identifier. Normalize those safely to the Firebase-tested Polycircle ID.
 python3 - <<'PY'
 from pathlib import Path
 
