@@ -41,7 +41,7 @@ test('Android local runner is emulator-only and preserves local state', () => {
   assert.match(runner, /--import=/);
   assert.match(runner, /--export-on-exit=/);
   assert.match(runner, /USE_FIREBASE_EMULATORS=true/);
-  assert.match(runner, /FIREBASE_EMULATOR_HOST=10\.0\.2\.2/);
+  assert.match(runner, /FIREBASE_EMULATOR_HOST=\$ANDROID_HOST/);
   assert.match(runner, /auth,firestore,functions,storage/);
   assert.match(runner, /google-services\.json/);
 });
