@@ -12,10 +12,13 @@ const seed = read('functions/scripts/seed_emulator.cjs');
 const functionsPackage = JSON.parse(read('functions/package.json'));
 const nvmrc = read('.nvmrc').trim();
 
-test('Firebase emulator routing is explicit, debug-only, and off by default', () => {
+test('Firebase emulator routing is explicit, guarded, and off by default', () => {
   assert.match(runtime, /USE_FIREBASE_EMULATORS/);
   assert.match(runtime, /defaultValue:\s*false/);
-  assert.match(runtime, /if \(!kDebugMode \|\| !useFirebaseEmulators\) return;/);
+  assert.match(runtime, /POLYCIRCLE_LOCAL_RELEASE_SMOKE/);
+  assert.match(runtime, /if \(!useFirebaseEmulators\)/);
+  assert.match(runtime, /if \(!kDebugMode && !localReleaseSmoke\)/);
+  assert.match(runtime, /Release emulator routing requires/);
   assert.match(main, /await configureFirebaseRuntime\(\);/);
 });
 

@@ -3,12 +3,18 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-/// Local Firebase emulators are opt-in so production/staging builds can never
-/// silently fall back to localhost. Enable only from a debug launch with:
+/// Local Firebase emulators are opt-in.
 ///
-/// flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+/// Debug builds may use them directly. Optimized release-mode emulator testing
+/// additionally requires POLYCIRCLE_LOCAL_RELEASE_SMOKE=true so a normal
+/// production release can never silently route to local Firebase.
 const bool useFirebaseEmulators = bool.fromEnvironment(
   'USE_FIREBASE_EMULATORS',
+  defaultValue: false,
+);
+
+const bool localReleaseSmoke = bool.fromEnvironment(
+  'POLYCIRCLE_LOCAL_RELEASE_SMOKE',
   defaultValue: false,
 );
 
@@ -18,7 +24,21 @@ const String firebaseEmulatorHost = String.fromEnvironment(
 );
 
 Future<void> configureFirebaseRuntime() async {
-  if (!kDebugMode || !useFirebaseEmulators) return;
+  if (!useFirebaseEmulators) {
+    if (localReleaseSmoke) {
+      throw StateError(
+        'POLYCIRCLE_LOCAL_RELEASE_SMOKE requires USE_FIREBASE_EMULATORS=true.',
+      );
+    }
+    return;
+  }
+
+  if (!kDebugMode && !localReleaseSmoke) {
+    throw StateError(
+      'Release emulator routing requires '
+      'POLYCIRCLE_LOCAL_RELEASE_SMOKE=true.',
+    );
+  }
 
   await FirebaseAuth.instance.useAuthEmulator(firebaseEmulatorHost, 9099);
   FirebaseFirestore.instance.useFirestoreEmulator(firebaseEmulatorHost, 8080);

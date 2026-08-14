@@ -22,8 +22,10 @@ Future<void> main() async {
   }
 
   await configureFirebaseRuntime();
+  final localSmokeAppCheck = localReleaseSmoke && useFirebaseEmulators;
+
   await FirebaseAppCheck.instance.activate(
-    providerAndroid: kDebugMode
+    providerAndroid: kDebugMode || localSmokeAppCheck
         ? const AndroidDebugProvider()
         : const AndroidPlayIntegrityProvider(),
     providerApple: kDebugMode
