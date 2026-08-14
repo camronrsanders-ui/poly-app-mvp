@@ -18,7 +18,7 @@ This document is the durable project record for major engineering, security, rel
 
 1. Keep the Flutter application runnable and reduce preventable test-cycle failures.
 2. Maintain CI, dependency auditing, security contracts, and Firebase rules tests.
-3. Complete native Android readiness and debug APK/device validation.
+3. Complete Android Firebase runtime/emulator and real-device validation now that the native host and CI debug APK build are established.
 4. Continue iOS real-device/runtime validation.
 5. Preserve App Check, Firestore/Storage protections, and release gates.
 6. Do not enable paid Firebase infrastructure merely to advance development.
@@ -26,12 +26,20 @@ This document is the durable project record for major engineering, security, rel
 
 ## Engineering record
 
+### 2026-08-14 — Android native host and CI APK milestone
+- The native `android/` Flutter host is now committed on `restart-foundation` with the permanent Android application ID `com.polycircle.app`.
+- CI now requires a real `flutter build apk --debug` on every run rather than conditionally skipping Android when the native host is absent.
+- CI uses a temporary non-secret build-only Firebase configuration solely for compile validation; real local/device runtime testing still requires the genuine git-ignored `android/app/google-services.json` for `com.polycircle.app`.
+- Android bootstrap/recovery tooling preserves the permanent package identity and local preflight verifies both Firebase project ID and Android package identity before runtime testing.
+- Latest verified milestone baseline: Polycircle CI #969 and Dependency Audit #316 passed on `600758b7b2f05aee6679d5efbd5c184cf82cab2e`, including Android debug APK build, normalized iOS simulator build, Flutter analysis/tests, Functions checks, security contracts, and Firestore/Storage adversarial rules.
+- Remaining Android blocker is runtime acceptance rather than basic compilation: genuine Firebase config, emulator journey, and physical-device testing are still required.
+
 ### 2026-08-12 — Android test preparation
 - Added guarded Android local-run tooling and Android development/readiness documentation.
 - Android emulator Firebase routing is designed around `10.0.2.2` while seed/admin tooling remains loopback-only.
 - Added preflight/contract protections so incomplete Android Firebase/native configuration fails explicitly instead of presenting a false ready state.
 - Added a conditional CI Android debug-APK gate so a committed Android native host will automatically begin receiving build validation.
-- Current blocker recorded: native `android/` Flutter host and matching Firebase Android configuration must exist before APK/device validation can complete.
+- Historical blocker at this point: native `android/` Flutter host and matching Firebase Android configuration still needed to exist before APK/device validation could complete. The native-host/APK portion was completed on 2026-08-14; runtime/device validation remains outstanding.
 
 ### 2026-08-12 — CI/runtime hardening
 - Updated GitHub Actions runtime dependencies to current Node-24-compatible action generations while preserving the application's required Node runtime.
