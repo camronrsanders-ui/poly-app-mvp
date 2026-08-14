@@ -33,7 +33,36 @@ jobs:
         shell: bash
         run: |
           if [[ -d android ]]; then
+            # google-services.json is intentionally not committed. The Android
+            # debug build only needs structurally valid Google Services input,
+            # so CI creates a non-secret demo config for compile validation.
+            cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "demo-polycircle",
+              "storage_bucket": "demo-polycircle.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.polycircle.app"
+                  }
+                },
+                "api_key": [
+                  {
+                    "current_key": "demo-not-a-real-api-key"
+                  }
+                ]
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
             flutter build apk --debug
+            rm -f android/app/google-services.json
           else
             echo "::notice::Android native host is not committed yet; debug APK build gate will activate automatically when android/ is added."
           fi
