@@ -120,7 +120,7 @@ if [[ -d android ]]; then
   fi
 
   ANDROID_PROJECT_ID="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); process.stdout.write(j.project_info?.project_id || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
-  ANDROID_PACKAGE_NAME="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); const names=(j.client || []).map((client) => client.client_info?.android_client_info?.package_name).filter(Boolean); process.stdout.write(names.includes(process.env.EXPECTED_ANDROID_APP_ID) ? process.env.EXPECTED_ANDROID_APP_ID : (names[0] || "")); } catch (_) { process.exit(2); }' 2>/dev/null EXPECTED_ANDROID_APP_ID="$EXPECTED_ANDROID_APP_ID" || true)"
+  ANDROID_PACKAGE_NAME="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); const names=(j.client || []).map((client) => client.client_info?.android_client_info?.package_name).filter(Boolean); process.stdout.write(names[0] || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
   if [[ -z "$ANDROID_PROJECT_ID" ]]; then
     fail "Could not read project_info.project_id from android/app/google-services.json."
   elif [[ "$ANDROID_PROJECT_ID" != "$EXPECTED_FIREBASE_PROJECT_ID" ]]; then
