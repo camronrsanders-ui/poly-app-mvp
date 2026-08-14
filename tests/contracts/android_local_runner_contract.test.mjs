@@ -30,10 +30,13 @@ test('Android local runner keeps emulator routing and project guards intact', ()
   assert.match(runner, /android\/app\/google-services\.json/);
 });
 
-test('Android bootstrap and Firebase guidance stay on the established Polycircle app ID', () => {
-  assert.match(bootstrap, /ANDROID_ORG="com\.mycompany"/);
-  assert.match(bootstrap, /ANDROID_APP_ID="com\.mycompany\.polycircle"/);
-  assert.match(runner, /package com\.mycompany\.polycircle/);
+test('Android bootstrap and Firebase guidance stay on the permanent Polycircle app ID', () => {
+  assert.match(bootstrap, /ANDROID_ORG="com\.polycircle"/);
+  assert.match(bootstrap, /ANDROID_APP_ID="com\.polycircle\.app"/);
+  assert.match(bootstrap, /app_id = 'com\.polycircle\.app'/);
+  assert.match(runner, /package com\.polycircle\.app/);
+  assert.doesNotMatch(bootstrap, /com\.mycompany\.polycircle/);
+  assert.doesNotMatch(runner, /package com\.mycompany\.polycircle/);
   assert.doesNotMatch(bootstrap, /com\.example\.polycircle/);
   assert.doesNotMatch(runner, /package com\.example\.polycircle/);
 });
