@@ -14,7 +14,11 @@ test('owner profile preview renders approved protected photos without public med
   assert.match(selfProfile, /ProfileMediaService/);
   assert.match(selfProfile, /listMyPhotos\(\)/);
   assert.match(selfProfile, /photo\.status == 'active'/);
-  assert.match(selfProfile, /getAccessUrl\(photo\.photoId\)/);
+  assert.match(selfProfile, /_loadPhotoAccessWithRetry\(photo\.photoId\)/);
+  assert.match(selfProfile, /getAccessUrl\(photoId\)/);
+  assert.match(selfProfile, /didChangeAppLifecycleState/);
+  assert.match(selfProfile, /AppLifecycleState\.resumed/);
+  assert.match(selfProfile, /Your approved profile photo is temporarily unavailable/);
   assert.doesNotMatch(selfProfile, /FirebaseStorage|firebase_storage|photoUrls|avatarUrl/);
 });
 

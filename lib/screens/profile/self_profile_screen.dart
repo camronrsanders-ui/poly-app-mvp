@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -16,18 +18,48 @@ class SelfProfileScreen extends StatefulWidget {
   State<SelfProfileScreen> createState() => _SelfProfileScreenState();
 }
 
-class _SelfProfileScreenState extends State<SelfProfileScreen> {
+class _SelfProfileScreenState extends State<SelfProfileScreen>
+    with WidgetsBindingObserver {
   final _profiles = ProfileService();
   final _media = ProfileMediaService();
   final _circle = CircleViewService();
 
   late Future<_SelfProfileData> _future;
   _PreviewAudience _audience = _PreviewAudience.member;
+  bool _reloadInFlight = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_reload());
+    }
+  }
+
+  Future<Uri?> _loadPhotoAccessWithRetry(String photoId) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await _media.getAccessUrl(photoId);
+      } catch (_) {
+        if (attempt == 2) return null;
+        await Future<void>.delayed(
+          Duration(milliseconds: attempt == 0 ? 250 : 750),
+        );
+      }
+    }
+    return null;
   }
 
   Future<_SelfProfileData> _load() async {
@@ -53,16 +85,13 @@ class _SelfProfileScreenState extends State<SelfProfileScreen> {
 
     final visiblePhotos = <VisibleProfilePhoto>[];
     for (final photo in active) {
-      try {
-        final url = await _media.getAccessUrl(photo.photoId);
-        visiblePhotos.add(VisibleProfilePhoto(
-          photoId: photo.photoId,
-          url: url,
-          createdAt: photo.createdAt,
-        ));
-      } catch (_) {
-        // One unavailable protected image must not break the whole preview.
-      }
+      final url = await _loadPhotoAccessWithRetry(photo.photoId);
+      if (url == null) continue;
+      visiblePhotos.add(VisibleProfilePhoto(
+        photoId: photo.photoId,
+        url: url,
+        createdAt: photo.createdAt,
+      ));
     }
 
     List<Map<String, dynamic>> circleCards = const [];
@@ -81,13 +110,19 @@ class _SelfProfileScreenState extends State<SelfProfileScreen> {
   }
 
   Future<void> _reload() async {
-    final next = _load();
-    if (mounted) {
-      setState(() {
-        _future = next;
-      });
+    if (_reloadInFlight) return;
+    _reloadInFlight = true;
+    try {
+      final next = _load();
+      if (mounted) {
+        setState(() {
+          _future = next;
+        });
+      }
+      await next;
+    } finally {
+      _reloadInFlight = false;
     }
-    await next;
   }
 
   Future<void> _editProfile() async {
@@ -182,6 +217,14 @@ class _SelfProfileScreenState extends State<SelfProfileScreen> {
             );
           },
         ),
+      );
+    }
+
+    final approved =
+        data.photoStatuses.any((photo) => photo.status == 'active');
+    if (approved) {
+      return _photoPlaceholder(
+        'Your approved profile photo is temporarily unavailable. Pull down to refresh.',
       );
     }
 
