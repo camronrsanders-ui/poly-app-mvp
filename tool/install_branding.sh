@@ -126,9 +126,46 @@ if [[ -d "$ROOT_DIR/android/app/src/main/res" ]]; then
   printf '%s\n' "$EXPECTED_SHA" > "$ROOT_DIR/android/app/src/main/res/.polycircle-source-sha256"
   ok "Android legacy/round launcher mipmaps generated from approved logo"
 
-  if find "$ROOT_DIR/android/app/src/main/res" -path '*mipmap-anydpi-v26*' -name 'ic_launcher*.xml' -print -quit | grep -q .; then
-    warn "Android adaptive-icon XML exists. Legacy/round mipmaps are updated, but adaptive foreground/background still require visual review before Android branding is marked complete."
-  fi
+  # Android 8+ uses adaptive icons. Keep the background white while
+  # presenting the approved Polycircle artwork substantially larger than
+  # Android's legacy-icon compatibility treatment.
+  ADAPTIVE_FOREGROUND_IMAGE="$ROOT_DIR/android/app/src/main/res/drawable-nodpi/ic_launcher_foreground_image.png"
+  ADAPTIVE_FOREGROUND="$ROOT_DIR/android/app/src/main/res/drawable/ic_launcher_foreground.xml"
+  ADAPTIVE_SET="$ROOT_DIR/android/app/src/main/res/mipmap-anydpi-v26"
+
+  make_png 432 "$ADAPTIVE_FOREGROUND_IMAGE"
+
+  cat > "$ADAPTIVE_FOREGROUND" <<'XML'
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:left="14dp"
+        android:top="14dp"
+        android:right="14dp"
+        android:bottom="14dp">
+        <bitmap
+            android:src="@drawable/ic_launcher_foreground_image"
+            android:gravity="fill" />
+    </item>
+</layer-list>
+XML
+
+  mkdir -p "$ADAPTIVE_SET"
+
+  cat > "$ADAPTIVE_SET/ic_launcher.xml" <<'XML'
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/white" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+XML
+
+  cat > "$ADAPTIVE_SET/ic_launcher_round.xml" <<'XML'
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/white" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+XML
+
+  ok "Android adaptive launcher icon generated from approved logo"
 else
   warn "Android native resources are not present in this checkout; Android icon generation skipped."
 fi
