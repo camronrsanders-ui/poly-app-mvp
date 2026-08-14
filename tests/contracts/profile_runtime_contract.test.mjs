@@ -29,8 +29,14 @@ test('Profile transient retry stays fail-closed for non-transient Firebase error
 
 test('Profile loader sanitizes legacy dropdown/list values before widget construction', () => {
   assert.match(profile, /String _choice/);
-  assert.match(profile, /_choice\(data\['profileVisibility'\], _profileVisibilityOptions, 'public'\)/);
-  assert.match(profile, /_choice\(data\['mapVisibility'\], _mapVisibilityOptions, 'matches_only'\)/);
+  assert.match(
+    profile,
+    /_choice\(\s*data\['profileVisibility'\],\s*_profileVisibilityOptions,\s*'public'\s*\)/,
+  );
+  assert.match(
+    profile,
+    /_choice\(\s*data\['mapVisibility'\],\s*_mapVisibilityOptions,\s*'matches_only'\s*\)/,
+  );
   assert.match(profile, /where\(connectionIntentionOptions\.contains\)/);
   assert.match(profile, /where\(relationshipStructureOptions\.contains\)/);
 });

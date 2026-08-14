@@ -35,7 +35,8 @@ class ModerationProfilePhoto {
       previewBytes = base64Decode(encoded);
     }
     final rawUrl = data['previewUrl'];
-    final previewUrl = rawUrl is String && rawUrl.isNotEmpty ? Uri.parse(rawUrl) : null;
+    final previewUrl =
+        rawUrl is String && rawUrl.isNotEmpty ? Uri.parse(rawUrl) : null;
     if (previewBytes == null && previewUrl == null) {
       throw StateError('Moderation photo preview was missing.');
     }
@@ -85,7 +86,8 @@ class ProfilePhotoModerationService {
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => ModerationProfilePhoto.fromMap(Map<String, dynamic>.from(item)))
+        .map((item) =>
+            ModerationProfilePhoto.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
 
@@ -96,7 +98,8 @@ class ProfilePhotoModerationService {
   }) async {
     await _requireLocalModerator();
     if (decision != 'approve' && decision != 'reject') {
-      throw ArgumentError.value(decision, 'decision', 'Must be approve or reject.');
+      throw ArgumentError.value(
+          decision, 'decision', 'Must be approve or reject.');
     }
     final callable = _functions.httpsCallable('reviewProfilePhoto');
     final result = await callable.call<Map<String, dynamic>>({

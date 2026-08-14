@@ -12,7 +12,8 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
-  Future<UserCredential> signUp({required String email, required String password}) async {
+  Future<UserCredential> signUp(
+      {required String email, required String password}) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -43,7 +44,8 @@ class AuthService {
     return credential;
   }
 
-  Future<UserCredential> signIn({required String email, required String password}) async {
+  Future<UserCredential> signIn(
+      {required String email, required String password}) async {
     final credential = await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -56,7 +58,8 @@ class AuthService {
       final account = await ref.get();
       final data = account.data();
       final status = data?['accountStatus']?.toString() ?? '';
-      final deletionPending = status == 'paused' && data?['deletionRequestedAt'] != null;
+      final deletionPending =
+          status == 'paused' && data?['deletionRequestedAt'] != null;
 
       if (!account.exists || (status != 'active' && !deletionPending)) {
         await _auth.signOut();

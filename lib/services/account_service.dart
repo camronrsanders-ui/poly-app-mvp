@@ -15,7 +15,8 @@ class AccountService {
 
     try {
       final callable = _functions.httpsCallable('deleteMyAccount');
-      final result = await callable.call<Map<String, dynamic>>(<String, dynamic>{
+      final result =
+          await callable.call<Map<String, dynamic>>(<String, dynamic>{
         'confirmation': 'DELETE',
       });
       if (result.data['deleted'] != true) {

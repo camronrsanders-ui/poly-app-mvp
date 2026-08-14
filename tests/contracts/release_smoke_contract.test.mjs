@@ -29,3 +29,29 @@ test('Android local release smoke uses debug App Check without changing normal r
   assert.match(main, /AndroidDebugProvider/);
   assert.match(main, /AndroidPlayIntegrityProvider/);
 });
+
+
+test('Android release smoke permits emulator cleartext only with an explicit host build flag', () => {
+  const gradle = fs.readFileSync(
+    path.join(root, 'android/app/build.gradle.kts'),
+    'utf8',
+  );
+  const manifest = fs.readFileSync(
+    path.join(root, 'android/app/src/main/AndroidManifest.xml'),
+    'utf8',
+  );
+
+  assert.match(gradle, /POLYCIRCLE_ANDROID_LOCAL_RELEASE_SMOKE/);
+  assert.match(
+    gradle,
+    /manifestPlaceholders\["polycircleUsesCleartextTraffic"\] = "false"/,
+  );
+  assert.match(
+    gradle,
+    /allowLocalReleaseSmokeCleartext\.toString\(\)/,
+  );
+  assert.match(
+    manifest,
+    /android:usesCleartextTraffic="\$\{polycircleUsesCleartextTraffic\}"/,
+  );
+});

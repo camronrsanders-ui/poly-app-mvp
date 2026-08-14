@@ -33,7 +33,10 @@ test('failed deletion leaves a minimal recoverable paused account marker with or
 });
 
 test('deletion retries preserve the original marker and receive a recovery-sized rate budget', () => {
-  assert.match(deletion, /const deletionPending = userState\.get\('accountStatus'\) === 'paused'/);
+  assert.match(
+    deletion,
+    /const deletionPending\s*=\s*userState\.get\('accountStatus'\)\s*===\s*'paused'/,
+  );
   assert.match(deletion, /deletionPending \? 20 : 2/);
   assert.match(deletion, /if \(!deletionPending\)[\s\S]*deletionRequestedAt:\s*FieldValue\.serverTimestamp\(\)/);
   const pendingMarkerIndex = deletion.indexOf('const deletionPending');

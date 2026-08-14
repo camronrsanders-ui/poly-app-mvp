@@ -124,7 +124,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final data = await _loadProfileWithRetry(uid) ?? {};
       _name.text = _string(data, 'displayName');
-      _age.text = ((data['age'] as num?)?.toInt() ?? 18).clamp(18, 120).toString();
+      _age.text =
+          ((data['age'] as num?)?.toInt() ?? 18).clamp(18, 120).toString();
       _city.text = _string(data, 'city');
       _region.text = _string(data, 'region');
       _bio.text = _string(data, 'bio');
@@ -136,25 +137,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _relationshipStatus.text = _string(data, 'relationshipStatus');
       _lookingFor.text = _string(data, 'lookingForNote');
       _interests.text = _strings(data['interests']).take(20).join(', ');
-      _partnered = data['partnered'] is bool ? data['partnered'] as bool : false;
-      _openToConnections = data['openToConnections'] is bool ? data['openToConnections'] as bool : true;
-      _profileVisibility = _choice(data['profileVisibility'], _profileVisibilityOptions, 'public');
-      _mapVisibility = _choice(data['mapVisibility'], _mapVisibilityOptions, 'matches_only');
+      _partnered =
+          data['partnered'] is bool ? data['partnered'] as bool : false;
+      _openToConnections = data['openToConnections'] is bool
+          ? data['openToConnections'] as bool
+          : true;
+      _profileVisibility = _choice(
+          data['profileVisibility'], _profileVisibilityOptions, 'public');
+      _mapVisibility =
+          _choice(data['mapVisibility'], _mapVisibilityOptions, 'matches_only');
       _intentions = _strings(data['intentionTags'])
           .where(connectionIntentionOptions.contains)
           .take(12)
           .toList(growable: true);
       _preferredStructures
         ..clear()
-        ..addAll(_strings(data['preferredStructures']).where(relationshipStructureOptions.contains).take(12));
+        ..addAll(_strings(data['preferredStructures'])
+            .where(relationshipStructureOptions.contains)
+            .take(12));
       _preferredIntentions
         ..clear()
-        ..addAll(_strings(data['preferredIntentions']).where(connectionIntentionOptions.contains).take(12));
+        ..addAll(_strings(data['preferredIntentions'])
+            .where(connectionIntentionOptions.contains)
+            .take(12));
 
-      final minAge = ((data['ageMin'] as num?)?.toDouble() ?? 18).clamp(18, 120).toDouble();
-      final maxAgeRaw = ((data['ageMax'] as num?)?.toDouble() ?? 99).clamp(18, 120).toDouble();
+      final minAge = ((data['ageMin'] as num?)?.toDouble() ?? 18)
+          .clamp(18, 120)
+          .toDouble();
+      final maxAgeRaw = ((data['ageMax'] as num?)?.toDouble() ?? 99)
+          .clamp(18, 120)
+          .toDouble();
       _ageRange = RangeValues(minAge, maxAgeRaw < minAge ? minAge : maxAgeRaw);
-      _distanceRadius = ((data['distanceRadius'] as num?)?.toDouble() ?? 50).clamp(1, 500).toDouble();
+      _distanceRadius = ((data['distanceRadius'] as num?)?.toDouble() ?? 50)
+          .clamp(1, 500)
+          .toDouble();
     } catch (error) {
       _loadError = error;
     } finally {
@@ -177,7 +193,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final age = int.tryParse(_age.text.trim());
     if (_name.text.trim().isEmpty || age == null || age < 18 || age > 120) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a display name and a valid age from 18 to 120.')),
+        const SnackBar(
+            content:
+                Text('Enter a display name and a valid age from 18 to 120.')),
       );
       return;
     }
@@ -217,7 +235,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save your profile. Please try again.')),
+          const SnackBar(
+              content: Text('Could not save your profile. Please try again.')),
         );
       }
     } finally {
@@ -230,10 +249,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete your account?'),
-        content: const Text('This permanently removes your profile and account-owned data. It cannot be undone.'),
+        content: const Text(
+            'This permanently removes your profile and account-owned data. It cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continue')),
         ],
       ),
     );
@@ -245,13 +269,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Final confirmation'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Type DELETE to permanently delete your Polycircle account.'),
+          const Text(
+              'Type DELETE to permanently delete your Polycircle account.'),
           const SizedBox(height: 12),
-          TextField(controller: confirm, autocorrect: false, decoration: const InputDecoration(labelText: 'DELETE')),
+          TextField(
+              controller: confirm,
+              autocorrect: false,
+              decoration: const InputDecoration(labelText: 'DELETE')),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, confirm.text.trim() == 'DELETE'), child: const Text('Delete account')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, confirm.text.trim() == 'DELETE'),
+              child: const Text('Delete account')),
         ],
       ),
     );
@@ -268,11 +301,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : e.code == 'internal'
               ? 'Deletion is paused safely. Sign in again to finish the remaining cleanup.'
               : 'Account deletion could not be completed. Please try again.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account deletion could not be completed.')),
+          const SnackBar(
+              content: Text('Account deletion could not be completed.')),
         );
       }
     } finally {
@@ -286,16 +321,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int maxLines = 1,
     int? maxLength,
     TextInputType? keyboardType,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: TextField(
-      controller: controller,
-      maxLines: maxLines,
-      maxLength: maxLength,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label),
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: TextField(
+          controller: controller,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(labelText: label),
+        ),
+      );
 
   @override
   void dispose() {
@@ -327,7 +363,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Icon(Icons.cloud_off_outlined, size: 52),
               const SizedBox(height: 14),
-              Text('Could not load your profile', style: Theme.of(context).textTheme.titleLarge),
+              Text('Could not load your profile',
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               const Text(
                 'Your profile was not changed. Check your connection and try again.',
@@ -345,7 +382,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text('Your profile', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 6),
-        const Text('Share enough to be understood without giving up more privacy than you want.'),
+        const Text(
+            'Share enough to be understood without giving up more privacy than you want.'),
         const SizedBox(height: 14),
         OutlinedButton.icon(
           onPressed: () => Navigator.of(context).push(
@@ -372,7 +410,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           value: _partnered,
           onChanged: (value) => setState(() => _partnered = value),
         ),
-        _field(_lookingFor, 'What I am looking for', maxLines: 3, maxLength: 1200),
+        _field(_lookingFor, 'What I am looking for',
+            maxLines: 3, maxLength: 1200),
         _field(_interests, 'Interests (comma separated)', maxLines: 2),
         const SizedBox(height: 8),
         Text('Intentions', style: Theme.of(context).textTheme.titleMedium),
@@ -380,17 +419,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: connectionIntentionOptions.map((item) => FilterChip(
-            label: Text(item),
-            selected: _intentions.contains(item),
-            onSelected: (selected) => setState(() => selected ? _intentions.add(item) : _intentions.remove(item)),
-          )).toList(),
+          children: connectionIntentionOptions
+              .map((item) => FilterChip(
+                    label: Text(item),
+                    selected: _intentions.contains(item),
+                    onSelected: (selected) => setState(() => selected
+                        ? _intentions.add(item)
+                        : _intentions.remove(item)),
+                  ))
+              .toList(),
         ),
         const SizedBox(height: 20),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Open to new connections'),
-          subtitle: const Text('Turn this off to stop appearing in Discover for new connections.'),
+          subtitle: const Text(
+              'Turn this off to stop appearing in Discover for new connections.'),
           value: _openToConnections,
           onChanged: (value) => setState(() => _openToConnections = value),
         ),
@@ -399,11 +443,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           initialValue: _profileVisibility,
           decoration: const InputDecoration(labelText: 'Profile visibility'),
           items: const [
-            DropdownMenuItem(value: 'public', child: Text('Public to signed-in members')),
+            DropdownMenuItem(
+                value: 'public', child: Text('Public to signed-in members')),
             DropdownMenuItem(value: 'hidden', child: Text('Hidden')),
-            DropdownMenuItem(value: 'matches_only', child: Text('Connections only')),
+            DropdownMenuItem(
+                value: 'matches_only', child: Text('Connections only')),
           ],
-          onChanged: (value) => setState(() => _profileVisibility = value ?? 'public'),
+          onChanged: (value) =>
+              setState(() => _profileVisibility = value ?? 'public'),
         ),
         const SizedBox(height: 14),
         DropdownButtonFormField<String>(
@@ -411,15 +458,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           decoration: const InputDecoration(labelText: 'Circle visibility'),
           items: const [
             DropdownMenuItem(value: 'public', child: Text('Public')),
-            DropdownMenuItem(value: 'matches_only', child: Text('Connections only')),
+            DropdownMenuItem(
+                value: 'matches_only', child: Text('Connections only')),
             DropdownMenuItem(value: 'private', child: Text('Private')),
           ],
-          onChanged: (value) => setState(() => _mapVisibility = value ?? 'matches_only'),
+          onChanged: (value) =>
+              setState(() => _mapVisibility = value ?? 'matches_only'),
         ),
         const SizedBox(height: 28),
         const Divider(),
         const SizedBox(height: 18),
-        Text('Discovery preferences', style: Theme.of(context).textTheme.titleLarge),
+        Text('Discovery preferences',
+            style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 6),
         const Text(
           'These preferences are private. Polycircle applies them on the trusted backend and does not include them in profile views shown to other members.',
@@ -438,30 +488,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onChanged: (values) => setState(() => _ageRange = values),
         ),
         const SizedBox(height: 10),
-        Text('Preferred relationship structures', style: Theme.of(context).textTheme.titleMedium),
+        Text('Preferred relationship structures',
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: relationshipStructureOptions.map((item) => FilterChip(
-            label: Text(item),
-            selected: _preferredStructures.contains(item),
-            onSelected: (selected) => setState(() =>
-                selected ? _preferredStructures.add(item) : _preferredStructures.remove(item)),
-          )).toList(),
+          children: relationshipStructureOptions
+              .map((item) => FilterChip(
+                    label: Text(item),
+                    selected: _preferredStructures.contains(item),
+                    onSelected: (selected) => setState(() => selected
+                        ? _preferredStructures.add(item)
+                        : _preferredStructures.remove(item)),
+                  ))
+              .toList(),
         ),
         const SizedBox(height: 18),
-        Text('Preferred intentions', style: Theme.of(context).textTheme.titleMedium),
+        Text('Preferred intentions',
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: connectionIntentionOptions.map((item) => FilterChip(
-            label: Text(item),
-            selected: _preferredIntentions.contains(item),
-            onSelected: (selected) => setState(() =>
-                selected ? _preferredIntentions.add(item) : _preferredIntentions.remove(item)),
-          )).toList(),
+          children: connectionIntentionOptions
+              .map((item) => FilterChip(
+                    label: Text(item),
+                    selected: _preferredIntentions.contains(item),
+                    onSelected: (selected) => setState(() => selected
+                        ? _preferredIntentions.add(item)
+                        : _preferredIntentions.remove(item)),
+                  ))
+              .toList(),
         ),
         const SizedBox(height: 18),
         Text('Distance preference: ${_distanceRadius.round()} miles'),
@@ -477,7 +535,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'Distance filtering will be applied only after location services are configured. Your exact location is not shown in your public profile.',
         ),
         const SizedBox(height: 28),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : 'Save profile')),
+        FilledButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Saving…' : 'Save profile')),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: (_saving || _deleting) ? null : _authService.signOut,
@@ -487,9 +547,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 28),
         const Divider(),
         const SizedBox(height: 16),
-        Text('Account & privacy', style: Theme.of(context).textTheme.titleMedium),
+        Text('Account & privacy',
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        const Text('Account deletion is permanent and removes your public profile and account-owned data.'),
+        const Text(
+            'Account deletion is permanent and removes your public profile and account-owned data.'),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: (_saving || _deleting) ? null : _deleteAccount,

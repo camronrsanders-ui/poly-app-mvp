@@ -54,7 +54,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _sending = true);
     _controller.clear();
     try {
-      await _messages.sendMessage(conversationId: widget.conversationId, text: text);
+      await _messages.sendMessage(
+          conversationId: widget.conversationId, text: text);
     } catch (_) {
       // Do not make a transient network/backend error eat the user's draft.
       // If they already started typing a new message while this request was in
@@ -65,7 +66,9 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message failed to send. Your text was kept so you can retry.')),
+          const SnackBar(
+              content: Text(
+                  'Message failed to send. Your text was kept so you can retry.')),
         );
       }
     } finally {
@@ -78,10 +81,15 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Block ${widget.otherDisplayName}?'),
-        content: const Text('They will no longer be able to interact with you through Polycircle. You can manage blocks later.'),
+        content: const Text(
+            'They will no longer be able to interact with you through Polycircle. You can manage blocks later.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Block')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Block')),
         ],
       ),
     );
@@ -119,7 +127,10 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<String>(
                 initialValue: reason,
-                items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r.replaceAll('_', ' ')))).toList(),
+                items: reasons
+                    .map((r) => DropdownMenuItem(
+                        value: r, child: Text(r.replaceAll('_', ' '))))
+                    .toList(),
                 onChanged: (v) => setLocalState(() => reason = v ?? reason),
                 decoration: const InputDecoration(labelText: 'Reason'),
               ),
@@ -128,13 +139,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 controller: details,
                 maxLines: 4,
                 maxLength: 2000,
-                decoration: const InputDecoration(labelText: 'Details (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Details (optional)'),
               ),
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Submit report')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Submit report')),
           ],
         ),
       ),
@@ -148,13 +164,16 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Report submitted. Thank you for helping protect the community.')),
+            const SnackBar(
+                content: Text(
+                    'Report submitted. Thank you for helping protect the community.')),
           );
         }
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not submit the report right now.')),
+            const SnackBar(
+                content: Text('Could not submit the report right now.')),
           );
         }
       }
@@ -165,7 +184,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return const Scaffold(body: Center(child: Text('Sign in to chat.')));
+    if (uid == null) {
+      return const Scaffold(body: Center(child: Text('Sign in to chat.')));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -194,13 +215,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError) {
-                    return const Center(child: Text('Could not load messages.'));
+                    return const Center(
+                        child: Text('Could not load messages.'));
                   }
                   final docs = snapshot.data?.docs ?? [];
                   if (docs.isEmpty) {
-                    return const Center(child: Padding(
+                    return const Center(
+                        child: Padding(
                       padding: EdgeInsets.all(24),
-                      child: Text('Start with something genuine. Your connection does not have to fit a traditional script.'),
+                      child: Text(
+                          'Start with something genuine. Your connection does not have to fit a traditional script.'),
                     ));
                   }
                   return ListView.builder(
@@ -211,21 +235,29 @@ class _ChatScreenState extends State<ChatScreen> {
                       final data = doc.data();
                       final senderUid = data['senderUid'] as String? ?? '';
                       final isMine = senderUid == uid;
-                      final text = data['isDeleted'] == true ? 'Message removed' : (data['text'] as String? ?? '');
+                      final text = data['isDeleted'] == true
+                          ? 'Message removed'
+                          : (data['text'] as String? ?? '');
                       if (!isMine) {
-                        final readBy = List<String>.from(data['readBy'] ?? const []);
+                        final readBy =
+                            List<String>.from(data['readBy'] ?? const []);
                         _queueMarkRead(doc.id, readBy, uid);
                       }
                       return Align(
-                        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: isMine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
                           constraints: const BoxConstraints(maxWidth: 320),
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: isMine
                                 ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Text(text),
@@ -246,14 +278,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     maxLines: 5,
                     maxLength: 2000,
                     textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(hintText: 'Message…', counterText: ''),
+                    decoration: const InputDecoration(
+                        hintText: 'Message…', counterText: ''),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
                   onPressed: _sending ? null : _send,
                   icon: _sending
-                      ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send),
                   tooltip: 'Send message',
                 ),

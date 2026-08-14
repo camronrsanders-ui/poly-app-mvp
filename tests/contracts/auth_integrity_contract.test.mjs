@@ -35,7 +35,10 @@ test('session gate continuously watches the trusted account record for moderatio
 
 test('only a trusted pending-deletion marker can bypass normal active-account login', () => {
   assert.match(authService, /status == 'paused' && data\?\['deletionRequestedAt'\] != null/);
-  assert.match(app, /final deletionPending = status == 'paused' && account\['deletionRequestedAt'\] != null/);
+  assert.match(
+    app,
+    /final deletionPending\s*=\s*status\s*==\s*'paused'\s*&&\s*account\['deletionRequestedAt'\]\s*!=\s*null/,
+  );
   assert.match(app, /_DeletionRecoveryScreen/);
   assert.match(app, /Finish deleting my account/);
   assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);

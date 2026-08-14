@@ -1,3 +1,7 @@
+val allowLocalReleaseSmokeCleartext =
+    providers.environmentVariable("POLYCIRCLE_ANDROID_LOCAL_RELEASE_SMOKE")
+        .orNull == "true"
+
 plugins {
     id("com.android.application")
 
@@ -25,10 +29,20 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Production stays cleartext-disabled. Local optimized Android smoke
+        // builds may explicitly enable emulator networking from the host shell.
+        manifestPlaceholders["polycircleUsesCleartextTraffic"] = "false"
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["polycircleUsesCleartextTraffic"] = "true"
+        }
+
         release {
+            manifestPlaceholders["polycircleUsesCleartextTraffic"] =
+                allowLocalReleaseSmokeCleartext.toString()
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")

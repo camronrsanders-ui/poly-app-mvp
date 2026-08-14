@@ -20,7 +20,10 @@ class WelcomeScreen extends StatelessWidget {
               Text(
                 'Polycircle',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context)
+                    .textTheme
+                    .displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Text(

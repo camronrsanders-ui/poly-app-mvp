@@ -18,7 +18,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   Future<List<Map<String, dynamic>>> _load() => _connections.loadConnections();
 
-  Future<void> _openChat(BuildContext context, Map<String, dynamic> person) async {
+  Future<void> _openChat(
+      BuildContext context, Map<String, dynamic> person) async {
     final otherUid = person['uid'] as String?;
     if (otherUid == null) return;
     try {
@@ -41,7 +42,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open this conversation right now.')),
+          const SnackBar(
+              content: Text('Could not open this conversation right now.')),
         );
       }
     }
@@ -74,8 +76,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
           'Ending your connection with $name will close the conversation and revoke any Private Vault access in both directions. This cannot be undone automatically.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('End connection')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('End connection')),
         ],
       ),
     );
@@ -91,7 +97,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not end this connection right now.')),
+          const SnackBar(
+              content: Text('Could not end this connection right now.')),
         );
       }
     }
@@ -107,21 +114,26 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return const Center(child: Padding(
+          return const Center(
+              child: Padding(
             padding: EdgeInsets.all(24),
             child: Text('We could not load your connections right now.'),
           ));
         }
         final people = snapshot.data ?? [];
         if (people.isEmpty) {
-          return const Center(child: Padding(
+          return const Center(
+              child: Padding(
             padding: EdgeInsets.all(28),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.people_outline, size: 56),
               SizedBox(height: 16),
-              Text('No connections yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+              Text('No connections yet',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
               SizedBox(height: 8),
-              Text('When interest is mutual, your new connections will appear here.', textAlign: TextAlign.center),
+              Text(
+                  'When interest is mutual, your new connections will appear here.',
+                  textAlign: TextAlign.center),
             ]),
           ));
         }
@@ -147,7 +159,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'profile', child: Text('View profile')),
                   PopupMenuItem(value: 'chat', child: Text('Open chat')),
-                  PopupMenuItem(value: 'unmatch', child: Text('End connection')),
+                  PopupMenuItem(
+                      value: 'unmatch', child: Text('End connection')),
                 ],
               ),
             );

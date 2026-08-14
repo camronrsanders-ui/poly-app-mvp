@@ -51,7 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _resetPassword() async {
     if (_email.text.trim().isEmpty) {
-      setState(() => _error = 'Enter your email first, then tap Forgot password.');
+      setState(
+          () => _error = 'Enter your email first, then tap Forgot password.');
       return;
     }
     try {
@@ -76,7 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text('Polycircle', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Polycircle',
+                style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
             const Text('Connect openly. Love honestly. Build your circle.'),
             const SizedBox(height: 28),
@@ -88,26 +90,37 @@ class _LoginScreenState extends State<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email.' : null,
+                  validator: (v) => (v == null || !v.contains('@'))
+                      ? 'Enter a valid email.'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _password,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Password'),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your password.' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Enter your password.' : null,
                 ),
               ]),
             ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text(_error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
               ),
             const SizedBox(height: 20),
-            FilledButton(onPressed: _busy ? null : _login, child: Text(_busy ? 'Signing in…' : 'Sign in')),
-            TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Forgot password?')),
-            TextButton(onPressed: _busy ? null : widget.onShowSignUp, child: const Text('New to Polycircle? Create account')),
+            FilledButton(
+                onPressed: _busy ? null : _login,
+                child: Text(_busy ? 'Signing in…' : 'Sign in')),
+            TextButton(
+                onPressed: _busy ? null : _resetPassword,
+                child: const Text('Forgot password?')),
+            TextButton(
+                onPressed: _busy ? null : widget.onShowSignUp,
+                child: const Text('New to Polycircle? Create account')),
           ],
         ),
       ),

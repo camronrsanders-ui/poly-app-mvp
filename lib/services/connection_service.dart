@@ -51,7 +51,8 @@ class ConnectionService {
     if (currentUid == otherUid) throw ArgumentError('Invalid connection.');
 
     final callable = _functions.httpsCallable('endConnection');
-    final result = await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
+    final result =
+        await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
     if (result.data['ended'] != true) {
       throw StateError('Connection was not ended.');
     }

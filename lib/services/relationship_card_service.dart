@@ -15,9 +15,8 @@ class RelationshipCardService {
         .where('isActive', isEqualTo: true)
         .orderBy('sortOrder')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   Future<void> createCard({

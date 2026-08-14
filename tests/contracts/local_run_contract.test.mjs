@@ -15,7 +15,14 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /Java 21 or newer/);
   assert.match(preflight, /ensure_java21\.sh/);
   assert.match(preflight, /GoogleService-Info\.plist/);
-  assert.match(preflight, /com\.mycompany\.polycircle/);
+  assert.match(
+    preflight,
+    /EXPECTED_IOS_BUNDLE_ID="com\.polycircle\.app"/,
+  );
+  assert.doesNotMatch(
+    preflight,
+    /EXPECTED_IOS_BUNDLE_ID="com\.mycompany\.polycircle"/,
+  );
   assert.match(preflight, /flutter analyze(?:\r?\n|$)/);
   assert.doesNotMatch(preflight, /flutter analyze lib/);
   assert.match(preflight, /flutter test/);
@@ -68,7 +75,18 @@ test('one-command iOS runner refreshes approved branding when the source artwork
 
 test('one-command iOS runner repairs an incomplete or stale native iOS shell before validation', () => {
   assert.match(iosRunner, /ensure_ios_runtime\.sh/);
-  assert.match(iosRepair, /flutter create --platforms=ios --org com\.mycompany \./);
+  assert.match(
+    iosRepair,
+    /flutter create --platforms=ios --org com\.polycircle \./,
+  );
+  assert.match(
+    iosRepair,
+    /EXPECTED_IOS_BUNDLE_ID="com\.polycircle\.app"/,
+  );
+  assert.doesNotMatch(
+    iosRepair,
+    /flutter create --platforms=ios --org com\.mycompany \./,
+  );
   assert.match(iosRepair, /GoogleService-Info\.plist/);
   assert.match(iosRepair, /IPHONEOS_DEPLOYMENT_TARGET/);
   assert.match(iosRepair, /15\.0/);

@@ -23,15 +23,21 @@ class MessagingService {
 
   Future<String> ensureConversation(String otherUid) async {
     final currentUid = _requireUid();
-    if (currentUid == otherUid) throw ArgumentError('Cannot create a conversation with yourself.');
+    if (currentUid == otherUid) {
+      throw ArgumentError('Cannot create a conversation with yourself.');
+    }
     final callable = _functions.httpsCallable('createConversation');
-    final result = await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
+    final result =
+        await callable.call<Map<String, dynamic>>({'otherUid': otherUid});
     final id = result.data['conversationId'] as String?;
-    if (id == null || id.isEmpty) throw StateError('Conversation was not created.');
+    if (id == null || id.isEmpty) {
+      throw StateError('Conversation was not created.');
+    }
     return id;
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> watchMessages(String conversationId) {
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchMessages(
+      String conversationId) {
     _requireUid();
     return _firestore
         .collection('messages')
@@ -41,7 +47,8 @@ class MessagingService {
         .snapshots();
   }
 
-  Future<void> sendMessage({required String conversationId, required String text}) async {
+  Future<void> sendMessage(
+      {required String conversationId, required String text}) async {
     final senderUid = _requireUid();
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
@@ -49,7 +56,8 @@ class MessagingService {
 
     final batch = _firestore.batch();
     final messageRef = _firestore.collection('messages').doc();
-    final conversationRef = _firestore.collection('conversations').doc(conversationId);
+    final conversationRef =
+        _firestore.collection('conversations').doc(conversationId);
     batch.set(messageRef, {
       'conversationId': conversationId,
       'senderUid': senderUid,

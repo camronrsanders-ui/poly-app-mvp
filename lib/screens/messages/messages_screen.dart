@@ -46,7 +46,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
@@ -61,7 +62,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
-                  TextButton(onPressed: _refresh, child: const Text('Try again')),
+                  TextButton(
+                      onPressed: _refresh, child: const Text('Try again')),
                 ],
               ),
             ),
@@ -104,19 +106,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
             itemBuilder: (context, index) {
               final profile = conversations[index];
               final otherUid = profile['uid']?.toString() ?? '';
-              final conversationId = profile['conversationId']?.toString() ?? '';
+              final conversationId =
+                  profile['conversationId']?.toString() ?? '';
               if (otherUid.isEmpty || conversationId.isEmpty) {
                 return const SizedBox.shrink();
               }
 
               final rawName = profile['displayName']?.toString().trim() ?? '';
               final name = rawName.isEmpty ? 'Polycircle connection' : rawName;
-              final structure = profile['relationshipStructure']?.toString().trim() ?? '';
+              final structure =
+                  profile['relationshipStructure']?.toString().trim() ?? '';
 
               return ListTile(
-                leading: CircleAvatar(child: Text(name.characters.first.toUpperCase())),
+                leading: CircleAvatar(
+                    child: Text(name.characters.first.toUpperCase())),
                 title: Text(name),
-                subtitle: Text(structure.isEmpty ? 'Open conversation' : structure),
+                subtitle:
+                    Text(structure.isEmpty ? 'Open conversation' : structure),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => ChatScreen(

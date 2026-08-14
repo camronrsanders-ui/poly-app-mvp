@@ -15,7 +15,8 @@ class CircleViewService {
     if (ownerUid.trim().isEmpty) throw ArgumentError('Invalid profile owner.');
 
     final callable = _functions.httpsCallable('getCircleForProfile');
-    final result = await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    final result =
+        await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
     final raw = result.data['cards'];
     if (raw is! List) return const [];
     return raw

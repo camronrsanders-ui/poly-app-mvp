@@ -41,7 +41,10 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   List<String> _strings(String key) {
     final raw = widget.profile[key];
     if (raw is! List) return const [];
-    return raw.whereType<String>().where((item) => item.trim().isNotEmpty).toList(growable: false);
+    return raw
+        .whereType<String>()
+        .where((item) => item.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<void> _like() async {
@@ -72,8 +75,12 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           'They will no longer be able to interact with you. Any existing match, chat access, and private-media sharing are revoked.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Block')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Block')),
         ],
       ),
     );
@@ -87,7 +94,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not block this person right now.')),
+          const SnackBar(
+              content: Text('Could not block this person right now.')),
         );
       }
     } finally {
@@ -121,23 +129,29 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 initialValue: reason,
                 decoration: const InputDecoration(labelText: 'Reason'),
                 items: reasons.entries
-                    .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+                    .map((entry) => DropdownMenuItem(
+                        value: entry.key, child: Text(entry.value)))
                     .toList(growable: false),
-                onChanged: (value) => setDialogState(() => reason = value ?? 'harassment'),
+                onChanged: (value) =>
+                    setDialogState(() => reason = value ?? 'harassment'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: details,
                 maxLength: 2000,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Details (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Details (optional)'),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Submit report')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Submit report')),
           ],
         ),
       ),
@@ -149,16 +163,20 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
 
     setState(() => _acting = true);
     try {
-      await _safety.reportUser(reportedUid: _uid, reason: reason, details: detailText);
+      await _safety.reportUser(
+          reportedUid: _uid, reason: reason, details: detailText);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report submitted. Thank you for helping keep Polycircle safer.')),
+          const SnackBar(
+              content: Text(
+                  'Report submitted. Thank you for helping keep Polycircle safer.')),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not submit the report right now.')),
+          const SnackBar(
+              content: Text('Could not submit the report right now.')),
         );
       }
     } finally {
@@ -171,7 +189,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: values.map((value) => Chip(label: Text(value))).toList(growable: false),
+      children: values
+          .map((value) => Chip(label: Text(value)))
+          .toList(growable: false),
     );
   }
 
@@ -188,7 +208,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
         final photos = snapshot.data ?? const <VisibleProfilePhoto>[];
         if (snapshot.hasError || photos.isEmpty) {
           return const Center(
-            child: CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
+            child:
+                CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
           );
         }
         return SizedBox(
@@ -205,7 +226,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                     photo.url.toString(),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Center(
-                      child: CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
+                      child: CircleAvatar(
+                          radius: 48, child: Icon(Icons.person, size: 46)),
                     ),
                   ),
                 ),
@@ -219,9 +241,14 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = _text('displayName').isEmpty ? 'Profile' : _text('displayName');
-    final age = widget.profile['age'] is num ? (widget.profile['age'] as num).toInt() : null;
-    final location = [_text('city'), _text('region')].where((value) => value.isNotEmpty).join(', ');
+    final displayName =
+        _text('displayName').isEmpty ? 'Profile' : _text('displayName');
+    final age = widget.profile['age'] is num
+        ? (widget.profile['age'] as num).toInt()
+        : null;
+    final location = [_text('city'), _text('region')]
+        .where((value) => value.isNotEmpty)
+        .join(', ');
     final headline = _text('headline');
     final bio = _text('bio');
     final pronouns = _text('pronouns');
@@ -269,13 +296,20 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             Text(location, textAlign: TextAlign.center),
           ],
           const SizedBox(height: 22),
-          if (pronouns.isNotEmpty || gender.isNotEmpty || orientation.isNotEmpty)
-            _chips([pronouns, gender, orientation].where((value) => value.isNotEmpty).toList()),
+          if (pronouns.isNotEmpty ||
+              gender.isNotEmpty ||
+              orientation.isNotEmpty)
+            _chips([pronouns, gender, orientation]
+                .where((value) => value.isNotEmpty)
+                .toList()),
           if (structure.isNotEmpty || status.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text('Relationship style', style: Theme.of(context).textTheme.titleMedium),
+            Text('Relationship style',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text([structure, status].where((value) => value.isNotEmpty).join(' • ')),
+            Text([structure, status]
+                .where((value) => value.isNotEmpty)
+                .join(' • ')),
           ],
           if (bio.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -306,10 +340,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           const SizedBox(height: 18),
           Text('Their Circle', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 6),
-          const Text('Relationship details appear only when their Circle and individual card privacy settings allow it.'),
+          const Text(
+              'Relationship details appear only when their Circle and individual card privacy settings allow it.'),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _uid.isEmpty ? Future.value(const []) : _circle.loadForProfile(_uid),
+            future: _uid.isEmpty
+                ? Future.value(const [])
+                : _circle.loadForProfile(_uid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
@@ -321,15 +358,22 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 return const Text('This Circle is not shared with you.');
               }
               final cards = snapshot.data ?? const [];
-              if (cards.isEmpty) return const Text('No Circle details are currently shared with you.');
+              if (cards.isEmpty) {
+                return const Text(
+                    'No Circle details are currently shared with you.');
+              }
               return Column(
                 children: cards.map((card) {
-                  final name = card['displayNameOptional']?.toString().trim() ?? '';
-                  final label = card['label']?.toString().trim() ?? 'Connection';
+                  final name =
+                      card['displayNameOptional']?.toString().trim() ?? '';
+                  final label =
+                      card['label']?.toString().trim() ?? 'Connection';
                   final type = card['connectionType']?.toString().trim() ?? '';
                   final cardStatus = card['status']?.toString().trim() ?? '';
                   final note = card['note']?.toString().trim() ?? '';
-                  final subtitleParts = [type, cardStatus].where((value) => value.isNotEmpty).join(' • ');
+                  final subtitleParts = [type, cardStatus]
+                      .where((value) => value.isNotEmpty)
+                      .join(' • ');
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.hub_outlined),

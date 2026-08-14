@@ -16,13 +16,25 @@ test('local Circle fixture uses values accepted by the editor', () => {
 
 test('Circle editor falls back safely when legacy documents contain unknown enum values', () => {
   assert.match(circle, /String _safeChoice/);
-  assert.match(circle, /_safeChoice\(existing\?\['connectionType'\], _connectionTypes, 'romantic_partner'\)/);
-  assert.match(circle, /_safeChoice\(existing\?\['status'\], _statuses, 'active'\)/);
-  assert.match(circle, /_safeChoice\(existing\?\['visibility'\], _visibilities, 'matches_only'\)/);
+  assert.match(
+    circle,
+    /_safeChoice\(\s*existing\?\['connectionType'\],\s*_connectionTypes,\s*'romantic_partner'\s*\)/,
+  );
+  assert.match(
+    circle,
+    /_safeChoice\(\s*existing\?\['status'\],\s*_statuses,\s*'active'\s*\)/,
+  );
+  assert.match(
+    circle,
+    /_safeChoice\(\s*existing\?\['visibility'\],\s*_visibilities,\s*'matches_only'\s*\)/,
+  );
 });
 
 test('Circle rendering tolerates a malformed empty legacy label', () => {
-  assert.match(circle, /final initial = label\.isEmpty \? '\?' : label\.characters\.first/);
+  assert.match(
+    circle,
+    /final initial\s*=\s*label\.isEmpty\s*\?\s*'\?'\s*:\s*label\.characters\.first/,
+  );
 });
 
 test('Circle mutations surface failures instead of producing uncaught UI actions', () => {

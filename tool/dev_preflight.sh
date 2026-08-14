@@ -17,7 +17,7 @@ if [[ "${1:-}" == "--full" ]]; then
 fi
 
 EXPECTED_FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
-EXPECTED_IOS_BUNDLE_ID="com.mycompany.polycircle"
+EXPECTED_IOS_BUNDLE_ID="com.polycircle.app"
 EXPECTED_ANDROID_APP_ID="com.polycircle.app"
 EXPECTED_BRANDING_SHA="45ad99e923294cea8d33457c2f4200e82affa10efa5c011cdd691f0bdd392f20"
 
@@ -120,7 +120,8 @@ if [[ -d android ]]; then
   fi
 
   ANDROID_PROJECT_ID="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); process.stdout.write(j.project_info?.project_id || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
-  ANDROID_PACKAGE_NAME="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); const names=(j.client || []).map((client) => client.client_info?.android_client_info?.package_name).filter(Boolean); process.stdout.write(names[0] || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
+  ANDROID_PACKAGE_NAMES="$(node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); const names=(j.client || []).map((client) => client.client_info?.android_client_info?.package_name).filter(Boolean); process.stdout.write(names.join(",")); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
+  ANDROID_MATCHING_APP_ID="$(EXPECTED_ANDROID_APP_ID="$EXPECTED_ANDROID_APP_ID" node -e 'const fs=require("fs"); try { const j=JSON.parse(fs.readFileSync("android/app/google-services.json","utf8")); const expected=process.env.EXPECTED_ANDROID_APP_ID || ""; const match=(j.client || []).find((client) => client.client_info?.android_client_info?.package_name === expected); process.stdout.write(match?.client_info?.mobilesdk_app_id || ""); } catch (_) { process.exit(2); }' 2>/dev/null || true)"
   if [[ -z "$ANDROID_PROJECT_ID" ]]; then
     fail "Could not read project_info.project_id from android/app/google-services.json."
   elif [[ "$ANDROID_PROJECT_ID" != "$EXPECTED_FIREBASE_PROJECT_ID" ]]; then
@@ -128,12 +129,13 @@ if [[ -d android ]]; then
   fi
   ok "Firebase Android project ID matches local runner"
 
-  if [[ -z "$ANDROID_PACKAGE_NAME" ]]; then
-    fail "Could not read an Android package name from android/app/google-services.json."
-  elif [[ "$ANDROID_PACKAGE_NAME" != "$EXPECTED_ANDROID_APP_ID" ]]; then
-    fail "Firebase Android package is '$ANDROID_PACKAGE_NAME'; expected '$EXPECTED_ANDROID_APP_ID'."
+  if [[ -z "$ANDROID_PACKAGE_NAMES" ]]; then
+    fail "Could not read Android package names from android/app/google-services.json."
+  elif [[ -z "$ANDROID_MATCHING_APP_ID" ]]; then
+    fail "Firebase Android config does not contain package '$EXPECTED_ANDROID_APP_ID'. Found: $ANDROID_PACKAGE_NAMES"
   fi
   ok "Firebase Android package matches Polycircle"
+  ok "Firebase Android app registration resolved for $EXPECTED_ANDROID_APP_ID"
 
   if ! grep -Fq 'com.google.gms.google-services' "$ANDROID_GRADLE_FILE"; then
     fail "Google Services Gradle plugin is not applied in $ANDROID_GRADLE_FILE. Firebase Android configuration would not be packaged."

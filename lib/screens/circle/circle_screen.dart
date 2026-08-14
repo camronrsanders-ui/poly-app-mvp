@@ -41,7 +41,8 @@ class _CircleScreenState extends State<CircleScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -72,7 +73,8 @@ class _CircleScreenState extends State<CircleScreen> {
           return _StateMessage(
             icon: Icons.hub_outlined,
             title: 'Build your circle',
-            text: 'Represent the relationships that matter to you. You control what other people can see.',
+            text:
+                'Represent the relationships that matter to you. You control what other people can see.',
             actionLabel: 'Add relationship',
             onAction: () => _openEditor(uid: uid, sortOrder: 0),
           );
@@ -85,10 +87,12 @@ class _CircleScreenState extends State<CircleScreen> {
               child: Row(
                 children: [
                   const Expanded(
-                    child: Text('Your relationship cards can be public, connection-only, unnamed, or private.'),
+                    child: Text(
+                        'Your relationship cards can be public, connection-only, unnamed, or private.'),
                   ),
                   FilledButton.icon(
-                    onPressed: () => _openEditor(uid: uid, sortOrder: cards.length),
+                    onPressed: () =>
+                        _openEditor(uid: uid, sortOrder: cards.length),
                     icon: const Icon(Icons.add),
                     label: const Text('Add'),
                   ),
@@ -102,7 +106,9 @@ class _CircleScreenState extends State<CircleScreen> {
                 itemBuilder: (context, index) {
                   final card = cards[index];
                   final label = card['label']?.toString().trim() ?? '';
-                  final initial = label.isEmpty ? '?' : label.characters.first.toUpperCase();
+                  final initial = label.isEmpty
+                      ? '?'
+                      : label.characters.first.toUpperCase();
                   final cardId = card['id']?.toString() ?? '';
                   return Card(
                     key: ValueKey(cardId),
@@ -115,42 +121,56 @@ class _CircleScreenState extends State<CircleScreen> {
                         children: [
                           IconButton(
                             tooltip: 'Move up',
-                            onPressed: index == 0 ? null : () => _moveCard(cards, index, index - 1),
+                            onPressed: index == 0
+                                ? null
+                                : () => _moveCard(cards, index, index - 1),
                             icon: const Icon(Icons.arrow_upward),
                           ),
                           IconButton(
                             tooltip: 'Move down',
-                            onPressed: index == cards.length - 1 ? null : () => _moveCard(cards, index, index + 1),
+                            onPressed: index == cards.length - 1
+                                ? null
+                                : () => _moveCard(cards, index, index + 1),
                             icon: const Icon(Icons.arrow_downward),
                           ),
                           PopupMenuButton<String>(
                             onSelected: (value) async {
                               if (cardId.isEmpty) {
-                                _showError('This relationship card could not be changed. Please refresh and try again.');
+                                _showError(
+                                    'This relationship card could not be changed. Please refresh and try again.');
                                 return;
                               }
                               try {
                                 if (value == 'edit') {
-                                  await _openEditor(uid: uid, existing: card, sortOrder: index);
+                                  await _openEditor(
+                                      uid: uid,
+                                      existing: card,
+                                      sortOrder: index);
                                 } else if (value == 'hide') {
                                   await _service.deactivateCard(cardId);
                                 } else if (value == 'delete') {
                                   final confirmed = await _confirmDelete();
-                                  if (confirmed == true) await _service.deleteCard(cardId);
+                                  if (confirmed == true) {
+                                    await _service.deleteCard(cardId);
+                                  }
                                 }
                               } catch (_) {
-                                _showError('That Circle change could not be saved. Please try again.');
+                                _showError(
+                                    'That Circle change could not be saved. Please try again.');
                               }
                             },
                             itemBuilder: (_) => const [
                               PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(value: 'hide', child: Text('Deactivate')),
-                              PopupMenuItem(value: 'delete', child: Text('Delete')),
+                              PopupMenuItem(
+                                  value: 'hide', child: Text('Deactivate')),
+                              PopupMenuItem(
+                                  value: 'delete', child: Text('Delete')),
                             ],
                           ),
                         ],
                       ),
-                      onTap: () => _openEditor(uid: uid, existing: card, sortOrder: index),
+                      onTap: () => _openEditor(
+                          uid: uid, existing: card, sortOrder: index),
                     ),
                   );
                 },
@@ -162,7 +182,8 @@ class _CircleScreenState extends State<CircleScreen> {
     );
   }
 
-  Future<void> _moveCard(List<Map<String, dynamic>> cards, int oldIndex, int newIndex) async {
+  Future<void> _moveCard(
+      List<Map<String, dynamic>> cards, int oldIndex, int newIndex) async {
     try {
       final reordered = [...cards];
       final item = reordered.removeAt(oldIndex);
@@ -175,9 +196,12 @@ class _CircleScreenState extends State<CircleScreen> {
 
   String _subtitle(Map<String, dynamic> card) {
     final type = '${card['connectionType'] ?? ''}'.replaceAll('_', ' ');
-    final visibility = '${card['visibility'] ?? 'private'}'.replaceAll('_', ' ');
+    final visibility =
+        '${card['visibility'] ?? 'private'}'.replaceAll('_', ' ');
     final name = '${card['displayNameOptional'] ?? ''}'.trim();
-    return [if (name.isNotEmpty) name, type, visibility].where((e) => e.isNotEmpty).join(' • ');
+    return [if (name.isNotEmpty) name, type, visibility]
+        .where((e) => e.isNotEmpty)
+        .join(' • ');
   }
 
   Future<void> _openEditor({
@@ -188,9 +212,11 @@ class _CircleScreenState extends State<CircleScreen> {
     var label = '${existing?['label'] ?? ''}';
     var displayName = '${existing?['displayNameOptional'] ?? ''}';
     var note = '${existing?['note'] ?? ''}';
-    var type = _safeChoice(existing?['connectionType'], _connectionTypes, 'romantic_partner');
+    var type = _safeChoice(
+        existing?['connectionType'], _connectionTypes, 'romantic_partner');
     var status = _safeChoice(existing?['status'], _statuses, 'active');
-    var visibility = _safeChoice(existing?['visibility'], _visibilities, 'matches_only');
+    var visibility =
+        _safeChoice(existing?['visibility'], _visibilities, 'matches_only');
     var saving = false;
 
     await showModalBottomSheet<void>(
@@ -198,47 +224,69 @@ class _CircleScreenState extends State<CircleScreen> {
       isScrollControlled: true,
       builder: (modalContext) => StatefulBuilder(
         builder: (modalContext, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(modalContext).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(modalContext).viewInsets.bottom + 20),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(existing == null ? 'Add relationship' : 'Edit relationship', style: Theme.of(modalContext).textTheme.headlineSmall),
+                Text(
+                    existing == null ? 'Add relationship' : 'Edit relationship',
+                    style: Theme.of(modalContext).textTheme.headlineSmall),
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: label,
                   maxLength: 100,
                   onChanged: (value) => label = value,
-                  decoration: const InputDecoration(labelText: 'Label, e.g. Anchor partner'),
+                  decoration: const InputDecoration(
+                      labelText: 'Label, e.g. Anchor partner'),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   initialValue: displayName,
                   maxLength: 100,
                   onChanged: (value) => displayName = value,
-                  decoration: const InputDecoration(labelText: 'Display name (optional)'),
+                  decoration: const InputDecoration(
+                      labelText: 'Display name (optional)'),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: type,
-                  decoration: const InputDecoration(labelText: 'Connection type'),
-                  items: _connectionTypes.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                  onChanged: saving ? null : (v) => setModalState(() => type = v ?? type),
+                  decoration:
+                      const InputDecoration(labelText: 'Connection type'),
+                  items: _connectionTypes
+                      .map((v) => DropdownMenuItem(
+                          value: v, child: Text(v.replaceAll('_', ' '))))
+                      .toList(),
+                  onChanged: saving
+                      ? null
+                      : (v) => setModalState(() => type = v ?? type),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: status,
                   decoration: const InputDecoration(labelText: 'Status'),
-                  items: _statuses.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                  onChanged: saving ? null : (v) => setModalState(() => status = v ?? status),
+                  items: _statuses
+                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                      .toList(),
+                  onChanged: saving
+                      ? null
+                      : (v) => setModalState(() => status = v ?? status),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: visibility,
-                  decoration: const InputDecoration(labelText: 'Who can see this?'),
-                  items: _visibilities.map((v) => DropdownMenuItem(value: v, child: Text(v.replaceAll('_', ' ')))).toList(),
-                  onChanged: saving ? null : (v) => setModalState(() => visibility = v ?? visibility),
+                  decoration:
+                      const InputDecoration(labelText: 'Who can see this?'),
+                  items: _visibilities
+                      .map((v) => DropdownMenuItem(
+                          value: v, child: Text(v.replaceAll('_', ' '))))
+                      .toList(),
+                  onChanged: saving
+                      ? null
+                      : (v) =>
+                          setModalState(() => visibility = v ?? visibility),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -246,7 +294,8 @@ class _CircleScreenState extends State<CircleScreen> {
                   maxLength: 1000,
                   maxLines: 3,
                   onChanged: (value) => note = value,
-                  decoration: const InputDecoration(labelText: 'Note (optional)'),
+                  decoration:
+                      const InputDecoration(labelText: 'Note (optional)'),
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
@@ -255,7 +304,9 @@ class _CircleScreenState extends State<CircleScreen> {
                       : () async {
                           if (label.trim().isEmpty) {
                             ScaffoldMessenger.of(modalContext).showSnackBar(
-                              const SnackBar(content: Text('Add a label for this relationship.')),
+                              const SnackBar(
+                                  content: Text(
+                                      'Add a label for this relationship.')),
                             );
                             return;
                           }
@@ -274,7 +325,10 @@ class _CircleScreenState extends State<CircleScreen> {
                               );
                             } else {
                               final cardId = existing['id']?.toString() ?? '';
-                              if (cardId.isEmpty) throw StateError('Missing relationship card ID.');
+                              if (cardId.isEmpty) {
+                                throw StateError(
+                                    'Missing relationship card ID.');
+                              }
                               await _service.updateCard(
                                 cardId: cardId,
                                 ownerUid: uid,
@@ -288,19 +342,27 @@ class _CircleScreenState extends State<CircleScreen> {
                                 },
                               );
                             }
-                            if (modalContext.mounted) Navigator.pop(modalContext);
+                            if (modalContext.mounted) {
+                              Navigator.pop(modalContext);
+                            }
                           } catch (_) {
                             if (modalContext.mounted) {
                               ScaffoldMessenger.of(modalContext).showSnackBar(
-                                const SnackBar(content: Text('Could not save this relationship. Please try again.')),
+                                const SnackBar(
+                                    content: Text(
+                                        'Could not save this relationship. Please try again.')),
                               );
                               setModalState(() => saving = false);
                             }
                           }
                         },
                   child: saving
-                      ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(existing == null ? 'Add to my circle' : 'Save changes'),
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(existing == null
+                          ? 'Add to my circle'
+                          : 'Save changes'),
                 ),
               ],
             ),
@@ -311,20 +373,30 @@ class _CircleScreenState extends State<CircleScreen> {
   }
 
   Future<bool?> _confirmDelete() => showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Delete relationship card?'),
-      content: const Text('This permanently removes this card from your circle.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-      ],
-    ),
-  );
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete relationship card?'),
+          content: const Text(
+              'This permanently removes this card from your circle.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete')),
+          ],
+        ),
+      );
 }
 
 class _StateMessage extends StatelessWidget {
-  const _StateMessage({required this.icon, required this.title, required this.text, required this.actionLabel, required this.onAction});
+  const _StateMessage(
+      {required this.icon,
+      required this.title,
+      required this.text,
+      required this.actionLabel,
+      required this.onAction});
   final IconData icon;
   final String title;
   final String text;
@@ -333,17 +405,20 @@ class _StateMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 64), const SizedBox(height: 16),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall), const SizedBox(height: 8),
-          Text(text, textAlign: TextAlign.center), const SizedBox(height: 20),
-          FilledButton(onPressed: onAction, child: Text(actionLabel)),
-        ],
-      ),
-    ),
-  );
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 64),
+              const SizedBox(height: 16),
+              Text(title, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text(text, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              FilledButton(onPressed: onAction, child: Text(actionLabel)),
+            ],
+          ),
+        ),
+      );
 }

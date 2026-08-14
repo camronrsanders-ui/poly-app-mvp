@@ -57,9 +57,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text('Join Polycircle', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Join Polycircle',
+                style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
-            const Text('A space for honest connections, community, and the relationships that matter to you.'),
+            const Text(
+                'A space for honest connections, community, and the relationships that matter to you.'),
             const SizedBox(height: 28),
             Form(
               key: _formKey,
@@ -69,31 +71,44 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email.' : null,
+                  validator: (v) => (v == null || !v.contains('@'))
+                      ? 'Enter a valid email.'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _password,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Password'),
-                  validator: (v) => (v == null || v.length < 8) ? 'Use at least 8 characters.' : null,
+                  validator: (v) => (v == null || v.length < 8)
+                      ? 'Use at least 8 characters.'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirm,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Confirm password'),
-                  validator: (v) => v != _password.text ? 'Passwords do not match.' : null,
+                  decoration:
+                      const InputDecoration(labelText: 'Confirm password'),
+                  validator: (v) =>
+                      v != _password.text ? 'Passwords do not match.' : null,
                 ),
               ]),
             ),
-            if (_error != null) Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(_error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
             const SizedBox(height: 20),
-            FilledButton(onPressed: _busy ? null : _signup, child: Text(_busy ? 'Creating account…' : 'Create account')),
-            TextButton(onPressed: _busy ? null : widget.onShowLogin, child: const Text('Already have an account? Sign in')),
+            FilledButton(
+                onPressed: _busy ? null : _signup,
+                child: Text(_busy ? 'Creating account…' : 'Create account')),
+            TextButton(
+                onPressed: _busy ? null : widget.onShowLogin,
+                child: const Text('Already have an account? Sign in')),
           ],
         ),
       ),

@@ -6,10 +6,12 @@ class ProfilePhotoModerationScreen extends StatefulWidget {
   const ProfilePhotoModerationScreen({super.key});
 
   @override
-  State<ProfilePhotoModerationScreen> createState() => _ProfilePhotoModerationScreenState();
+  State<ProfilePhotoModerationScreen> createState() =>
+      _ProfilePhotoModerationScreenState();
 }
 
-class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScreen> {
+class _ProfilePhotoModerationScreenState
+    extends State<ProfilePhotoModerationScreen> {
   final _service = ProfilePhotoModerationService();
   late Future<List<ModerationProfilePhoto>> _future;
   final Set<String> _working = {};
@@ -68,7 +70,9 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(status == 'active' ? 'Photo approved.' : 'Photo rejected.')),
+        SnackBar(
+            content: Text(
+                status == 'active' ? 'Photo approved.' : 'Photo rejected.')),
       );
       await _refresh();
     } catch (_) {
@@ -119,7 +123,8 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
       body: FutureBuilder<List<ModerationProfilePhoto>>(
         future: _future,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
@@ -136,7 +141,8 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 14),
-                    FilledButton(onPressed: _refresh, child: const Text('Try again')),
+                    FilledButton(
+                        onPressed: _refresh, child: const Text('Try again')),
                   ],
                 ),
               ),
@@ -154,7 +160,8 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
                   SizedBox(height: 120),
                   Icon(Icons.verified_outlined, size: 56),
                   SizedBox(height: 14),
-                  Text('No photos awaiting review', textAlign: TextAlign.center),
+                  Text('No photos awaiting review',
+                      textAlign: TextAlign.center),
                   SizedBox(height: 8),
                   Text(
                     'This emulator-only queue exercises the same App-Check-protected moderation callables used by the backend.',
@@ -200,7 +207,9 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: working ? null : () => _review(photo, 'reject'),
+                                onPressed: working
+                                    ? null
+                                    : () => _review(photo, 'reject'),
                                 icon: const Icon(Icons.close),
                                 label: const Text('Reject'),
                               ),
@@ -208,11 +217,14 @@ class _ProfilePhotoModerationScreenState extends State<ProfilePhotoModerationScr
                             const SizedBox(width: 12),
                             Expanded(
                               child: FilledButton.icon(
-                                onPressed: working ? null : () => _review(photo, 'approve'),
+                                onPressed: working
+                                    ? null
+                                    : () => _review(photo, 'approve'),
                                 icon: working
                                     ? const SizedBox.square(
                                         dimension: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
                                       )
                                     : const Icon(Icons.check),
                                 label: const Text('Approve'),

@@ -64,7 +64,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       await _connections.passUser(uid);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passed. This profile will stay out of Discover.')),
+        const SnackBar(
+            content: Text('Passed. This profile will stay out of Discover.')),
       );
       _reload();
     } catch (error, stackTrace) {
@@ -109,9 +110,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           return _StateMessage(
             icon: Icons.error_outline,
             title: 'Discover is taking a break',
-            text: 'We could not load profiles. Check your connection and try again.',
+            text:
+                'We could not load profiles. Check your connection and try again.',
             debugDetails: kDebugMode ? snapshot.error?.toString() : null,
-            action: TextButton(onPressed: _reload, child: const Text('Try again')),
+            action:
+                TextButton(onPressed: _reload, child: const Text('Try again')),
           );
         }
         final profiles = snapshot.data ?? [];
@@ -120,7 +123,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             icon: Icons.travel_explore,
             title: 'Your circle is still growing',
             text: 'No new profiles match the current discovery settings yet.',
-            action: TextButton(onPressed: _reload, child: const Text('Refresh')),
+            action:
+                TextButton(onPressed: _reload, child: const Text('Refresh')),
           );
         }
         return RefreshIndicator(
@@ -133,7 +137,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               final p = profiles[index];
               final uid = p['uid']?.toString() ?? '';
               final acting = uid.isNotEmpty && _actingOn.contains(uid);
-              final intentions = (p['intentionTags'] as List?)?.cast<String>() ?? const <String>[];
+              final intentions =
+                  (p['intentionTags'] as List?)?.cast<String>() ??
+                      const <String>[];
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
                 clipBehavior: Clip.antiAlias,
@@ -143,9 +149,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        const CircleAvatar(radius: 30, child: Icon(Icons.person, size: 32)),
+                        const CircleAvatar(
+                            radius: 30, child: Icon(Icons.person, size: 32)),
                         const SizedBox(width: 14),
-                        Expanded(child: Column(
+                        Expanded(
+                            child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
@@ -160,8 +168,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         )),
                       ]),
                       const SizedBox(height: 14),
-                      if ((p['relationshipStructure'] ?? '').toString().isNotEmpty)
-                        Chip(label: Text(p['relationshipStructure'].toString())),
+                      if ((p['relationshipStructure'] ?? '')
+                          .toString()
+                          .isNotEmpty)
+                        Chip(
+                            label: Text(p['relationshipStructure'].toString())),
                       if ((p['bio'] ?? '').toString().isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(p['bio'].toString()),
@@ -171,7 +182,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: intentions.map((i) => Chip(label: Text(i))).toList(),
+                          children: intentions
+                              .map((i) => Chip(label: Text(i)))
+                              .toList(),
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -228,25 +241,27 @@ class _StateMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 56),
-        const SizedBox(height: 16),
-        Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        Text(text, textAlign: TextAlign.center),
-        if (debugDetails != null && debugDetails!.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          SelectableText(
-            debugDetails!,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        const SizedBox(height: 12),
-        action,
-      ]),
-    ),
-  );
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 56),
+            const SizedBox(height: 16),
+            Text(title,
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(text, textAlign: TextAlign.center),
+            if (debugDetails != null && debugDetails!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SelectableText(
+                debugDetails!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 12),
+            action,
+          ]),
+        ),
+      );
 }

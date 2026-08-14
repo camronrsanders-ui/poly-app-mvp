@@ -34,7 +34,8 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load profile photos right now.')),
+          const SnackBar(
+              content: Text('Could not load profile photos right now.')),
         );
       }
     } finally {
@@ -87,14 +88,17 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Photo uploaded securely. It will appear after processing and safety review.'),
+            content: Text(
+                'Photo uploaded securely. It will appear after processing and safety review.'),
           ),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not upload that photo. Please try another image.')),
+          const SnackBar(
+              content: Text(
+                  'Could not upload that photo. Please try another image.')),
         );
       }
     } finally {
@@ -155,7 +159,8 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Padding(
                         padding: EdgeInsets.all(32),
-                        child: Text('This protected photo could not be loaded.'),
+                        child:
+                            Text('This protected photo could not be loaded.'),
                       ),
                     ),
                   ),
@@ -165,9 +170,12 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
                   child: Row(
                     children: [
                       const Expanded(
-                        child: Text('This viewing link is temporary and is not stored in your public profile.'),
+                        child: Text(
+                            'This viewing link is temporary and is not stored in your public profile.'),
                       ),
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close')),
                     ],
                   ),
                 ),
@@ -190,10 +198,15 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete this photo?'),
-        content: const Text('This removes the photo from Polycircle. This action cannot be undone.'),
+        content: const Text(
+            'This removes the photo from Polycircle. This action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -210,7 +223,8 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete this photo right now.')),
+          const SnackBar(
+              content: Text('Could not delete this photo right now.')),
         );
       }
     }
@@ -226,7 +240,8 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           children: [
-            Text('Protected profile photos', style: Theme.of(context).textTheme.headlineSmall),
+            Text('Protected profile photos',
+                style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             const Text(
               'Uploads go to a private quarantine area first. Polycircle validates and re-encodes them before review, and approved photos are delivered through short-lived protected links rather than permanent public URLs.',
@@ -235,13 +250,15 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
             FilledButton.icon(
               onPressed: _uploading ? null : _pickAndUpload,
               icon: const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(_uploading ? 'Uploading securely…' : 'Choose a photo'),
+              label:
+                  Text(_uploading ? 'Uploading securely…' : 'Choose a photo'),
             ),
             const SizedBox(height: 8),
             const Text('JPEG, PNG, or WebP • 10 MB maximum'),
             const SizedBox(height: 22),
             if (_loading)
-              const Center(child: Padding(
+              const Center(
+                  child: Padding(
                 padding: EdgeInsets.all(24),
                 child: CircularProgressIndicator(),
               ))
@@ -255,35 +272,41 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
                       SizedBox(height: 10),
                       Text('No profile photos yet'),
                       SizedBox(height: 6),
-                      Text('Add a photo when you are ready. Nothing is made visible until processing and review are complete.', textAlign: TextAlign.center),
+                      Text(
+                          'Add a photo when you are ready. Nothing is made visible until processing and review are complete.',
+                          textAlign: TextAlign.center),
                     ],
                   ),
                 ),
               )
             else
               ..._photos.map((photo) => Card(
-                child: ListTile(
-                  leading: Icon(_statusIcon(photo.status)),
-                  title: Text(_statusLabel(photo.status)),
-                  subtitle: Text(
-                    photo.status == 'active'
-                        ? 'Approved and available through protected delivery.'
-                        : 'Photo ID ${photo.photoId.substring(0, photo.photoId.length.clamp(0, 8))}',
-                  ),
-                  onTap: photo.status == 'active' ? () => _viewPhoto(photo) : null,
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'view') _viewPhoto(photo);
-                      if (value == 'delete') _deletePhoto(photo);
-                    },
-                    itemBuilder: (_) => [
-                      if (photo.status == 'active')
-                        const PopupMenuItem(value: 'view', child: Text('View securely')),
-                      const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
-                  ),
-                ),
-              )),
+                    child: ListTile(
+                      leading: Icon(_statusIcon(photo.status)),
+                      title: Text(_statusLabel(photo.status)),
+                      subtitle: Text(
+                        photo.status == 'active'
+                            ? 'Approved and available through protected delivery.'
+                            : 'Photo ID ${photo.photoId.substring(0, photo.photoId.length.clamp(0, 8))}',
+                      ),
+                      onTap: photo.status == 'active'
+                          ? () => _viewPhoto(photo)
+                          : null,
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'view') _viewPhoto(photo);
+                          if (value == 'delete') _deletePhoto(photo);
+                        },
+                        itemBuilder: (_) => [
+                          if (photo.status == 'active')
+                            const PopupMenuItem(
+                                value: 'view', child: Text('View securely')),
+                          const PopupMenuItem(
+                              value: 'delete', child: Text('Delete')),
+                        ],
+                      ),
+                    ),
+                  )),
             const SizedBox(height: 24),
             const Card(
               child: Padding(

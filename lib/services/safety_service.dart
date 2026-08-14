@@ -15,7 +15,8 @@ class SafetyService {
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
 
-  String blockId(String blockerUid, String blockedUid) => '${blockerUid}_$blockedUid';
+  String blockId(String blockerUid, String blockedUid) =>
+      '${blockerUid}_$blockedUid';
 
   String _requireUid() {
     final uid = _auth.currentUser?.uid;
@@ -25,7 +26,9 @@ class SafetyService {
 
   Future<void> blockUser(String blockedUid) async {
     final blockerUid = _requireUid();
-    if (blockerUid == blockedUid) throw ArgumentError('You cannot block yourself.');
+    if (blockerUid == blockedUid) {
+      throw ArgumentError('You cannot block yourself.');
+    }
 
     final callable = _functions.httpsCallable('blockUser');
     await callable.call(<String, dynamic>{'blockedUid': blockedUid});
@@ -33,7 +36,9 @@ class SafetyService {
 
   Future<void> unblockUser(String blockedUid) async {
     final blockerUid = _requireUid();
-    if (blockerUid == blockedUid) throw ArgumentError('You cannot unblock yourself.');
+    if (blockerUid == blockedUid) {
+      throw ArgumentError('You cannot unblock yourself.');
+    }
 
     final callable = _functions.httpsCallable('unblockUser');
     await callable.call(<String, dynamic>{'blockedUid': blockedUid});
@@ -58,10 +63,14 @@ class SafetyService {
     String details = '',
   }) async {
     final reporterUid = _requireUid();
-    if (reporterUid == reportedUid) throw ArgumentError('You cannot report yourself.');
+    if (reporterUid == reportedUid) {
+      throw ArgumentError('You cannot report yourself.');
+    }
     final safeReason = reason.trim();
     final safeDetails = details.trim();
-    if (safeReason.isEmpty || safeReason.length > 80 || safeDetails.length > 2000) {
+    if (safeReason.isEmpty ||
+        safeReason.length > 80 ||
+        safeDetails.length > 2000) {
       throw ArgumentError('Invalid report content.');
     }
 

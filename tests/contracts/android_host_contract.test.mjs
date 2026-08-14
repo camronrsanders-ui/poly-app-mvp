@@ -17,6 +17,11 @@ const runner = fs.readFileSync(
   'utf8',
 );
 
+const preflight = fs.readFileSync(
+  'tool/dev_preflight.sh',
+  'utf8',
+);
+
 test('Android host uses permanent Polycircle application identity', () => {
   assert.match(appGradle, /namespace\s*=\s*"com\.polycircle\.app"/);
   assert.match(appGradle, /applicationId\s*=\s*"com\.polycircle\.app"/);
@@ -44,4 +49,12 @@ test('Android local runner is emulator-only and preserves local state', () => {
   assert.match(runner, /FIREBASE_EMULATOR_HOST=\$ANDROID_HOST/);
   assert.match(runner, /auth,firestore,functions,storage/);
   assert.match(runner, /google-services\.json/);
+});
+
+
+test('Android Firebase preflight selects the client matching the permanent package', () => {
+  assert.match(preflight, /ANDROID_MATCHING_APP_ID/);
+  assert.match(preflight, /package_name === expected/);
+  assert.match(preflight, /EXPECTED_ANDROID_APP_ID/);
+  assert.doesNotMatch(preflight, /names\[0\]/);
 });
