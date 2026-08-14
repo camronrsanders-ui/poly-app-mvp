@@ -36,7 +36,7 @@ fi
 
 if [[ ! -f android/app/google-services.json ]]; then
   printf "Android Firebase configuration is missing: android/app/google-services.json\n" >&2
-  printf "Download the config for package com.mycompany.polycircle from the Polycircle Firebase project and place it there locally.\n" >&2
+  printf "Download the config for package com.polycircle.app from the Polycircle Firebase project and place it there locally.\n" >&2
   printf "The file is intentionally git-ignored; do not commit it.\n" >&2
   exit 1
 fi
