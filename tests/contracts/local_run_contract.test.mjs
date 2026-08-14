@@ -68,11 +68,12 @@ test('one-command iOS runner refreshes approved branding when the source artwork
 
 test('one-command iOS runner repairs an incomplete or stale native iOS shell before validation', () => {
   assert.match(iosRunner, /ensure_ios_runtime\.sh/);
-  assert.match(iosRepair, /flutter create --platforms=ios \./);
+  assert.match(iosRepair, /flutter create --platforms=ios --org com\.mycompany \./);
   assert.match(iosRepair, /GoogleService-Info\.plist/);
   assert.match(iosRepair, /IPHONEOS_DEPLOYMENT_TARGET/);
   assert.match(iosRepair, /15\.0/);
   assert.match(iosRepair, /preserved GoogleService-Info\.plist/);
+  assert.doesNotMatch(iosRepair, /flutter create --platforms=ios \./);
 });
 
 test('one-command Android runner refuses incomplete native configuration and keeps Firebase traffic local', () => {
