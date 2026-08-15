@@ -197,8 +197,11 @@ class ProfileMediaService {
 
   Future<List<VisibleProfilePhoto>> listVisiblePhotos(String ownerUid) async {
     final callable = _functions.httpsCallable('listMyProfilePhotos');
-    final result =
-        await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    final payload = <String, dynamic>{'ownerUid': ownerUid};
+    if (useFirebaseEmulators) {
+      payload['emulatorHost'] = firebaseEmulatorHost;
+    }
+    final result = await callable.call<Map<String, dynamic>>(payload);
     final raw = result.data['photos'];
     if (raw is! List) return const [];
     return raw

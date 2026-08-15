@@ -1,9 +1,14 @@
+import {randomUUID} from 'node:crypto';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {canViewOwnerProfile} from './profile_access';
 
 const db = getFirestore();
+
+function runningInFunctionsEmulator(): boolean {
+  return process.env.FUNCTIONS_EMULATOR === 'true';
+}
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -85,10 +90,51 @@ export const listMyProfilePhotos = onCall(
         const storagePath = String(doc.get('storagePath') ?? '');
         if (storagePath !== expectedPath) return null;
         try {
-          const [url] = await bucket.file(storagePath).getSignedUrl({
+          const file = bucket.file(storagePath);
+
+          if (runningInFunctionsEmulator()) {
+            const token = randomUUID();
+
+            const [currentMetadata] = await file.getMetadata();
+            await file.setMetadata({
+              metadata: {
+                ...(currentMetadata.metadata ?? {}),
+                firebaseStorageDownloadTokens: token,
+              },
+            });
+
+            const requestedHost = String(
+              request.data?.emulatorHost ?? '127.0.0.1',
+            ).trim();
+
+            const emulatorHost =
+              requestedHost === '127.0.0.1'
+              || requestedHost === 'localhost'
+              || requestedHost === '10.0.2.2'
+                ? requestedHost
+                : '127.0.0.1';
+
+            const encodedBucket = encodeURIComponent(bucket.name);
+            const encodedPath = encodeURIComponent(storagePath);
+            const encodedToken = encodeURIComponent(token);
+
+            const url =
+              `http://${emulatorHost}:9199/v0/b/${encodedBucket}/o/`
+              + `${encodedPath}?alt=media&token=${encodedToken}`;
+
+            return {
+              photoId: doc.id,
+              url,
+              expiresInSeconds: 0,
+              createdAtMs: timestampMillis(doc.get('createdAt')),
+            };
+          }
+
+          const [url] = await file.getSignedUrl({
             action: 'read',
             expires: Date.now() + 2 * 60 * 1000,
           });
+
           return {
             photoId: doc.id,
             url,
