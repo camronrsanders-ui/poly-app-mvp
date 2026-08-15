@@ -1,5 +1,9 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {
+  assertActiveCompliantMember,
+  isActiveCompliantMember,
+} from './account_compliance';
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -16,13 +20,6 @@ function requireTargetUid(raw: unknown, currentUid: string): string {
 
 function pairId(a: string, b: string): string {
   return [a, b].sort().join('_');
-}
-
-async function assertActive(db: FirebaseFirestore.Firestore, uid: string): Promise<void> {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
 }
 
 async function consumeRateLimit(
@@ -60,7 +57,7 @@ export const passProfile = onCall(
     const uid = requireUid(request.auth);
     const toUid = requireTargetUid(request.data?.toUid, uid);
 
-    await assertActive(db, uid);
+    await assertActiveCompliantMember(db, uid);
     // Charge the caller before inspecting the target so arbitrary UID probing
     // cannot bypass the abuse budget.
     await consumeRateLimit(db, uid);
@@ -80,10 +77,10 @@ export const passProfile = onCall(
         tx.get(matchRef),
       ]);
 
-      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
-        throw new HttpsError('permission-denied', 'Account is not active.');
+      if (!isActiveCompliantMember(callerUser)) {
+        throw new HttpsError('permission-denied', 'Complete adult access before using Discover.');
       }
-      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+      if (!isActiveCompliantMember(targetUser)) {
         throw new HttpsError('permission-denied', 'Profile is unavailable.');
       }
       // Passing is a discovery action, not a connection-ending action. Direct
