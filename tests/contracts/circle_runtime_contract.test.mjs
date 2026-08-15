@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const circle = fs.readFileSync(path.join(root, 'lib/screens/circle/circle_screen.dart'), 'utf8');
+const circle = fs.readFileSync(path.join(root, 'lib/screens/circle/relationship_manager_screen.dart'), 'utf8');
 const seed = fs.readFileSync(path.join(root, 'functions/scripts/seed_emulator.cjs'), 'utf8');
 
 test('local Circle fixture uses values accepted by the editor', () => {

@@ -49,5 +49,5 @@ test('owner profile preview includes edit and photo-management paths', () => {
 test('main shell opens owner preview on Profile tab and refreshes it on re-entry', () => {
   assert.match(shell, /import 'profile\/self_profile_screen\.dart';/);
   assert.match(shell, /4 => const SelfProfileScreen\(\)/);
-  assert.match(shell, /index == 1 \|\| index == 3 \|\| index == 4/);
+  assert.match(shell, /index == 1 \|\| index == 2 \|\| index == 3 \|\| index == 4/);
 });

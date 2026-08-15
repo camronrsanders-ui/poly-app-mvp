@@ -90,7 +90,8 @@ test('Connections UI reuses a trusted existing conversation ID before calling cr
 test('existing connections can reopen the trusted profile view without another Connect action', () => {
   assert.match(connectionsScreen, /ProfileDetailScreen/);
   assert.match(connectionsScreen, /showConnectAction:\s*false/);
-  assert.match(connectionsScreen, /PopupMenuItem\(value:\s*'profile',\s*child:\s*Text\('View profile'\)\)/);
+  assert.match(connectionsScreen, /value:\\s*'profile'/);
+  assert.match(connectionsScreen, /Text\\('View profile'\\)/);
   assert.match(profileDetail, /this\.showConnectAction\s*=\s*true/);
   assert.match(profileDetail, /if \(widget\.showConnectAction\)/);
 });

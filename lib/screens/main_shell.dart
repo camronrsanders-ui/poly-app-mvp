@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'circle/circle_screen.dart';
+import 'circle/my_circle_screen.dart';
 import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
 import 'messages/messages_screen.dart';
@@ -37,14 +37,15 @@ class _MainShellState extends State<MainShell> {
     return switch (index) {
       0 => const DiscoverScreen(),
       1 => const ConnectionsScreen(),
-      2 => const CircleScreen(),
+      2 => const MyCircleScreen(),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
       _ => const SizedBox.shrink(),
     };
   }
 
-  bool _refreshOnEntry(int index) => index == 1 || index == 3 || index == 4;
+  bool _refreshOnEntry(int index) =>
+      index == 1 || index == 2 || index == 3 || index == 4;
 
   void _selectTab(int value) {
     if (value == _index) {
@@ -72,18 +73,22 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_index]),
-        actions: [
-          IconButton(
-            tooltip: 'Safety center',
-            icon: const Icon(Icons.shield_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SafetyCenterScreen()),
+      appBar: _index == 2
+          ? null
+          : AppBar(
+              title: Text(_titles[_index]),
+              actions: [
+                IconButton(
+                  tooltip: 'Safety center',
+                  icon: const Icon(Icons.shield_outlined),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SafetyCenterScreen(),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
       body: IndexedStack(
         index: _index,
         children: List<Widget>.generate(
