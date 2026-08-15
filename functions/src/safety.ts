@@ -3,6 +3,9 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 const allowedReportReasons = new Set([
   'harassment',
+  'threats_violence',
+  'child_safety',
+  'sexual_content',
   'fake_profile',
   'hate_speech',
   'misrepresentation',
