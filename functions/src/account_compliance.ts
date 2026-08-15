@@ -3,6 +3,23 @@ import {HttpsError} from 'firebase-functions/v2/https';
 export const CURRENT_TERMS_VERSION = '2026-08-alpha-v1';
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-08-v1';
 
+export function isActiveAccount(
+  user: FirebaseFirestore.DocumentSnapshot,
+): boolean {
+  return user.exists && user.get('accountStatus') === 'active';
+}
+
+export async function assertActiveAccount(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+): Promise<FirebaseFirestore.DocumentSnapshot> {
+  const user = await db.collection('users').doc(uid).get();
+  if (!isActiveAccount(user)) {
+    throw new HttpsError('permission-denied', 'This Polycircle account is unavailable.');
+  }
+  return user;
+}
+
 /**
  * Temporary migration-aware member eligibility check.
  *
@@ -14,7 +31,7 @@ export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-08-v1';
 export function isActiveCompliantMember(
   user: FirebaseFirestore.DocumentSnapshot,
 ): boolean {
-  if (!user.exists || user.get('accountStatus') !== 'active') return false;
+  if (!isActiveAccount(user)) return false;
 
   const data = user.data() ?? {};
   if (!Object.prototype.hasOwnProperty.call(data, 'adultAccessApproved')) {
