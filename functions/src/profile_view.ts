@@ -1,5 +1,9 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {
+  assertActiveCompliantMember,
+  isActiveCompliantMember,
+} from './account_compliance';
 import {toProfileView} from './profile_view_fields';
 
 const db = getFirestore();
@@ -8,13 +12,6 @@ const maxConnectionsPerResponse = 100;
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   return auth.uid;
-}
-
-async function assertActive(uid: string): Promise<void> {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
 }
 
 async function consumeRateLimit(uid: string, max: number, windowMs: number): Promise<void> {
@@ -55,7 +52,7 @@ export const listMyConnections = onCall(
   {enforceAppCheck: true, maxInstances: 25},
   async (request) => {
     const uid = requireUid(request.auth);
-    await assertActive(uid);
+    await assertActiveCompliantMember(db, uid);
     await consumeRateLimit(uid, 60, 60_000);
 
     // Filter active state in Firestore before applying the read cap. Limiting a
@@ -122,7 +119,7 @@ export const listMyConnections = onCall(
       if (blocked.has(otherUid)) continue;
       const user = userById.get(otherUid);
       const profile = profileById.get(otherUid);
-      if (!user?.exists || user.get('accountStatus') !== 'active' || !profile?.exists) continue;
+      if (!user || !isActiveCompliantMember(user) || !profile?.exists) continue;
 
       const conversation = conversationById.get(match.id);
       const conversationActive = conversation?.exists === true && conversation.get('active') === true;
