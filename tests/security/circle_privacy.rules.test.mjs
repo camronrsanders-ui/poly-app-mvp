@@ -101,6 +101,18 @@ test('Circle owner cannot add unknown privileged fields to a card', async () => 
   }));
 });
 
+test('Circle create and update reject severe UGC at the Firestore boundary', async () => {
+  await seed([['users', 'alice', activeUser('alice')]]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'threat'), newCard('alice', {
+    note: 'I will hurt you',
+  })));
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'minor-solicitation'), newCard('alice', {
+    note: 'Seeking an underage kid',
+  })));
+});
+
 test('Circle create and update require server-authoritative timestamps', async () => {
   await seed([['users', 'alice', activeUser('alice')]]);
   const db = env.authenticatedContext('alice').firestore();
