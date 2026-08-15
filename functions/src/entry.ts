@@ -2,3 +2,4 @@
 // security/compliance callables to live in dedicated source files.
 export * from './index';
 export {recordAdultPolicyAcceptance} from './compliance';
+export {getMyEntitlements} from './monetization';
