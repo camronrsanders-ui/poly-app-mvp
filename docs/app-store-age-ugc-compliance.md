@@ -14,6 +14,7 @@ Primary platform sources reviewed for this work:
 - Google Play Age-Restricted Content and Functionality: https://support.google.com/googleplay/android-developer/answer/16302250
 - Google Play UGC moderation requirements: https://support.google.com/googleplay/android-developer/answer/12923286
 - Google Play Age Signals API: https://developer.android.com/google/play/age-signals/use-age-signals-api
+- Google Play Age Signals 0.0.4 release notes: https://developer.android.com/google/play/age-signals/release-notes
 
 Platform policies and laws change. Re-verify the primary sources before every public-store submission.
 
@@ -28,7 +29,8 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - A platform signal that confirms the person is under 18 blocks access.
 - A platform response that says verification is required blocks progress until the store/device verification is resolved.
 - In a region where the native platform marks age assurance as required, failure/declined sharing cannot silently downgrade to self-attestation.
-- Where the platform API is unavailable or sharing is optional, the current pre-release fallback is self-attested date of birth. This fallback is explicitly tracked as a release risk rather than being described as verified age.
+- Where the platform API positively indicates optional/non-shared behavior, the current pre-release fallback is self-attested date of birth. This fallback is explicitly tracked as a release risk rather than being described as verified age.
+- When the app cannot determine whether mandatory platform assurance applies because a native assurance check itself fails, the current implementation fails closed and requires retry rather than silently assuming a nonregulated fallback.
 
 ### Apple
 
@@ -37,18 +39,20 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - Flutter has a native bridge to Apple's Declared Age Range API when the framework/OS supports it.
 - The request uses the age gate `18` and returns only range/status information to Flutter.
 - Exact date of birth is not requested from Apple or stored by Polycircle.
-- Older/unsupported iOS versions fail to the documented fallback path.
+- Older/unsupported iOS versions fail to the documented fallback path where platform assurance is not known to be mandatory.
 - The bridge uses the OS availability required by the currently compiled Apple API, rather than assuming every iOS 26 build exposes the same age-feature surface.
 - CI has successfully compiled the current iOS native age-assurance bridge after correcting availability and Flutter registrar handling.
 
 ### Android
 
 - Android includes Google Play Age Signals `0.0.4`.
-- Flutter has a native bridge that requests age-sharing access before checking the age range.
+- Flutter has a native bridge that first calls `requestAgeSignalsAccess()` and only calls `checkAgeSignals()` after Play returns `SHARED`.
 - `VERIFICATION_REQUIRED` is treated as a blocking state.
-- A shared range with an upper bound below 18 blocks access; an 18+ lower bound confirms adult status.
-- Google Play's `VERIFIED` user status is treated as confirmed adult even when `ageLower()` / `ageUpper()` are null, because the API defines `VERIFIED` as an over-18 verified user.
-- Shared signals that remain ambiguous around the 18+ boundary fail closed rather than being interpreted as adult.
+- Play Age Signals 0.0.4 no longer supports the older `userStatus` response model; the implementation uses the supported `ageRangeSource`, `ageLower`, and `ageUpper` response fields instead.
+- A shared range with an upper bound below 18 blocks access; a shared lower bound of 18 or greater confirms adult status.
+- A shared result that remains ambiguous around the 18+ boundary fails closed rather than being interpreted as adult.
+- Failures while determining access/sharing requirements or retrieving an already-shared signal fail closed instead of silently downgrading to self-attestation.
+- The app does not use `ageRangeSource` alone as proof of adulthood; the age bounds determine the 18+ decision.
 - CI must continue compiling the Android debug APK after any Age Signals bridge change; real Play-delivered validation remains separate.
 
 ### UGC policy acceptance
@@ -128,7 +132,8 @@ This is still **not a complete moderation system**. Firestore Rules are determin
 - In Play Console, select **18 and over** as the only target age group.
 - Enable Google's **Restrict Minor Access** functionality for the dating/matchmaking app. The in-app age gate and Play Age Signals API do not replace this store-level requirement.
 - Complete/configure the Play Age Signals setup needed for the production application ID and test the real Play-delivered build.
-- Test `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` behaviors on supported real devices/accounts, including a verified-adult response with null age bounds and supervised/declared-user ranges.
+- Test `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` behaviors on supported real devices/accounts, including adult 18+ ranges, minor ranges, supervised ranges, and ambiguous/error behavior.
+- Verify the shipping implementation against the then-current supported Play Age Signals version; do not reintroduce the removed 0.0.3 `userStatus` model while using 0.0.4+.
 - Review Play's Data safety, target audience, content-rating, UGC, sexual-content, and account-deletion disclosures against the shipping build.
 - Replace debug signing with dedicated distribution signing before any distributed beta/release.
 - Threat-model the trust placed in age signals and evaluate Play Integrity or equivalent platform anti-tamper protections appropriate to the production design.
