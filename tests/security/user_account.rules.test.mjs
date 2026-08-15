@@ -21,6 +21,7 @@ const userDoc = (uid, overrides = {}) => ({
   onboardingComplete: false,
   lastActiveAt: serverTimestamp(),
   accountStatus: 'active',
+  adultAccessApproved: false,
   ...overrides,
 });
 
