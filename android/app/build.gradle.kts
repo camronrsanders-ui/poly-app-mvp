@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Permanent Polycircle Android application ID.
         applicationId = "com.polycircle.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -48,6 +48,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    // Google Play's privacy-preserving age-range API. This complements, but
+    // does not replace, the Play Console Restrict Minor Access requirement for
+    // an adult-only dating/matchmaking app.
+    implementation("com.google.android.play:age-signals:0.0.4")
 }
 
 kotlin {
