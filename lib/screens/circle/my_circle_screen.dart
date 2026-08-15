@@ -48,6 +48,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   int _worldTravelDirection = 1;
   bool _worldTravelSwapped = false;
   bool _creatingCircle = false;
+  bool _sendingCircleInvite = false;
+  String? _respondingCircleInviteId;
 
   @override
   void initState() {
@@ -196,6 +198,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       profile: results[1] as Map<String, dynamic>? ?? const <String, dynamic>{},
       connections: results[0] as List<Map<String, dynamic>>,
       circles: circleSnapshot.circles,
+      invites: circleSnapshot.invites,
     );
   }
 
@@ -290,6 +293,180 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         ),
       );
     }
+  }
+
+  Future<void> _inviteToCircle({
+    required CircleSummary circle,
+    required List<Map<String, dynamic>> connections,
+  }) async {
+    if (_sendingCircleInvite) return;
+
+    final person = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _InviteCircleMemberSheet(
+        circleName: circle.name,
+        connections: connections,
+      ),
+    );
+
+    if (!mounted || person == null) return;
+
+    final inviteeUid = person['uid']?.toString().trim() ?? '';
+
+    if (inviteeUid.isEmpty) return;
+
+    final displayName = _name(person);
+
+    setState(() {
+      _sendingCircleInvite = true;
+    });
+
+    try {
+      await _circleMembership.inviteMember(
+        circleId: circle.circleId,
+        inviteeUid: inviteeUid,
+      );
+
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _sendingCircleInvite = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Invitation sent to $displayName. '
+            'They will not appear in ${circle.name} '
+            'until they accept.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle invitation failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _sendingCircleInvite = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not send that Circle invitation. '
+            'Please try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _respondToCircleInvitation({
+    required CircleInviteSummary invite,
+    required bool accept,
+  }) async {
+    if (_respondingCircleInviteId != null) {
+      return;
+    }
+
+    setState(() {
+      _respondingCircleInviteId = invite.inviteId;
+    });
+
+    try {
+      final accepted = await _circleMembership.respondToInvite(
+        inviteId: invite.inviteId,
+        accept: accept,
+      );
+
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _respondingCircleInviteId = null;
+
+        if (accepted) {
+          _activeWorldId = 'circle:${invite.circleId}';
+        }
+
+        _focused = null;
+        _photoFutures.clear();
+        _future = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accepted
+                ? 'Welcome to ${invite.circleName}.'
+                : 'Circle invitation declined.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle invitation response failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _respondingCircleInviteId = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not update that Circle invitation.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openCircleInvitations(
+    _UniverseModel model,
+  ) async {
+    if (model.invites.isEmpty) return;
+
+    final decision = await showModalBottomSheet<_CircleInviteDecision>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _IncomingCircleInvitesSheet(
+        invites: model.invites,
+        connections: model.connections,
+      ),
+    );
+
+    if (!mounted || decision == null) {
+      return;
+    }
+
+    await _respondToCircleInvitation(
+      invite: decision.invite,
+      accept: decision.accept,
+    );
   }
 
   Future<void> _openSafety() async {
@@ -637,6 +814,13 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                 ),
                 onCreate: _createCircle,
               ),
+              if (model.invites.isNotEmpty)
+                _CircleInvitationNotice(
+                  count: model.invites.length,
+                  onTap: () => _openCircleInvitations(
+                    model,
+                  ),
+                ),
               Expanded(
                 child: Stack(
                   fit: StackFit.expand,
@@ -743,10 +927,44 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                 ),
                 onCreate: _createCircle,
               ),
+              if (model.invites.isNotEmpty)
+                _CircleInvitationNotice(
+                  count: model.invites.length,
+                  onTap: () => _openCircleInvitations(
+                    model,
+                  ),
+                ),
               Expanded(
                 child: _EmptyCircleStage(
                   name: active.name,
                   displayName: model.profile['displayName']?.toString() ?? '',
+                  onInvite: () {
+                    CircleSummary? circle;
+
+                    final circleId = active.id.startsWith(
+                      'circle:',
+                    )
+                        ? active.id.substring(
+                            'circle:'.length,
+                          )
+                        : '';
+
+                    for (final candidate in model.circles) {
+                      if (candidate.circleId == circleId) {
+                        circle = candidate;
+                        break;
+                      }
+                    }
+
+                    if (circle == null || !circle.isOwner) {
+                      return;
+                    }
+
+                    _inviteToCircle(
+                      circle: circle,
+                      connections: model.connections,
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 10),
@@ -938,10 +1156,12 @@ class _EmptyCircleStage extends StatelessWidget {
   const _EmptyCircleStage({
     required this.name,
     required this.displayName,
+    this.onInvite,
   });
 
   final String name;
   final String displayName;
+  final VoidCallback? onInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -1052,8 +1272,593 @@ class _EmptyCircleStage extends StatelessWidget {
                     height: 1.45,
                   ),
             ),
+            if (onInvite != null) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onInvite,
+                icon: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                ),
+                label: const Text(
+                  'Invite people',
+                ),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InviteCircleMemberSheet extends StatelessWidget {
+  const _InviteCircleMemberSheet({
+    required this.circleName,
+    required this.connections,
+  });
+
+  final String circleName;
+  final List<Map<String, dynamic>> connections;
+
+  String _name(
+    Map<String, dynamic> person,
+  ) {
+    final value = person['displayName']?.toString().trim() ?? '';
+
+    return value.isEmpty ? 'Connection' : value;
+  }
+
+  String _detail(
+    Map<String, dynamic> person,
+  ) {
+    final relationship = [
+      person['relationshipStructure'],
+      person['relationshipStatus'],
+    ]
+        .whereType<String>()
+        .where(
+          (value) => value.trim().isNotEmpty,
+        )
+        .join(' • ');
+
+    final location = [
+      person['city'],
+      person['region'],
+    ]
+        .whereType<String>()
+        .where(
+          (value) => value.trim().isNotEmpty,
+        )
+        .join(', ');
+
+    return [
+      relationship,
+      location,
+    ]
+        .where(
+          (value) => value.isNotEmpty,
+        )
+        .join('  •  ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(32),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .72,
+        minChildSize: .48,
+        maxChildSize: .92,
+        builder: (
+          context,
+          scrollController,
+        ) {
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(
+                    999,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  22,
+                  22,
+                  22,
+                  12,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: colors.primaryContainer,
+                          ),
+                          child: Icon(
+                            Icons.person_add_alt_1_rounded,
+                            color: colors.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 14,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Invite into $circleName',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(
+                                height: 3,
+                              ),
+                              Text(
+                                'Choose an existing connection.',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(
+                        13,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(
+                          16,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.verified_user_outlined,
+                            size: 19,
+                            color: colors.primary,
+                          ),
+                          const SizedBox(
+                            width: 9,
+                          ),
+                          Expanded(
+                            child: Text(
+                              'Sending an invitation does not add them. '
+                              'They become a member only after accepting.',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    height: 1.35,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: connections.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(
+                            28,
+                          ),
+                          child: Text(
+                            'You need an active connection '
+                            'before inviting someone into a Circle.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(
+                          12,
+                          8,
+                          12,
+                          28,
+                        ),
+                        itemCount: connections.length,
+                        separatorBuilder: (_, __) => const SizedBox(
+                          height: 4,
+                        ),
+                        itemBuilder: (context, index) {
+                          final person = connections[index];
+
+                          final name = _name(person);
+
+                          final detail = _detail(person);
+
+                          return Card(
+                            elevation: 0,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 5,
+                              ),
+                              leading: CircleAvatar(
+                                child: Text(
+                                  name.characters.first.toUpperCase(),
+                                ),
+                              ),
+                              title: Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: detail.isEmpty
+                                  ? null
+                                  : Text(
+                                      detail,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              trailing: const Icon(
+                                Icons.arrow_forward_rounded,
+                              ),
+                              onTap: () {
+                                Navigator.of(
+                                  context,
+                                ).pop(
+                                  person,
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CircleInvitationNotice extends StatelessWidget {
+  const _CircleInvitationNotice({
+    required this.count,
+    required this.onTap,
+  });
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        18,
+        0,
+        18,
+        8,
+      ),
+      child: Material(
+        color: colors.secondaryContainer.withAlpha(170),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 11,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.mark_email_unread_rounded,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    count == 1
+                        ? '1 Circle invitation'
+                        : '$count Circle invitations',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleInviteDecision {
+  const _CircleInviteDecision({
+    required this.invite,
+    required this.accept,
+  });
+
+  final CircleInviteSummary invite;
+  final bool accept;
+}
+
+class _IncomingCircleInvitesSheet extends StatelessWidget {
+  const _IncomingCircleInvitesSheet({
+    required this.invites,
+    required this.connections,
+  });
+
+  final List<CircleInviteSummary> invites;
+  final List<Map<String, dynamic>> connections;
+
+  String _inviterName(
+    CircleInviteSummary invite,
+  ) {
+    for (final person in connections) {
+      if (person['uid']?.toString() == invite.inviterUid) {
+        final name = person['displayName']?.toString().trim() ?? '';
+
+        if (name.isNotEmpty) {
+          return name;
+        }
+      }
+    }
+
+    return 'A connection';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(32),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .66,
+        minChildSize: .44,
+        maxChildSize: .90,
+        builder: (
+          context,
+          scrollController,
+        ) {
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(
+                    999,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  22,
+                  22,
+                  22,
+                  14,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colors.primaryContainer,
+                      ),
+                      child: Icon(
+                        Icons.hub_outlined,
+                        color: colors.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Circle invitations',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(
+                            height: 4,
+                          ),
+                          Text(
+                            'You choose which worlds become part of yours.',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(
+                    14,
+                  ),
+                  itemCount: invites.length,
+                  separatorBuilder: (_, __) => const SizedBox(
+                    height: 10,
+                  ),
+                  itemBuilder: (context, index) {
+                    final invite = invites[index];
+
+                    final inviter = _inviterName(
+                      invite,
+                    );
+
+                    return Card(
+                      elevation: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(
+                          16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  child: Text(
+                                    invite.circleName.characters.first
+                                        .toUpperCase(),
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 12,
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    invite.circleName,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(
+                              height: 12,
+                            ),
+                            Text(
+                              '$inviter invited you '
+                              'to join this Circle.',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(
+                              height: 8,
+                            ),
+                            Text(
+                              'Joining only adds you to '
+                              'the Circle. Relationship '
+                              'labels remain separately '
+                              'controlled.',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(
+                              height: 18,
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(
+                                      context,
+                                    ).pop(
+                                      _CircleInviteDecision(
+                                        invite: invite,
+                                        accept: false,
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Decline',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 10,
+                                ),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: () => Navigator.of(
+                                      context,
+                                    ).pop(
+                                      _CircleInviteDecision(
+                                        invite: invite,
+                                        accept: true,
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Accept',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1065,12 +1870,14 @@ class _UniverseModel {
     required this.profile,
     required this.connections,
     required this.circles,
+    required this.invites,
   });
 
   final String uid;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> connections;
   final List<CircleSummary> circles;
+  final List<CircleInviteSummary> invites;
 }
 
 class _CircleWorld {
