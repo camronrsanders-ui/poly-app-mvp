@@ -4,6 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
+class PolycircleSpatialOrbitController {
+  Map<String, Offset> _normalizedPositions = const <String, Offset>{};
+
+  Map<String, Offset> get normalizedPositions => _normalizedPositions;
+
+  void _replaceNormalizedPositions(
+    Map<String, Offset> positions,
+  ) {
+    _normalizedPositions = Map<String, Offset>.unmodifiable(
+      positions,
+    );
+  }
+}
+
 class PolycircleSpatialOrbit<T> extends StatefulWidget {
   const PolycircleSpatialOrbit({
     super.key,
@@ -14,6 +28,8 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
     required this.onFocused,
     required this.onOpen,
     this.centerBuilder,
+    this.controller,
+    this.hiddenItemIds = const <String>{},
     this.height = 380,
     this.maxVisibleItems = 12,
   });
@@ -34,6 +50,10 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
   final ValueChanged<T> onOpen;
 
   final WidgetBuilder? centerBuilder;
+
+  final PolycircleSpatialOrbitController? controller;
+
+  final Set<String> hiddenItemIds;
 
   final double height;
   final int maxVisibleItems;
@@ -419,6 +439,18 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
               );
             }
 
+            widget.controller?._replaceNormalizedPositions(
+              <String, Offset>{
+                for (final node in projected)
+                  widget.itemId(
+                    _items[node.index],
+                  ): Offset(
+                    width <= 0 ? .5 : node.position.dx / width,
+                    height <= 0 ? .43 : node.position.dy / height,
+                  ),
+              },
+            );
+
             final backNodes = projected
                 .where(
                   (node) => node.depth < 0,
@@ -556,6 +588,12 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
     final label = widget.labelBuilder(
       item,
     );
+
+    if (widget.hiddenItemIds.contains(
+      widget.itemId(item),
+    )) {
+      return const SizedBox.shrink();
+    }
 
     // Perspective already alters
     // scale. Depth adds another

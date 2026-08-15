@@ -27,6 +27,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   final _profiles = ProfileService();
   final _media = ProfileMediaService();
 
+  final _orbitController = PolycircleSpatialOrbitController();
+
   final Map<String, Future<List<VisibleProfilePhoto>>> _photoFutures = {};
 
   late Future<_UniverseModel> _future;
@@ -34,6 +36,10 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
   String _activeWorldId = 'mine';
   String? _pendingWorldId;
+
+  List<Map<String, dynamic>> _migratingPeople = const <Map<String, dynamic>>[];
+
+  Map<String, Offset> _migrationStartPositions = const <String, Offset>{};
 
   Map<String, dynamic>? _focused;
 
@@ -87,6 +93,11 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       return;
     }
 
+    final source = worlds.firstWhere(
+      (world) => world.id == _activeWorldId,
+      orElse: () => worlds.first,
+    );
+
     final currentIndex = worlds.indexWhere(
       (world) => world.id == _activeWorldId,
     );
@@ -95,11 +106,55 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       (world) => world.id == target.id,
     );
 
+    final targetIds =
+        target.people.map(_uidOf).where((id) => id.isNotEmpty).toSet();
+
+    final sharedCandidates = source.people
+        .where(
+          (person) => targetIds.contains(
+            _uidOf(person),
+          ),
+        )
+        .toList();
+
+    final focusedId = _focused == null ? '' : _uidOf(_focused!);
+
+    sharedCandidates.sort(
+      (a, b) {
+        final aFocused = _uidOf(a) == focusedId;
+        final bFocused = _uidOf(b) == focusedId;
+
+        if (aFocused == bFocused) return 0;
+
+        return aFocused ? -1 : 1;
+      },
+    );
+
+    // Keep this visually special without making the
+    // camera transition heavier than necessary.
+    final migrating = sharedCandidates.take(3).toList(growable: false);
+
+    final currentPositions = _orbitController.normalizedPositions;
+
+    final startPositions = <String, Offset>{};
+
+    for (final person in migrating) {
+      final id = _uidOf(person);
+      final position = currentPositions[id];
+
+      if (id.isNotEmpty && position != null) {
+        startPositions[id] = position;
+      }
+    }
+
     _worldTravelDirection = targetIndex >= currentIndex ? 1 : -1;
 
     setState(() {
       _pendingWorldId = target.id;
       _worldTravelSwapped = false;
+
+      _migratingPeople = migrating;
+      _migrationStartPositions = startPositions;
     });
 
     HapticFeedback.lightImpact();
@@ -111,6 +166,10 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     setState(() {
       _pendingWorldId = null;
       _worldTravelSwapped = false;
+
+      _migratingPeople = const <Map<String, dynamic>>[];
+
+      _migrationStartPositions = const <String, Offset>{};
     });
   }
 
@@ -241,6 +300,12 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     return worlds;
   }
 
+  String _uidOf(
+    Map<String, dynamic> person,
+  ) {
+    return person['uid']?.toString() ?? '';
+  }
+
   String _name(
     Map<String, dynamic> person,
   ) {
@@ -369,6 +434,15 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         ? _focused!
         : active.people.first;
 
+    final migratingIds = _pendingWorldId == null
+        ? const <String>{}
+        : _migratingPeople
+            .map(_uidOf)
+            .where(
+              (id) => id.isNotEmpty,
+            )
+            .toSet();
+
     return Stack(
       children: [
         const Positioned.fill(
@@ -403,36 +477,65 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                 },
               ),
               Expanded(
-                child: _WorldCameraTravel(
-                  animation: _worldTravel,
-                  direction: _worldTravelDirection,
-                  child: Center(
-                    key: ValueKey(active.id),
-                    child: PolycircleSpatialOrbit<Map<String, dynamic>>(
-                      items: active.people,
-                      itemId: (person) => person['uid']?.toString() ?? '',
-                      labelBuilder: _name,
-                      avatarBuilder: (
-                        context,
-                        person,
-                        focused,
-                      ) =>
-                          _personPhoto(person),
-                      onFocused: (person) {
-                        setState(() {
-                          _focused = person;
-                        });
-                      },
-                      onOpen: _openProfile,
-                      height: 430,
-                      centerBuilder: (_) => _OwnerWorld(
-                        displayName:
-                            model.profile['displayName']?.toString() ?? '',
-                        photoFuture: _photosFor(model.uid),
-                        worldName: active.name,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    _WorldCameraTravel(
+                      animation: _worldTravel,
+                      direction: _worldTravelDirection,
+                      child: Center(
+                        key: ValueKey(
+                          active.id,
+                        ),
+                        child: PolycircleSpatialOrbit<Map<String, dynamic>>(
+                          controller: _orbitController,
+                          hiddenItemIds: migratingIds,
+                          items: active.people,
+                          itemId: _uidOf,
+                          labelBuilder: _name,
+                          avatarBuilder: (
+                            context,
+                            person,
+                            focused,
+                          ) =>
+                              _personPhoto(
+                            person,
+                          ),
+                          onFocused: (person) {
+                            setState(() {
+                              _focused = person;
+                            });
+                          },
+                          onOpen: _openProfile,
+                          height: 430,
+                          centerBuilder: (_) => _OwnerWorld(
+                            displayName:
+                                model.profile['displayName']?.toString() ?? '',
+                            photoFuture: _photosFor(
+                              model.uid,
+                            ),
+                            worldName: active.name,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (_pendingWorldId != null && _migratingPeople.isNotEmpty)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: _SharedMemberMigrationLayer(
+                            animation: _worldTravel,
+                            direction: _worldTravelDirection,
+                            people: _migratingPeople,
+                            startPositions: _migrationStartPositions,
+                            orbitController: _orbitController,
+                            avatarBuilder: _personPhoto,
+                            labelBuilder: _name,
+                            orbitHeight: 430,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               _FocusedPersonGlass(
@@ -567,6 +670,323 @@ class _WorldCameraTravel extends StatelessWidget {
             transform: matrix,
             child: child,
           ),
+        );
+      },
+    );
+  }
+}
+
+class _SharedMemberMigrationLayer extends StatelessWidget {
+  const _SharedMemberMigrationLayer({
+    required this.animation,
+    required this.direction,
+    required this.people,
+    required this.startPositions,
+    required this.orbitController,
+    required this.avatarBuilder,
+    required this.labelBuilder,
+    required this.orbitHeight,
+  });
+
+  final Animation<double> animation;
+  final int direction;
+
+  final List<Map<String, dynamic>> people;
+
+  final Map<String, Offset> startPositions;
+
+  final PolycircleSpatialOrbitController orbitController;
+
+  final Widget Function(
+    Map<String, dynamic> person,
+  ) avatarBuilder;
+
+  final String Function(
+    Map<String, dynamic> person,
+  ) labelBuilder;
+
+  final double orbitHeight;
+
+  Offset _resolve(
+    Offset normalized,
+    double width,
+    double orbitTop,
+  ) {
+    return Offset(
+      normalized.dx * width,
+      orbitTop + normalized.dy * orbitHeight,
+    );
+  }
+
+  Offset _quadratic(
+    Offset start,
+    Offset control,
+    Offset end,
+    double t,
+  ) {
+    final inverse = 1 - t;
+
+    return Offset(
+      inverse * inverse * start.dx +
+          2 * inverse * t * control.dx +
+          t * t * end.dx,
+      inverse * inverse * start.dy +
+          2 * inverse * t * control.dy +
+          t * t * end.dy,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return LayoutBuilder(
+      builder: (
+        context,
+        constraints,
+      ) {
+        final width = constraints.maxWidth;
+
+        final height = constraints.maxHeight;
+
+        final orbitTop = ((height - orbitHeight) / 2)
+            .clamp(
+              0.0,
+              height,
+            )
+            .toDouble();
+
+        return AnimatedBuilder(
+          animation: animation,
+          builder: (
+            context,
+            child,
+          ) {
+            final raw = animation.value.clamp(0.0, 1.0).toDouble();
+
+            final targetPositions = orbitController.normalizedPositions;
+
+            final middleStrength =
+                (1 - ((raw - .5).abs() * 2)).clamp(0.0, 1.0).toDouble();
+
+            final nodeScale = 1 +
+                (.10 *
+                    Curves.easeOutCubic.transform(
+                      middleStrength,
+                    ));
+
+            final children = <Widget>[];
+
+            for (var index = 0; index < people.length; index++) {
+              final person = people[index];
+
+              final id = person['uid']?.toString() ?? '';
+
+              if (id.isEmpty) {
+                continue;
+              }
+
+              final startNormalized = startPositions[id] ??
+                  const Offset(
+                    .5,
+                    .43,
+                  );
+
+              final targetNormalized = targetPositions[id] ??
+                  const Offset(
+                    .5,
+                    .43,
+                  );
+
+              final start = _resolve(
+                startNormalized,
+                width,
+                orbitTop,
+              );
+
+              final target = _resolve(
+                targetNormalized,
+                width,
+                orbitTop,
+              );
+
+              final lane = (index - ((people.length - 1) / 2)) * 52.0;
+
+              final bridge = Offset(
+                (width / 2) + lane,
+                orbitTop + orbitHeight * .26,
+              );
+
+              late final Offset position;
+
+              if (raw < .5) {
+                final phase = Curves.easeInOutCubic.transform(
+                  (raw / .5)
+                      .clamp(
+                        0.0,
+                        1.0,
+                      )
+                      .toDouble(),
+                );
+
+                final highestY = start.dy < bridge.dy ? start.dy : bridge.dy;
+
+                final control = Offset(
+                  (start.dx + bridge.dx) / 2,
+                  highestY - 22,
+                );
+
+                position = _quadratic(
+                  start,
+                  control,
+                  bridge,
+                  phase,
+                );
+              } else {
+                final phase = Curves.easeInOutCubic.transform(
+                  ((raw - .5) / .5)
+                      .clamp(
+                        0.0,
+                        1.0,
+                      )
+                      .toDouble(),
+                );
+
+                final highestY = bridge.dy < target.dy ? bridge.dy : target.dy;
+
+                final control = Offset(
+                  (bridge.dx + target.dx) / 2,
+                  highestY - 22,
+                );
+
+                position = _quadratic(
+                  bridge,
+                  control,
+                  target,
+                  phase,
+                );
+              }
+
+              final firstHalf = (raw / .5)
+                  .clamp(
+                    0.0,
+                    1.0,
+                  )
+                  .toDouble();
+
+              final secondHalf = ((raw - .5) / .5)
+                  .clamp(
+                    0.0,
+                    1.0,
+                  )
+                  .toDouble();
+
+              final rotation = raw < .5
+                  ? direction * -.055 * firstHalf
+                  : direction * .055 * (1 - secondHalf);
+
+              const size = 54.0;
+
+              children.add(
+                Positioned(
+                  left: position.dx - size / 2,
+                  top: position.dy - size / 2,
+                  child: Transform.rotate(
+                    angle: rotation,
+                    child: Transform.scale(
+                      scale: nodeScale,
+                      child: RepaintBoundary(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: size,
+                              height: size,
+                              padding: const EdgeInsets.all(
+                                2.5,
+                              ),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white,
+                                    colors.secondaryContainer,
+                                    colors.primary,
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: colors.primary,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colors.primary.withAlpha(
+                                      82,
+                                    ),
+                                    blurRadius: 22 + (middleStrength * 14),
+                                    spreadRadius: 2 + (middleStrength * 3),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: avatarBuilder(
+                                  person,
+                                ),
+                              ),
+                            ),
+                            if (raw > .16 && raw < .84) ...[
+                              const SizedBox(
+                                height: 5,
+                              ),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 96,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.surface.withAlpha(
+                                    236,
+                                  ),
+                                  borderRadius: BorderRadius.circular(
+                                    999,
+                                  ),
+                                  border: Border.all(
+                                    color: colors.outlineVariant,
+                                  ),
+                                ),
+                                child: Text(
+                                  labelBuilder(
+                                    person,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return Stack(
+              clipBehavior: Clip.none,
+              children: children,
+            );
+          },
         );
       },
     );
