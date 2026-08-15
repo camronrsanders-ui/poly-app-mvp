@@ -61,6 +61,9 @@ class SafetyService {
     required String reportedUid,
     required String reason,
     String details = '',
+    String contentType = 'account',
+    String? contentId,
+    String? conversationId,
   }) async {
     final reporterUid = _requireUid();
     if (reporterUid == reportedUid) {
@@ -68,10 +71,21 @@ class SafetyService {
     }
     final safeReason = reason.trim();
     final safeDetails = details.trim();
+    final safeContentType = contentType.trim();
+    final safeContentId = contentId?.trim();
+    final safeConversationId = conversationId?.trim();
     if (safeReason.isEmpty ||
         safeReason.length > 80 ||
-        safeDetails.length > 2000) {
+        safeDetails.length > 2000 ||
+        !const {'account', 'profile', 'message'}.contains(safeContentType) ||
+        (safeContentId != null && safeContentId.length > 128) ||
+        (safeConversationId != null && safeConversationId.length > 128)) {
       throw ArgumentError('Invalid report content.');
+    }
+    if (safeContentType == 'message' &&
+        ((safeContentId?.isEmpty ?? true) ||
+            (safeConversationId?.isEmpty ?? true))) {
+      throw ArgumentError('Message reports require message context.');
     }
 
     final callable = _functions.httpsCallable('submitReport');
@@ -79,6 +93,11 @@ class SafetyService {
       'reportedUid': reportedUid,
       'reason': safeReason,
       'details': safeDetails,
+      'contentType': safeContentType,
+      if (safeContentId != null && safeContentId.isNotEmpty)
+        'contentId': safeContentId,
+      if (safeConversationId != null && safeConversationId.isNotEmpty)
+        'conversationId': safeConversationId,
     });
   }
 
