@@ -21,9 +21,9 @@ test('My Circle owns an immersive spatial canvas', () => {
 
 test('My Circle has spatial world switching', () => {
   assert.match(circle, /class _WorldDock/);
-  assert.match(circle, /AnimatedSwitcher/);
-  assert.match(circle, /ScaleTransition/);
-  assert.match(circle, /FadeTransition/);
+  assert.match(circle, /_WorldCameraTravel/);
+  assert.match(circle, /Matrix4/);
+  assert.match(circle, /translateByDouble/);
 });
 
 test('shared world previews are emulator-only', () => {
