@@ -18,6 +18,18 @@ class PolycircleSpatialOrbitController {
   }
 }
 
+class PolycircleTopologyLink {
+  const PolycircleTopologyLink({
+    required this.fromId,
+    required this.toId,
+    required this.label,
+  });
+
+  final String fromId;
+  final String toId;
+  final String label;
+}
+
 class PolycircleSpatialOrbit<T> extends StatefulWidget {
   const PolycircleSpatialOrbit({
     super.key,
@@ -30,6 +42,7 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
     this.centerBuilder,
     this.controller,
     this.hiddenItemIds = const <String>{},
+    this.topologyLinks = const <PolycircleTopologyLink>[],
     this.height = 380,
     this.maxVisibleItems = 12,
   });
@@ -54,6 +67,8 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
   final PolycircleSpatialOrbitController? controller;
 
   final Set<String> hiddenItemIds;
+
+  final List<PolycircleTopologyLink> topologyLinks;
 
   final double height;
   final int maxVisibleItems;
@@ -451,6 +466,20 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
               },
             );
 
+            final nodeById = <String, _ProjectedNode>{
+              for (final node in projected)
+                widget.itemId(
+                  _items[node.index],
+                ): node,
+            };
+
+            final focusedId =
+                _focusedIndex >= 0 && _focusedIndex < _items.length
+                    ? widget.itemId(
+                        _items[_focusedIndex],
+                      )
+                    : '';
+
             final backNodes = projected
                 .where(
                   (node) => node.depth < 0,
@@ -505,6 +534,23 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
                       ),
                     ),
                   ),
+
+                  if (widget.topologyLinks.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _TopologyPainter(
+                            links: widget.topologyLinks,
+                            nodes: nodeById,
+                            center: center,
+                            focusedId: focusedId,
+                            hiddenItemIds: widget.hiddenItemIds,
+                            primary: colors.primary,
+                            secondary: colors.secondary,
+                          ),
+                        ),
+                      ),
+                    ),
 
                   // Rear half of the actual
                   // projected orbital plane.
@@ -565,6 +611,28 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
                     _buildNode(
                       context: context,
                       node: node,
+                    ),
+
+                  // Relationship terminology belongs above
+                  // the physical scene so avatars and the
+                  // orbital rail cannot cover it.
+                  if (widget.topologyLinks.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _TopologyLabelPainter(
+                            links: widget.topologyLinks,
+                            nodes: nodeById,
+                            center: center,
+                            focusedId: focusedId,
+                            hiddenItemIds: widget.hiddenItemIds,
+                            primary: colors.primary,
+                            secondary: colors.secondary,
+                            surface: colors.surface,
+                            onSurface: colors.onSurface,
+                          ),
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -924,6 +992,359 @@ class _SpatialCenter extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _TopologyPainter extends CustomPainter {
+  const _TopologyPainter({
+    required this.links,
+    required this.nodes,
+    required this.center,
+    required this.focusedId,
+    required this.hiddenItemIds,
+    required this.primary,
+    required this.secondary,
+  });
+
+  final List<PolycircleTopologyLink> links;
+  final Map<String, _ProjectedNode> nodes;
+  final Offset center;
+  final String focusedId;
+  final Set<String> hiddenItemIds;
+  final Color primary;
+  final Color secondary;
+
+  Offset? _pointFor(String id) {
+    if (id == '__owner__') {
+      return center;
+    }
+
+    return nodes[id]?.position;
+  }
+
+  bool _hidden(String id) {
+    return id != '__owner__' && hiddenItemIds.contains(id);
+  }
+
+  @override
+  void paint(
+    Canvas canvas,
+    Size size,
+  ) {
+    for (final link in links) {
+      if (_hidden(link.fromId) || _hidden(link.toId)) {
+        continue;
+      }
+
+      final from = _pointFor(link.fromId);
+      final to = _pointFor(link.toId);
+
+      if (from == null || to == null) {
+        continue;
+      }
+
+      final active = focusedId.isNotEmpty &&
+          (link.fromId == focusedId || link.toId == focusedId);
+
+      final dx = to.dx - from.dx;
+      final dy = to.dy - from.dy;
+
+      final length = math.max(
+        1.0,
+        math.sqrt(
+          dx * dx + dy * dy,
+        ),
+      );
+
+      final midpoint = Offset(
+        (from.dx + to.dx) / 2,
+        (from.dy + to.dy) / 2,
+      );
+
+      final bend = active ? 24.0 : 15.0;
+
+      final control = Offset(
+        midpoint.dx - (dy / length) * bend,
+        midpoint.dy + (dx / length) * bend,
+      );
+
+      final path = Path()
+        ..moveTo(
+          from.dx,
+          from.dy,
+        )
+        ..quadraticBezierTo(
+          control.dx,
+          control.dy,
+          to.dx,
+          to.dy,
+        );
+
+      if (active) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeWidth = 7
+            ..color = secondary.withAlpha(22)
+            ..maskFilter = const MaskFilter.blur(
+              BlurStyle.normal,
+              6,
+            ),
+        );
+      }
+
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = active ? 2.6 : 1.15
+          ..color = primary.withAlpha(
+            active ? 178 : 36,
+          ),
+      );
+
+      final dotPaint = Paint()
+        ..color = primary.withAlpha(
+          active ? 180 : 44,
+        );
+
+      canvas.drawCircle(
+        from,
+        active ? 2.7 : 1.6,
+        dotPaint,
+      );
+
+      canvas.drawCircle(
+        to,
+        active ? 2.7 : 1.6,
+        dotPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _TopologyPainter oldDelegate,
+  ) {
+    return oldDelegate.links != links ||
+        oldDelegate.nodes != nodes ||
+        oldDelegate.center != center ||
+        oldDelegate.focusedId != focusedId ||
+        oldDelegate.hiddenItemIds != hiddenItemIds ||
+        oldDelegate.primary != primary ||
+        oldDelegate.secondary != secondary;
+  }
+}
+
+class _TopologyLabelPainter extends CustomPainter {
+  const _TopologyLabelPainter({
+    required this.links,
+    required this.nodes,
+    required this.center,
+    required this.focusedId,
+    required this.hiddenItemIds,
+    required this.primary,
+    required this.secondary,
+    required this.surface,
+    required this.onSurface,
+  });
+
+  final List<PolycircleTopologyLink> links;
+  final Map<String, _ProjectedNode> nodes;
+
+  final Offset center;
+  final String focusedId;
+
+  final Set<String> hiddenItemIds;
+
+  final Color primary;
+  final Color secondary;
+  final Color surface;
+  final Color onSurface;
+
+  Offset? _pointFor(String id) {
+    if (id == '__owner__') {
+      return center;
+    }
+
+    return nodes[id]?.position;
+  }
+
+  bool _hidden(String id) {
+    return id != '__owner__' && hiddenItemIds.contains(id);
+  }
+
+  Offset _quadraticPoint(
+    Offset start,
+    Offset control,
+    Offset end,
+    double t,
+  ) {
+    final inverse = 1 - t;
+
+    return Offset(
+      inverse * inverse * start.dx +
+          2 * inverse * t * control.dx +
+          t * t * end.dx,
+      inverse * inverse * start.dy +
+          2 * inverse * t * control.dy +
+          t * t * end.dy,
+    );
+  }
+
+  @override
+  void paint(
+    Canvas canvas,
+    Size size,
+  ) {
+    for (final link in links) {
+      if (_hidden(link.fromId) || _hidden(link.toId)) {
+        continue;
+      }
+
+      final active = focusedId.isNotEmpty &&
+          (link.fromId == focusedId || link.toId == focusedId);
+
+      if (!active || link.label.trim().isEmpty) {
+        continue;
+      }
+
+      final from = _pointFor(link.fromId);
+      final to = _pointFor(link.toId);
+
+      if (from == null || to == null) {
+        continue;
+      }
+
+      final dx = to.dx - from.dx;
+      final dy = to.dy - from.dy;
+
+      final length = math.max(
+        1.0,
+        math.sqrt(
+          dx * dx + dy * dy,
+        ),
+      );
+
+      final midpoint = Offset(
+        (from.dx + to.dx) / 2,
+        (from.dy + to.dy) / 2,
+      );
+
+      const bend = 27.0;
+
+      final control = Offset(
+        midpoint.dx - (dy / length) * bend,
+        midpoint.dy + (dx / length) * bend,
+      );
+
+      final anchor = _quadraticPoint(
+        from,
+        control,
+        to,
+        .56,
+      );
+
+      final ownerRelationship =
+          link.fromId == '__owner__' || link.toId == '__owner__';
+
+      final accent = ownerRelationship ? secondary : primary;
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: link.label,
+          style: TextStyle(
+            color: onSurface,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .15,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(
+          maxWidth: 112,
+        );
+
+      const horizontalPadding = 9.0;
+      const verticalPadding = 4.5;
+
+      final rect = Rect.fromCenter(
+        center: Offset(
+          anchor.dx,
+          anchor.dy - 10,
+        ),
+        width: textPainter.width + horizontalPadding * 2,
+        height: textPainter.height + verticalPadding * 2,
+      );
+
+      final pill = RRect.fromRectAndRadius(
+        rect,
+        const Radius.circular(999),
+      );
+
+      canvas.drawRRect(
+        pill.shift(
+          const Offset(0, 3),
+        ),
+        Paint()
+          ..color = Colors.black.withAlpha(22)
+          ..maskFilter = const MaskFilter.blur(
+            BlurStyle.normal,
+            6,
+          ),
+      );
+
+      canvas.drawRRect(
+        pill,
+        Paint()..color = surface.withAlpha(248),
+      );
+
+      canvas.drawRRect(
+        pill,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = accent.withAlpha(120),
+      );
+
+      // Small illuminated connection marker.
+      canvas.drawCircle(
+        Offset(
+          rect.left + 7,
+          rect.center.dy,
+        ),
+        2.2,
+        Paint()..color = accent.withAlpha(210),
+      );
+
+      textPainter.paint(
+        canvas,
+        Offset(
+          rect.left + horizontalPadding + 3,
+          rect.top + verticalPadding,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _TopologyLabelPainter oldDelegate,
+  ) {
+    return oldDelegate.links != links ||
+        oldDelegate.nodes != nodes ||
+        oldDelegate.center != center ||
+        oldDelegate.focusedId != focusedId ||
+        oldDelegate.hiddenItemIds != hiddenItemIds ||
+        oldDelegate.primary != primary ||
+        oldDelegate.secondary != secondary ||
+        oldDelegate.surface != surface ||
+        oldDelegate.onSurface != onSurface;
   }
 }
 

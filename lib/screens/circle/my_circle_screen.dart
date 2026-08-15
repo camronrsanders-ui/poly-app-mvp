@@ -300,6 +300,70 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     return worlds;
   }
 
+  List<PolycircleTopologyLink> _visibleTopologyFor(
+    _CircleWorld world,
+  ) {
+    if (!(kDebugMode && useFirebaseEmulators)) {
+      return const <PolycircleTopologyLink>[];
+    }
+
+    final ids = world.people
+        .map(_uidOf)
+        .where(
+          (id) => id.isNotEmpty,
+        )
+        .toList(growable: false);
+
+    if (ids.length < 2) {
+      return const <PolycircleTopologyLink>[];
+    }
+
+    final links = <PolycircleTopologyLink>[
+      PolycircleTopologyLink(
+        fromId: '__owner__',
+        toId: ids[0],
+        label: 'Partner',
+      ),
+      PolycircleTopologyLink(
+        fromId: ids[0],
+        toId: ids[1],
+        label: 'Metamour',
+      ),
+    ];
+
+    if (ids.length >= 3) {
+      links.add(
+        PolycircleTopologyLink(
+          fromId: '__owner__',
+          toId: ids[2],
+          label: 'Important connection',
+        ),
+      );
+    }
+
+    if (ids.length >= 4) {
+      links.add(
+        PolycircleTopologyLink(
+          fromId: ids[1],
+          toId: ids[3],
+          label: world.id == 'house' ? 'Household' : 'Chosen family',
+        ),
+      );
+    }
+
+    if (world.id == 'chosen' && ids.length >= 5) {
+      links.add(
+        PolycircleTopologyLink(
+          fromId: ids[2],
+          toId: ids[4],
+          label: 'Chosen family',
+        ),
+      );
+    }
+
+    return links;
+  }
+
   String _uidOf(
     Map<String, dynamic> person,
   ) {
@@ -434,6 +498,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         ? _focused!
         : active.people.first;
 
+    final topologyLinks = _visibleTopologyFor(active);
+
     final migratingIds = _pendingWorldId == null
         ? const <String>{}
         : _migratingPeople
@@ -491,6 +557,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                         child: PolycircleSpatialOrbit<Map<String, dynamic>>(
                           controller: _orbitController,
                           hiddenItemIds: migratingIds,
+                          topologyLinks: topologyLinks,
                           items: active.people,
                           itemId: _uidOf,
                           labelBuilder: _name,
