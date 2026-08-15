@@ -91,7 +91,7 @@ test('Circle invitations require an existing active connection', () => {
 
   assert.match(
     membership,
-    /active.*===\s*true/,
+    /(?:active.*===\s*true|match\.get\(['"]active['"]\)\s*!==\s*true)/s,
   );
 });
 

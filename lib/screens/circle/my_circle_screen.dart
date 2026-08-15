@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../config/firebase_runtime.dart';
 import '../../services/connection_service.dart';
+import '../../services/circle_membership_service.dart';
 import '../../services/profile_media_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/polycircle_spatial_orbit.dart';
@@ -24,6 +25,7 @@ class MyCircleScreen extends StatefulWidget {
 class _MyCircleScreenState extends State<MyCircleScreen>
     with SingleTickerProviderStateMixin {
   final _connections = ConnectionService();
+  final _circleMembership = CircleMembershipService();
   final _profiles = ProfileService();
   final _media = ProfileMediaService();
 
@@ -45,6 +47,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
   int _worldTravelDirection = 1;
   bool _worldTravelSwapped = false;
+  bool _creatingCircle = false;
 
   @override
   void initState() {
@@ -183,12 +186,16 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     final results = await Future.wait<Object?>([
       _connections.loadConnections(),
       _profiles.getProfile(uid),
+      _circleMembership.listMyCircles(),
     ]);
+
+    final circleSnapshot = results[2] as CircleMembershipSnapshot;
 
     return _UniverseModel(
       uid: uid,
       profile: results[1] as Map<String, dynamic>? ?? const <String, dynamic>{},
       connections: results[0] as List<Map<String, dynamic>>,
+      circles: circleSnapshot.circles,
     );
   }
 
@@ -213,6 +220,76 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       _photoFutures.clear();
       _future = _load();
     });
+  }
+
+  Future<void> _createCircle() async {
+    if (_creatingCircle) return;
+
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CreateCircleSheet(),
+    );
+
+    if (!mounted || name == null || name.trim().isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _creatingCircle = true;
+    });
+
+    try {
+      final created = await _circleMembership.createCircle(
+        name,
+      );
+
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _creatingCircle = false;
+        _activeWorldId = 'circle:${created.circleId}';
+        _focused = null;
+        _photoFutures.clear();
+        _future = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${created.name} is now part of your universe.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle creation failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _creatingCircle = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not create that Circle. '
+            'Please try again.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openSafety() async {
@@ -269,6 +346,25 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         people: people,
       ),
     ];
+
+    for (final circle in model.circles) {
+      worlds.add(
+        _CircleWorld(
+          id: 'circle:${circle.circleId}',
+          name: circle.name,
+          subtitle: circle.isOwner
+              ? 'Private Circle • You created this'
+              : 'Shared Circle',
+          icon: Icons.bubble_chart_rounded,
+          memberCount: circle.memberCount,
+
+          // Membership identities intentionally
+          // arrive in the next consent-backed API.
+          // Never substitute ordinary connections.
+          people: const <Map<String, dynamic>>[],
+        ),
+      );
+    }
 
     // Shared Worlds are being visually prototyped against
     // local synthetic fixtures only. Production gets the
@@ -483,11 +579,19 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     }
 
     if (active.people.isEmpty) {
-      return _EmptyUniverse(
-        displayName: model.profile['displayName']?.toString() ?? '',
-        photoFuture: _photosFor(model.uid),
-        onManage: _openManager,
-        onSafety: _openSafety,
+      if (active.id == 'mine') {
+        return _EmptyUniverse(
+          displayName: model.profile['displayName']?.toString() ?? '',
+          photoFuture: _photosFor(model.uid),
+          onManage: _openManager,
+          onSafety: _openSafety,
+        );
+      }
+
+      return _buildEmptyCircleUniverse(
+        model: model,
+        worlds: worlds,
+        active: active,
       );
     }
 
@@ -520,7 +624,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
             children: [
               _SpatialHeader(
                 world: active,
-                count: active.people.length,
+                count: active.memberCount ?? active.people.length,
                 onSafety: _openSafety,
                 onManage: _openManager,
               ),
@@ -531,16 +635,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                   world,
                   worlds,
                 ),
-                onCreate: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Shared Circle creation is the next '
-                        'consent-backed build phase.',
-                      ),
-                    ),
-                  );
-                },
+                onCreate: _createCircle,
               ),
               Expanded(
                 child: Stack(
@@ -618,6 +713,350 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       ],
     );
   }
+
+  Widget _buildEmptyCircleUniverse({
+    required _UniverseModel model,
+    required List<_CircleWorld> worlds,
+    required _CircleWorld active,
+  }) {
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: _SpatialBackground(),
+        ),
+        SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _SpatialHeader(
+                world: active,
+                count: active.memberCount ?? active.people.length,
+                onSafety: _openSafety,
+                onManage: _openManager,
+              ),
+              _WorldDock(
+                worlds: worlds,
+                activeWorldId: active.id,
+                onSelect: (world) => _travelToWorld(
+                  world,
+                  worlds,
+                ),
+                onCreate: _createCircle,
+              ),
+              Expanded(
+                child: _EmptyCircleStage(
+                  name: active.name,
+                  displayName: model.profile['displayName']?.toString() ?? '',
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CreateCircleSheet extends StatefulWidget {
+  const _CreateCircleSheet();
+
+  @override
+  State<_CreateCircleSheet> createState() => _CreateCircleSheetState();
+}
+
+class _CreateCircleSheetState extends State<_CreateCircleSheet> {
+  final _controller = TextEditingController();
+
+  String get _name => _controller.text.trim();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_name.isEmpty) return;
+
+    Navigator.of(context).pop(
+      _name,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(32),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          12,
+          24,
+          24 + bottomInset,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(
+                    999,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    colors.primaryContainer,
+                    colors.secondaryContainer,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 24,
+                    spreadRadius: 2,
+                    color: colors.primary.withAlpha(35),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.bubble_chart_rounded,
+                color: colors.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Create a new world',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Give this Circle a name. '
+              'It starts private — nobody joins '
+              'until they accept your invitation.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLength: 60,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _submit(),
+              decoration: const InputDecoration(
+                labelText: 'Circle name',
+                hintText: 'House, Chosen Family, Boston Crew…',
+                prefixIcon: Icon(
+                  Icons.blur_on_rounded,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(
+                  18,
+                ),
+                border: Border.all(
+                  color: colors.outlineVariant,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.verified_user_outlined,
+                    size: 20,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Circle membership and '
+                      'relationship labels use '
+                      'separate consent controls.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _name.isEmpty ? null : _submit,
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                ),
+                label: const Text(
+                  'Create Circle',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCircleStage extends StatelessWidget {
+  const _EmptyCircleStage({
+    required this.name,
+    required this.displayName,
+  });
+
+  final String name;
+  final String displayName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final initial = displayName.trim().isEmpty
+        ? 'YOU'
+        : displayName.trim().characters.first.toUpperCase();
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 30,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 190,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: colors.primary.withAlpha(38),
+                      width: 1.3,
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        colors.primaryContainer,
+                        colors.secondaryContainer,
+                      ],
+                    ),
+                    border: Border.all(
+                      color: colors.primary,
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 30,
+                        spreadRadius: 3,
+                        color: colors.primary.withAlpha(38),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          initial,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: colors.onPrimaryContainer,
+                              ),
+                        ),
+                        Text(
+                          'YOU',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                color: colors.onPrimaryContainer,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Just you for now',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This Circle is private. '
+              'People appear here only after '
+              'they accept an invitation.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UniverseModel {
@@ -625,11 +1064,13 @@ class _UniverseModel {
     required this.uid,
     required this.profile,
     required this.connections,
+    required this.circles,
   });
 
   final String uid;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> connections;
+  final List<CircleSummary> circles;
 }
 
 class _CircleWorld {
@@ -639,6 +1080,7 @@ class _CircleWorld {
     required this.subtitle,
     required this.icon,
     required this.people,
+    this.memberCount,
   });
 
   final String id;
@@ -646,6 +1088,7 @@ class _CircleWorld {
   final String subtitle;
   final IconData icon;
   final List<Map<String, dynamic>> people;
+  final int? memberCount;
 }
 
 class _WorldCameraTravel extends StatelessWidget {
@@ -1171,22 +1614,53 @@ class _WorldDock extends StatelessWidget {
 
     return SizedBox(
       height: 102,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
         children: [
-          for (final world in worlds)
-            Padding(
-              padding: const EdgeInsets.only(right: 9),
-              child: _WorldButton(
-                world: world,
-                selected: world.id == activeWorldId,
-                onTap: () => onSelect(world),
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(
+                left: 14,
+                right: 6,
+              ),
+              children: [
+                for (final world in worlds)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: 9,
+                    ),
+                    child: _WorldButton(
+                      world: world,
+                      selected: world.id == activeWorldId,
+                      onTap: () => onSelect(world),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Creating a Circle is a primary action,
+          // so it never disappears into horizontal
+          // world scrolling.
+          Container(
+            padding: const EdgeInsets.only(
+              left: 4,
+              right: 10,
+            ),
+            decoration: BoxDecoration(
+              color: colors.surface.withAlpha(
+                246,
+              ),
+              border: Border(
+                left: BorderSide(
+                  color: colors.outlineVariant.withAlpha(90),
+                ),
               ),
             ),
-          _CreateWorldButton(
-            onTap: onCreate,
-            colors: colors,
+            child: _CreateWorldButton(
+              onTap: onCreate,
+              colors: colors,
+            ),
           ),
         ],
       ),

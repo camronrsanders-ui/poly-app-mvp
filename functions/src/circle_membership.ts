@@ -198,6 +198,7 @@ export const createCircle = onCall(
           name,
           status: 'active',
           visibility: 'private',
+          memberCount: 1,
 
           createdAt:
             FieldValue.serverTimestamp(),
@@ -232,6 +233,7 @@ export const createCircle = onCall(
       circleId: circleRef.id,
       name,
       role: 'owner',
+      memberCount: 1,
     };
   },
 );
@@ -756,6 +758,24 @@ export const respondToCircleInvite =
             );
 
             tx.update(
+              circleRef,
+              {
+                memberCount:
+                  Math.max(
+                    1,
+                    Number(
+                      circle.get(
+                        'memberCount',
+                      ) ?? 1,
+                    ),
+                  ) + 1,
+
+                updatedAt:
+                  FieldValue.serverTimestamp(),
+              },
+            );
+
+            tx.update(
               invitationRef,
               {
                 status: 'accepted',
@@ -880,6 +900,24 @@ export const leaveCircle = onCall(
 
               leftAt:
                 FieldValue.serverTimestamp(),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+            },
+          );
+
+          tx.update(
+            circleRef,
+            {
+              memberCount:
+                Math.max(
+                  1,
+                  Number(
+                    circle.get(
+                      'memberCount',
+                    ) ?? 1,
+                  ) - 1,
+                ),
 
               updatedAt:
                 FieldValue.serverTimestamp(),
@@ -1071,6 +1109,16 @@ export const listMyCircles = onCall(
                 membership.get(
                   'role',
                 ) ?? 'member',
+              ),
+
+            memberCount:
+              Math.max(
+                1,
+                Number(
+                  circle.get(
+                    'memberCount',
+                  ) ?? 1,
+                ),
               ),
 
             status: 'active',

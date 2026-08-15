@@ -7,12 +7,14 @@ class CircleSummary {
     required this.name,
     required this.ownerUid,
     required this.role,
+    required this.memberCount,
   });
 
   final String circleId;
   final String name;
   final String ownerUid;
   final String role;
+  final int memberCount;
 
   bool get isOwner => role == 'owner';
 
@@ -24,6 +26,10 @@ class CircleSummary {
       name: data['name']?.toString() ?? '',
       ownerUid: data['ownerUid']?.toString() ?? '',
       role: data['role']?.toString() ?? 'member',
+      memberCount: int.tryParse(
+            data['memberCount']?.toString() ?? '',
+          ) ??
+          1,
     );
   }
 }
@@ -109,6 +115,10 @@ class CircleMembershipService {
       name: result.data['name']?.toString() ?? cleanName,
       ownerUid: _auth.currentUser?.uid ?? '',
       role: result.data['role']?.toString() ?? 'owner',
+      memberCount: int.tryParse(
+            result.data['memberCount']?.toString() ?? '',
+          ) ??
+          1,
     );
   }
 
