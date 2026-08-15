@@ -1,6 +1,6 @@
 # Polycircle Release Gates
 
-No feature is considered release-ready because the UI appears to work. Security, privacy, backend integrity, age assurance, UGC safety, and negative tests are required.
+No feature is considered release-ready because the UI appears to work. Security, privacy, backend integrity, age assurance, UGC safety, legal readiness, and negative tests are required.
 
 ## Gate 0 — Build health
 Must pass in CI:
@@ -65,6 +65,10 @@ Required in addition to Gate 1:
 - Account deletion/recovery passes end-to-end fault-injection tests: Firestore failure, BulkWriter failure, Storage cleanup failure, Auth deletion failure, retry after partial cleanup, and final minimal-tombstone cleanup.
 - Privacy Policy and Terms are completed with operator/jurisdiction/retention/age-assurance decisions and reviewed appropriately before publication; the current pre-release Terms draft is not the final public legal document.
 - Community Guidelines reviewed/finalized.
+- `docs/legal/legal-hub.md` is reviewed and every RED item applicable to non-staff/closed-beta users is resolved or has a written qualified-counsel disposition; a green build does not override a RED legal gate.
+- TAKE IT DOWN Act applicability is reviewed and the required clear notice/removal intake, non-account requester path, 48-hour valid-request handling, and known-identical-copy procedure are operational before external users can create/share covered UGC.
+- 18 U.S.C. § 2258A/NCMEC CyberTipline provider obligations are reviewed with a designated child-safety/legal owner and controlled reporting/evidence procedure before external UGC moderation begins.
+- DMCA § 512 safe-harbor strategy is decided; if relied upon, the designated-agent, notice/counter-notice, and repeat-infringer process is operational.
 - A real published support/contact channel exists for users and app-store review; do not invent contact information only to satisfy a checklist.
 - Moderator/admin/superadmin claim assignment and revocation validated on staging.
 - Report moderation queue and protected profile-photo moderation queue validated operationally.
@@ -85,9 +89,12 @@ Required in addition to Gate 2:
 - Abuse-response and security/privacy incident-response ownership assigned and procedures exercised, including timely handling of UGC reports.
 - App-store privacy/safety/age/UGC disclosures completed accurately.
 - Final Terms, Privacy Policy, Community Guidelines, and published support contact are live and match actual product behavior.
+- The legal operator/entity, intended launch geography, privacy/breach-law applicability matrix, law-enforcement/legal-process procedure, trademark/IP provenance review, vendor/subprocessor register, and public legal/safety endpoints required by `docs/legal/legal-hub.md` are completed.
+- Every RED — PUBLIC-LAUNCH BLOCKER in `docs/legal/legal-hub.md` is closed or has an explicit written qualified-counsel disposition for the exact launch scope.
+- Final legal launch review/signoff is recorded in `docs/legal/legal-hub.md`; this signoff is evidence of review, not a guarantee against claims or regulatory action.
 - No P0 security/safety issues open.
 
-See `docs/app-store-age-ugc-compliance.md` for the implementation map, platform-specific manual configuration, and current unresolved compliance risks.
+See `docs/app-store-age-ugc-compliance.md` for the implementation map, platform-specific manual configuration, and current unresolved compliance risks. See `docs/legal/legal-hub.md` for the single legal-readiness control center, legal-document hierarchy, primary-source register, and legal risk/signoff record.
 
 ## Deferred paid-infrastructure work
 A paid Firebase plan is not required for continued local implementation. Trusted callable development and automated security testing can continue with the guarded emulator workflow in `docs/local-development.md`.
@@ -121,4 +128,4 @@ The following remain release blockers and must not be marked complete based only
 Closing an issue, having backend scaffolding, or making the UI visible is never sufficient to enable Private Vault.
 
 ## Merge policy
-`restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests. Keep PR #4 in draft while staging/payment-dependent and operational gates remain outstanding.
+`restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests. Keep PR #4 in draft while staging/payment-dependent, legal, and operational gates remain outstanding.
