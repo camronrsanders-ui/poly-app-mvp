@@ -102,7 +102,7 @@ jobs:
         env:
           GCLOUD_PROJECT: demo-polycircle
           FIREBASE_CONFIG: '{"projectId":"demo-polycircle","storageBucket":"demo-polycircle.appspot.com"}'
-        run: node -e "require('./lib/index.js'); console.log('Functions module loaded successfully')"
+        run: node -e "require('./lib/entry.js'); console.log('Functions module loaded successfully')"
 
   contracts:
     name: Client/backend security contracts
