@@ -46,6 +46,22 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
     }
   }
 
+  String _recordableSignalStatus(AgeAssuranceSignal signal) {
+    if (signal.confirmsAdult) {
+      final raw = signal.platformStatus?.trim() ?? '';
+      final safePlatformStatus = raw.isNotEmpty &&
+              raw.length <= 48 &&
+              RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(raw)
+          ? raw
+          : 'platform_confirmed';
+      return 'adult:$safePlatformStatus';
+    }
+
+    // Fallback records only the coarse decision. Native/system error details are
+    // not useful evidence of age and should not become durable account metadata.
+    return 'self_attested:${signal.decision.name}';
+  }
+
   Future<void> _continue() async {
     if (_busy) return;
     final birthDate = _birthDate;
@@ -111,15 +127,10 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
       final method = signal.confirmsAdult
           ? signal.method
           : 'self_attested_dob_fallback';
-      final statusParts = <String>[
-        signal.decision.name,
-        if (signal.platformStatus != null) signal.platformStatus!,
-      ];
-      final signalStatus = statusParts.join(':');
 
       await _compliance.recordAdultPolicyAcceptance(
         ageAssuranceMethod: method,
-        ageSignalStatus: signalStatus,
+        ageSignalStatus: _recordableSignalStatus(signal),
       );
       // The parent session gate watches the account document. Once the trusted
       // callable records the policy fields it automatically advances to
