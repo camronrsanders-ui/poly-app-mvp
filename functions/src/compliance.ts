@@ -5,7 +5,6 @@ import {
   CURRENT_TERMS_VERSION,
 } from './account_compliance';
 
-const db = getFirestore();
 const allowedMethods = new Set([
   'apple_declared_age_range',
   'play_age_signals',
@@ -33,7 +32,10 @@ function requireSignalStatus(raw: unknown): string {
   return status;
 }
 
-async function consumeRateLimit(uid: string): Promise<void> {
+async function consumeRateLimit(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+): Promise<void> {
   const action = 'compliance_accept';
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
   const now = Date.now();
@@ -61,6 +63,7 @@ async function consumeRateLimit(uid: string): Promise<void> {
 export const recordAdultPolicyAcceptance = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
+    const db = getFirestore();
     const uid = requireUid(request.auth);
     const method = requireMethod(request.data?.ageAssuranceMethod);
     const signalStatus = requireSignalStatus(request.data?.ageSignalStatus);
@@ -79,7 +82,7 @@ export const recordAdultPolicyAcceptance = onCall(
       throw new HttpsError('permission-denied', 'Adult access is not available for this account.');
     }
 
-    await consumeRateLimit(uid);
+    await consumeRateLimit(db, uid);
 
     const userRef = db.collection('users').doc(uid);
     await db.runTransaction(async (tx) => {
