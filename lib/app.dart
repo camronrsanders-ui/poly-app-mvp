@@ -115,10 +115,7 @@ class _SessionGateState extends State<_SessionGate> {
               return _AccountUnavailableScreen(onSignOut: _auth.signOut);
             }
             if (!accountHasCurrentCompliance(account)) {
-              return ComplianceGateScreen(
-                uid: user.uid,
-                onSignOut: _auth.signOut,
-              );
+              return ComplianceGateScreen(onSignOut: _auth.signOut);
             }
             if (account['onboardingComplete'] != true) {
               return const OnboardingScreen(onComplete: _noop);
