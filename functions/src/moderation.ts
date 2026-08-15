@@ -187,6 +187,9 @@ export const listModerationReports = onCall(
       const internal = moderationById.get(doc.id);
       const detailsRaw = doc.get('details');
       const reasonRaw = doc.get('reason');
+      const contentTypeRaw = doc.get('contentType');
+      const contentIdRaw = doc.get('contentId');
+      const conversationIdRaw = doc.get('conversationId');
       const noteRaw = internal?.exists ? internal.get('note') : null;
       return {
         reportId: doc.id,
@@ -194,6 +197,9 @@ export const listModerationReports = onCall(
         reportedUid: String(doc.get('reportedUid') ?? ''),
         reason: typeof reasonRaw === 'string' ? reasonRaw.slice(0, 80) : 'other',
         details: typeof detailsRaw === 'string' ? detailsRaw.slice(0, 2000) : '',
+        contentType: typeof contentTypeRaw === 'string' ? contentTypeRaw.slice(0, 32) : 'account',
+        contentId: typeof contentIdRaw === 'string' ? contentIdRaw.slice(0, 128) : null,
+        conversationId: typeof conversationIdRaw === 'string' ? conversationIdRaw.slice(0, 128) : null,
         status: String(doc.get('status') ?? 'open'),
         createdAtMs: timestampMillis(doc.get('createdAt')),
         reviewedAtMs: timestampMillis(doc.get('reviewedAt')),
