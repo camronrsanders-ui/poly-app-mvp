@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'ugc_text_policy.dart';
+
 class ProfileService {
   ProfileService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -29,6 +31,13 @@ class ProfileService {
       .map((snapshot) => snapshot.data());
 
   Future<void> saveProfile(String uid, Map<String, dynamic> values) async {
+    UgcTextPolicy.ensureAllowedValues([
+      values['displayName']?.toString() ?? '',
+      values['headline']?.toString() ?? '',
+      values['bio']?.toString() ?? '',
+      values['lookingForNote']?.toString() ?? '',
+    ]);
+
     final ref = _firestore.collection('profiles').doc(uid);
     final existing = await ref.get();
     await ref.set({
