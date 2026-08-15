@@ -1,15 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../config/compliance_policy.dart';
 
 class ComplianceService {
-  ComplianceService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  ComplianceService({FirebaseFunctions? functions})
+      : _functions = functions ?? FirebaseFunctions.instance;
 
-  final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
   Future<void> recordAdultPolicyAcceptance({
-    required String uid,
     required String ageAssuranceMethod,
     required String ageSignalStatus,
   }) async {
@@ -28,16 +27,12 @@ class ComplianceService {
       );
     }
 
-    await _firestore.collection('users').doc(uid).update({
-      'adultAccessApproved': true,
-      'termsAcceptedVersion': currentTermsVersion,
-      'communityGuidelinesAcceptedVersion':
-          currentCommunityGuidelinesVersion,
+    // Account identity and policy versions are derived by the trusted backend.
+    // The client sends only the bounded age-assurance method/status; exact date
+    // of birth never leaves this device through this service.
+    await _functions.httpsCallable('recordAdultPolicyAcceptance').call({
       'ageAssuranceMethod': ageAssuranceMethod,
       'ageSignalStatus': ageSignalStatus,
-      'ageAssuranceCheckedAt': FieldValue.serverTimestamp(),
-      'ugcPolicyAcceptedAt': FieldValue.serverTimestamp(),
-      'lastActiveAt': FieldValue.serverTimestamp(),
     });
   }
 }
