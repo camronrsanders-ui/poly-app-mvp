@@ -11,8 +11,11 @@ const ugc = read('lib/services/ugc_text_policy.dart');
 const messaging = read('lib/services/messaging_service.dart');
 const profile = read('lib/services/profile_service.dart');
 const circle = read('lib/services/relationship_card_service.dart');
+const chatScreen = read('lib/screens/messages/chat_screen.dart');
+const safetyService = read('lib/services/safety_service.dart');
 const safetyUi = read('lib/screens/safety/safety_center_screen.dart');
 const safetyBackend = read('functions/src/safety.ts');
+const moderationBackend = read('functions/src/moderation.ts');
 const backendCompliance = read('functions/src/account_compliance.ts');
 const coreBackend = read('functions/src/index.ts');
 const passBackend = read('functions/src/discovery_actions.ts');
@@ -73,7 +76,7 @@ test('high-risk UGC prefilter is wired to normal posting surfaces but not report
   assert.match(messaging, /UgcTextPolicy\.ensureAllowed\(trimmed\)/);
   assert.match(profile, /UgcTextPolicy\.ensureAllowedValues/);
   assert.match(circle, /UgcTextPolicy\.ensureAllowedValues/);
-  assert.doesNotMatch(read('lib/services/safety_service.dart'), /UgcTextPolicy/);
+  assert.doesNotMatch(safetyService, /UgcTextPolicy/);
 });
 
 test('Firestore independently rejects severe UGC on direct posting paths', () => {
@@ -104,6 +107,19 @@ test('reporting visibly includes child safety and threat categories', () => {
   assert.match(safetyBackend, /'sexual_content'/);
   assert.match(safetyUi, /child-safety \/ underage/i);
   assert.match(safetyUi, /threats or violence/i);
+});
+
+test('message reports carry validated content context without copying message text', () => {
+  assert.match(chatScreen, /onLongPress: !isMine && !isDeleted/);
+  assert.match(chatScreen, /contentType: reportingMessage \? 'message' : 'account'/);
+  assert.match(safetyService, /Message reports require message context/);
+  assert.match(safetyBackend, /String\(message\.get\('senderUid'\) \?\? ''\) !== reportedUid/);
+  assert.match(safetyBackend, /participants\.includes\(reporterUid\)/);
+  assert.match(safetyBackend, /participants\.includes\(reportedUid\)/);
+  assert.match(moderationBackend, /contentType:/);
+  assert.match(moderationBackend, /contentId:/);
+  assert.match(moderationBackend, /conversationId:/);
+  assert.doesNotMatch(safetyBackend, /message\.get\('text'\)/);
 });
 
 test('release gates keep manual store and trusted moderation work explicit', () => {
