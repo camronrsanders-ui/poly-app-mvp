@@ -53,6 +53,9 @@ test('Android integrates supported Play Age Signals and native Flutter bridge', 
   assert.match(androidActivity, /requestAgeSignalsAccess/);
   assert.match(androidActivity, /AgeSignalsStatus\.VERIFICATION_REQUIRED/);
   assert.match(androidActivity, /checkAgeSignals/);
+  assert.match(androidActivity, /ageResult\.userStatus\(\)/);
+  assert.match(androidActivity, /AgeSignalsVerificationStatus\.VERIFIED/);
+  assert.match(androidActivity, /userStatus == AgeSignalsVerificationStatus\.VERIFIED -> "adult"/);
 });
 
 test('iOS declares and invokes privacy-preserving declared age range', () => {
@@ -106,7 +109,7 @@ test('reporting visibly includes child safety and threat categories', () => {
 test('release gates keep manual store and trusted moderation work explicit', () => {
   assert.match(releaseGates, /Restrict Minor Access/);
   assert.match(releaseGates, /trusted callable/i);
-  assert.match(releaseGates, /Trusted backend moderation\/enforcement/);
+  assert.match(releaseGates, /Trusted moderation\/enforcement/);
   assert.match(releaseGates, /published support\/contact/i);
   assert.match(releaseGates, /final public legal document/i);
 });
