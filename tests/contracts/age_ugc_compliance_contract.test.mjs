@@ -7,6 +7,7 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const app = read('lib/app.dart');
 const gate = read('lib/screens/compliance/compliance_gate_screen.dart');
 const policy = read('lib/config/compliance_policy.dart');
+const complianceService = read('lib/services/compliance_service.dart');
 const ugc = read('lib/services/ugc_text_policy.dart');
 const messaging = read('lib/services/messaging_service.dart');
 const profile = read('lib/services/profile_service.dart');
@@ -18,6 +19,9 @@ const safetyUi = read('lib/screens/safety/safety_center_screen.dart');
 const safetyBackend = read('functions/src/safety.ts');
 const moderationBackend = read('functions/src/moderation.ts');
 const backendCompliance = read('functions/src/account_compliance.ts');
+const complianceCallable = read('functions/src/compliance.ts');
+const functionsEntry = read('functions/src/entry.ts');
+const functionsPackage = read('functions/package.json');
 const coreBackend = read('functions/src/index.ts');
 const passBackend = read('functions/src/discovery_actions.ts');
 const circleBackend = read('functions/src/circle_view.ts');
@@ -49,6 +53,21 @@ test('policy versions and adult assurance methods are explicit', () => {
   assert.match(policy, /apple_declared_age_range/);
   assert.match(policy, /play_age_signals/);
   assert.match(policy, /self_attested_dob_fallback/);
+});
+
+test('adult policy approval is recorded through an App-Check-protected trusted callable', () => {
+  assert.match(complianceService, /httpsCallable\('recordAdultPolicyAcceptance'\)/);
+  assert.doesNotMatch(complianceService, /FirebaseFirestore/);
+  assert.match(complianceCallable, /recordAdultPolicyAcceptance = onCall/);
+  assert.match(complianceCallable, /enforceAppCheck: true/);
+  assert.match(complianceCallable, /CURRENT_TERMS_VERSION/);
+  assert.match(complianceCallable, /CURRENT_COMMUNITY_GUIDELINES_VERSION/);
+  assert.match(complianceCallable, /method !== 'self_attested_dob_fallback'/);
+  assert.match(complianceCallable, /signalStatus\.startsWith\('adult:'\)/);
+  assert.match(functionsEntry, /recordAdultPolicyAcceptance/);
+  assert.match(functionsPackage, /"main": "lib\/entry\.js"/);
+  assert.match(firestoreRules, /backend-owned and can only be changed/);
+  assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly\(\[\s*'onboardingComplete', 'lastActiveAt'/);
 });
 
 test('Android integrates supported Play Age Signals and native Flutter bridge', () => {
