@@ -9,6 +9,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -61,6 +62,23 @@ async function createPendingAdultAccount(db, uid = 'alice') {
   }));
 }
 
+async function trustedApproveAdultAccess(uid = 'alice') {
+  // Admin/rules-disabled writes represent the trusted callable's Admin SDK
+  // mutation. The client must never be able to perform this transition itself.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), 'users', uid), {
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
+      ageAssuranceMethod: 'play_age_signals',
+      ageSignalStatus: 'adult:shared_verified',
+      ageAssuranceCheckedAt: new Date(),
+      ugcPolicyAcceptedAt: new Date(),
+      lastActiveAt: new Date(),
+    });
+  });
+}
+
 before(async () => {
   env = await initializeTestEnvironment({projectId, firestore: {rules}});
 });
@@ -79,41 +97,35 @@ test('new account cannot create member profile before adult compliance acceptanc
   await assertFails(setDoc(doc(db, 'profiles', 'alice'), baseProfile('alice')));
 });
 
-test('current adult and UGC policy acceptance unlocks profile creation', async () => {
+test('trusted current adult and UGC policy acceptance unlocks profile creation', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  await createPendingAdultAccount(db);
+  await trustedApproveAdultAccess();
+
+  const account = await assertSucceeds(getDoc(doc(db, 'users', 'alice')));
+  if (account.data()?.adultAccessApproved !== true) {
+    throw new Error('Trusted approval fixture did not establish adult access.');
+  }
+  await assertSucceeds(setDoc(doc(db, 'profiles', 'alice'), baseProfile('alice')));
+});
+
+test('client cannot self-approve adult access even with a complete current policy record', async () => {
   const db = env.authenticatedContext('alice').firestore();
   await createPendingAdultAccount(db);
 
-  await assertSucceeds(updateDoc(doc(db, 'users', 'alice'), {
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {
     adultAccessApproved: true,
     termsAcceptedVersion: '2026-08-alpha-v1',
     communityGuidelinesAcceptedVersion: '2026-08-v1',
     ageAssuranceMethod: 'play_age_signals',
-    ageSignalStatus: 'adult:shared',
+    ageSignalStatus: 'adult:shared_verified',
     ageAssuranceCheckedAt: serverTimestamp(),
     ugcPolicyAcceptedAt: serverTimestamp(),
     lastActiveAt: serverTimestamp(),
   }));
 
-  await assertSucceeds(setDoc(doc(db, 'profiles', 'alice'), baseProfile('alice')));
-});
-
-test('client cannot approve adult access without the complete current policy record', async () => {
-  const db = env.authenticatedContext('alice').firestore();
-  await createPendingAdultAccount(db);
-
   await assertFails(updateDoc(doc(db, 'users', 'alice'), {
     adultAccessApproved: true,
-    lastActiveAt: serverTimestamp(),
-  }));
-
-  await assertFails(updateDoc(doc(db, 'users', 'alice'), {
-    adultAccessApproved: true,
-    termsAcceptedVersion: 'stale-version',
-    communityGuidelinesAcceptedVersion: '2026-08-v1',
-    ageAssuranceMethod: 'play_age_signals',
-    ageSignalStatus: 'adult:shared',
-    ageAssuranceCheckedAt: serverTimestamp(),
-    ugcPolicyAcceptedAt: serverTimestamp(),
     lastActiveAt: serverTimestamp(),
   }));
 });
