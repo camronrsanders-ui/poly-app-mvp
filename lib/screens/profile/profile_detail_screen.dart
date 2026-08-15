@@ -167,7 +167,12 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     setState(() => _acting = true);
     try {
       await _safety.reportUser(
-          reportedUid: _uid, reason: reason, details: detailText);
+        reportedUid: _uid,
+        reason: reason,
+        details: detailText,
+        contentType: 'profile',
+        contentId: _uid,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
