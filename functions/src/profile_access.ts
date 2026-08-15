@@ -1,13 +1,10 @@
-import {HttpsError} from 'firebase-functions/v2/https';
+import {assertActiveCompliantMember} from './account_compliance';
 
 async function assertActive(
   db: FirebaseFirestore.Firestore,
   uid: string,
 ): Promise<void> {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(db, uid);
 }
 
 async function isBlocked(
