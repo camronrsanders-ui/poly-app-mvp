@@ -11,7 +11,7 @@ const termsDraft = read('docs/terms-draft.md');
 
 test('legal hub cannot be mistaken for a compliance guarantee or attorney opinion', () => {
   assert.match(hub, /not legal advice/i);
-  assert.match(hub, /does not guarantee/i);
+  assert.match(hub, /does\s+(?:\*\*)?not(?:\*\*)?\s+guarantee/i);
   assert.match(hub, /qualified attorney/i);
   assert.match(hub, /fully legally compliant/i);
 });
