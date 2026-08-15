@@ -1,6 +1,6 @@
 # Polycircle — Age Assurance & App-Store UGC Compliance
 
-**Last verified:** 2026-08-14  
+**Last verified:** 2026-08-15  
 **Status:** implementation foundation in progress; this document is not a claim of legal or app-store approval.
 
 ## Why this is a release gate
@@ -33,10 +33,12 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 ### Apple
 
 - `com.apple.developer.declared-age-range` is present in `Runner.entitlements`.
+- Both Flutter iOS build configurations set `CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements`, so Debug, Release, and Profile target builds inherit the entitlement file.
 - Flutter has a native bridge to Apple's Declared Age Range API when the framework/OS supports it.
 - The request uses the age gate `18` and returns only range/status information to Flutter.
 - Exact date of birth is not requested from Apple or stored by Polycircle.
 - Older/unsupported iOS versions fail to the documented fallback path.
+- CI on 2026-08-15 successfully built the iOS simulator app with the current native host and compliance bridge.
 
 ### Android
 
@@ -44,6 +46,7 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - Flutter has a native bridge that requests age-sharing access before checking the age range.
 - `VERIFICATION_REQUIRED` is treated as a blocking state.
 - A shared range with an upper bound below 18 blocks access; an 18+ lower bound confirms adult status.
+- CI on 2026-08-15 successfully compiled the Android debug APK with the current Age Signals `0.0.4` integration.
 
 ### UGC policy acceptance
 
