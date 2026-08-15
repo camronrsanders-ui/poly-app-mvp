@@ -31,10 +31,12 @@ test('client reads entitlement through trusted callable and never writes billing
   assert.doesNotMatch(entitlementService, /_billing_entitlements/);
 });
 
-test('trusted entitlement callable requires App Check and compliant membership', () => {
+test('trusted entitlement lookup requires App Check and an active account without forcing policy reacceptance', () => {
   assert.match(entitlementBackend, /getMyEntitlements = onCall/);
   assert.match(entitlementBackend, /enforceAppCheck: true/);
-  assert.match(entitlementBackend, /assertActiveCompliantMember/);
+  assert.match(entitlementBackend, /assertActiveAccount/);
+  assert.doesNotMatch(entitlementBackend, /assertActiveCompliantMember/);
+  assert.match(entitlementBackend, /must not hide an existing paid subscription/);
   assert.match(entitlementBackend, /_billing_entitlements/);
   assert.match(functionsEntry, /getMyEntitlements/);
 });
