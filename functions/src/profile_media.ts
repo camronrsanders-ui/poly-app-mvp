@@ -4,6 +4,7 @@ import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {onObjectFinalized} from 'firebase-functions/v2/storage';
 import sharp from 'sharp';
+import {assertActiveCompliantMember} from './account_compliance';
 
 const db = getFirestore();
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -18,10 +19,7 @@ function requireUid(auth: {uid: string} | undefined): string {
 }
 
 async function assertActive(uid: string) {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(db, uid);
 }
 
 async function consumeRateLimit(
