@@ -46,7 +46,7 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
     }
   }
 
-  String _recordableSignalStatus(AgeAssuranceSignal signal) {
+  String _recordableSignalStatus(AgeAssuranceResult signal) {
     if (signal.confirmsAdult) {
       final raw = signal.platformStatus?.trim() ?? '';
       final safePlatformStatus = raw.isNotEmpty &&
