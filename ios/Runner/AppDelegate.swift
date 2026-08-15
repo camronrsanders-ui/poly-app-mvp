@@ -44,13 +44,14 @@ import DeclaredAgeRange
     // than attempting an unsupported API.
     if #available(iOS 26.2, *) {
       Task { @MainActor in
+        var regulatedRegion: Bool?
         do {
-          let regulatedRegion = try await AgeRangeService.shared.isEligibleForAgeFeatures
+          regulatedRegion = try await AgeRangeService.shared.isEligibleForAgeFeatures
           guard let presenter = activeViewController() else {
             result([
               "status": "unavailable",
               "platformStatus": "no_presenting_view_controller",
-              "regulatedRegion": regulatedRegion,
+              "regulatedRegion": regulatedRegion ?? true,
             ])
             return
           }
@@ -76,7 +77,7 @@ import DeclaredAgeRange
             var payload: [String: Any] = [
               "status": status,
               "platformStatus": "shared",
-              "regulatedRegion": regulatedRegion,
+              "regulatedRegion": regulatedRegion ?? true,
             ]
             if let lower { payload["lowerBound"] = lower }
             if let upper { payload["upperBound"] = upper }
@@ -86,21 +87,27 @@ import DeclaredAgeRange
             result([
               "status": "not_shared",
               "platformStatus": "declined_sharing",
-              "regulatedRegion": regulatedRegion,
+              "regulatedRegion": regulatedRegion ?? true,
             ])
 
           @unknown default:
             result([
               "status": "unavailable",
               "platformStatus": "unknown_response",
-              "regulatedRegion": regulatedRegion,
+              "regulatedRegion": regulatedRegion ?? true,
             ])
           }
         } catch {
+          // If eligibility itself failed, we do not know whether age assurance
+          // is legally required for this account/region. Treat that uncertainty
+          // as regulated so Flutter cannot silently downgrade to self-attested
+          // DOB. If eligibility was positively known to be nonregulated before
+          // a later request error, preserve false and allow the documented
+          // fallback behavior.
           result([
             "status": "unavailable",
             "platformStatus": String(describing: error),
-            "regulatedRegion": false,
+            "regulatedRegion": regulatedRegion ?? true,
           ])
         }
       }
