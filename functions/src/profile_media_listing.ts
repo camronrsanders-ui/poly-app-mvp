@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertActiveCompliantMember} from './account_compliance';
 import {canViewOwnerProfile} from './profile_access';
 
 const db = getFirestore();
@@ -16,10 +17,7 @@ function requireUid(auth: {uid: string} | undefined): string {
 }
 
 async function assertActive(uid: string): Promise<void> {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(db, uid);
 }
 
 async function consumeRateLimit(uid: string): Promise<void> {
