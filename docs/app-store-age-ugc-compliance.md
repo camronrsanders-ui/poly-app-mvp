@@ -1,7 +1,7 @@
 # Polycircle — Age Assurance & App-Store UGC Compliance
 
 **Last verified:** 2026-08-15  
-**Status:** implementation foundation in progress; this document is not a claim of legal or app-store approval.
+**Status:** age-assurance and UGC-compliance foundation implemented and under automated validation; this document is **not** a claim of legal advice, App Store approval, Google Play approval, or full regulatory compliance.
 
 ## Why this is a release gate
 
@@ -38,7 +38,8 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - The request uses the age gate `18` and returns only range/status information to Flutter.
 - Exact date of birth is not requested from Apple or stored by Polycircle.
 - Older/unsupported iOS versions fail to the documented fallback path.
-- CI on 2026-08-15 successfully built the iOS simulator app with the current native host and compliance bridge.
+- The bridge uses the OS availability required by the currently compiled Apple API, rather than assuming every iOS 26 build exposes the same age-feature surface.
+- CI has successfully compiled the current iOS native age-assurance bridge after correcting availability and Flutter registrar handling.
 
 ### Android
 
@@ -46,7 +47,7 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - Flutter has a native bridge that requests age-sharing access before checking the age range.
 - `VERIFICATION_REQUIRED` is treated as a blocking state.
 - A shared range with an upper bound below 18 blocks access; an 18+ lower bound confirms adult status.
-- CI on 2026-08-15 successfully compiled the Android debug APK with the current Age Signals `0.0.4` integration.
+- CI has successfully compiled the Android debug APK with the current Age Signals integration.
 
 ### UGC policy acceptance
 
@@ -57,24 +58,64 @@ Before onboarding/member access, the user must explicitly accept both:
 
 Acceptance state and the age-assurance method/status are recorded on the user's account. Exact DOB is not recorded.
 
-### Firestore boundary
+### Firestore adult-compliance boundary
 
-New Firestore account documents explicitly begin with `adultAccessApproved=false`. Client member-data paths use the active-user helper, which denies these new accounts until the compliance record becomes approved. A temporary missing-field migration branch remains for old test/legacy documents and must be removed once migration/testing is complete.
+New Firestore account documents explicitly begin with `adultAccessApproved=false`. For accounts using the new compliance schema, normal member-data access requires all of the following:
+
+- active account status;
+- `adultAccessApproved=true`;
+- the exact current Terms version; and
+- the exact current Community Guidelines version.
+
+A temporary missing-field migration branch remains for old test/legacy account documents so existing local QA fixtures do not become unusable while the migration is prepared. This compatibility allowance is a **public-release blocker** and must be removed after migration/testing.
+
+### Trusted member-callable boundary
+
+The shared trusted backend eligibility helper now protects the main member-facing callable surfaces, including:
+
+- Discover candidate retrieval;
+- Like/match flow;
+- Pass;
+- conversation creation;
+- Connections listing;
+- trusted Circle views;
+- report/block/unblock/end-connection safety actions; and
+- member profile-photo upload, confirmation, protected access, and listing flows.
+
+The helper requires an active account plus current adult/policy approval for new-format accounts, and the relevant transaction paths re-check target eligibility where a target account is part of authorization.
+
+Two deliberate exceptions should remain available even when a member does not accept a newer policy version:
+
+- **account deletion**, so declining new Terms cannot trap a user in the service; and
+- **own-data access/export**, subject to its existing authentication/rate-limit controls, because privacy/data-access rights should not depend on accepting new community participation terms.
+
+Privileged moderator/admin operations are separate operator-security paths and should be governed by least-privilege claims, audit, and operational controls rather than being treated as normal member access. Private Vault remains server/client gated OFF and is not counted as a released member surface.
 
 ### UGC controls already present
 
-- in-app reporting;
-- in-app blocking and block management;
+- in-app reporting from profiles and chats;
+- in-app blocking and blocked-member management;
 - connection ending/unmatch safety behavior;
+- report reasons for harassment, threats/violence, child-safety or underage concerns, sexual content/solicitation, non-consensual content, hate speech, fake profiles, scams/spam, misrepresentation, and other concerns;
 - protected profile-photo processing and moderator review;
-- Safety Center and Community Guidelines;
+- Safety Center and Community Guidelines; and
 - moderation runbook and privileged moderator foundations.
 
-### UGC text prefilter
+Report details are intentionally **not** passed through the normal posting filter. A member must be able to describe threatening, exploitative, hateful, or sexual material when submitting evidence/context for moderation.
 
-Profile free text, messages, and Circle-card free text now pass through a narrow pre-submit safety filter targeting severe high-confidence patterns such as direct violent threats and sexual/dating solicitation involving minors. The filter intentionally avoids broad identity/slur keyword lists because context, reclamation, education, and LGBTQ+/ENM terminology can create harmful false positives.
+### UGC text prefilter and Firestore enforcement
 
-This client-side prefilter is **not** a substitute for trusted backend moderation. A modified client can bypass client code, so server-side text moderation/enforcement remains a public-beta gate.
+Profile free text, messages, and Circle-card free text pass through a narrow pre-submit safety filter targeting severe high-confidence patterns such as direct violent threats and sexual/dating solicitation involving minors. The filter intentionally avoids broad identity/slur keyword lists because context, reclamation, education, survivor-support, and LGBTQ+/ENM terminology can create harmful false positives.
+
+The same narrow severe-content categories are also enforced independently in Firestore Security Rules for direct client writes to:
+
+- profile display/free-text fields;
+- Circle relationship-card display/free-text fields; and
+- text messages.
+
+This means a modified Flutter client cannot bypass the posting filter merely by calling Firestore directly. Firebase emulator tests exercise prohibited threat/minor-solicitation writes for profile, Circle, and chat paths.
+
+This is still **not a complete moderation system**. Firestore Rules are deterministic pre-post controls, not contextual human moderation, and trusted Admin SDK/server code bypasses client Security Rules by design. Public release therefore still requires reviewed moderator operations, report response targets, escalation/evidence procedures, and continuing review of every server-generated UGC path.
 
 ## Required before Google Play distribution
 
@@ -84,6 +125,7 @@ This client-side prefilter is **not** a substitute for trusted backend moderatio
 - Test `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` behaviors on supported real devices/accounts.
 - Review Play's Data safety, target audience, content-rating, UGC, sexual-content, and account-deletion disclosures against the shipping build.
 - Replace debug signing with dedicated distribution signing before any distributed beta/release.
+- Threat-model the trust placed in age signals and evaluate Play Integrity or equivalent platform anti-tamper protections appropriate to the production design.
 
 ## Required before App Store distribution
 
@@ -92,21 +134,18 @@ This client-side prefilter is **not** a substitute for trusted backend moderatio
 - Complete the current App Store Connect age-rating/social-capability questions accurately.
 - Confirm the final app rating, UGC disclosures, contact/support information, and review notes describe the adult-only behavior and moderation tools accurately.
 
-## UGC items still blocking a public beta
+## UGC / age items still blocking public distribution
 
-Apple's UGC guideline calls for filtering, reporting, blocking, timely response, and published contact information. Google Play similarly expects clear user policies, acceptance before UGC, accessible reporting/blocking, and ongoing moderation.
-
-Polycircle still needs:
-
-1. **Trusted text moderation/enforcement:** client prefiltering is only defense-in-depth. Add a backend moderation boundary for profile/message/public Circle text or an equivalent reviewed architecture before public beta.
-2. **Moderator operations:** exercise queue ownership, response targets, escalation, appeals, and evidence handling with real staging data.
-3. **Published support contact:** choose and publish a real business/support contact. Do not invent one in code or store metadata.
-4. **Final Terms of Use:** replace the pre-release draft with counsel-reviewed public Terms.
-5. **Final Privacy Policy:** publish a separate counsel-reviewed Privacy Policy covering actual data flows, retention, deletion, processors, age-assurance processing, and user rights.
-6. **Content-rating/store declarations:** complete Apple/Google submission questionnaires using the actual shipping functionality.
-7. **Adult-access migration:** migrate any legacy account documents, then remove the temporary Firestore missing-field allowance.
-8. **Backend adult enforcement:** make every trusted callable that exposes/interacts with member data require the approved adult/compliance state, not only `accountStatus == active`.
-9. **Tamper resistance on Android:** evaluate Play Integrity around age-signal flows as recommended by Google and threat-model how platform results are trusted.
+1. **Moderator operations:** exercise queue ownership, response targets, escalation, appeals, and evidence handling with real staging data. Automated filtering does not replace timely human review.
+2. **Published support contact:** choose and publish a real business/support contact. Do not invent one in code or store metadata.
+3. **Final Terms of Use:** replace the pre-release draft with a reviewed public Terms document before public distribution.
+4. **Final Privacy Policy:** publish a separate reviewed Privacy Policy covering actual data flows, retention, deletion, processors, age-assurance processing, and user rights.
+5. **Content-rating/store declarations:** complete Apple/Google submission questionnaires using the actual shipping functionality.
+6. **Adult-access migration:** migrate any legacy account documents, then remove the temporary Firestore/backend missing-field allowance.
+7. **Remaining callable audit:** keep auditing every new or existing member-facing callable so it either uses the centralized compliance helper or has a documented privacy/safety reason not to. Account deletion and own-data access are intentional exceptions.
+8. **Server/Admin UGC review:** continue to audit any server-generated or Admin-SDK UGC write paths because Firestore client rules do not apply to Admin SDK writes.
+9. **Real platform validation:** production/sandbox Apple age-range and Play Age Signals behaviors must be validated on real supported devices/store-delivered builds.
+10. **Android tamper resistance:** evaluate Play Integrity around production age-signal flows and document the threat model.
 
 ## Privacy principles
 
@@ -116,7 +155,8 @@ Polycircle still needs:
 - Do not treat self-attestation as “verified age.”
 - Do not collect identity documents directly merely to imitate platform age-verification services.
 - Minors must not receive a reduced dating experience inside Polycircle; the current product is adult-only, so confirmed minors are blocked.
+- Do not require acceptance of new participation terms merely to let a user delete their account or exercise a legitimate own-data access process.
 
 ## Release-language rule
 
-Until the manual store configuration, real-device validation, final legal policies, backend enforcement, and moderation operations above are complete, describe this work as **“age-assurance and UGC-compliance foundation implemented”**, not “Polycircle is fully compliant.”
+Until manual store configuration, real-device validation, final legal policies, legacy-account migration, and operational moderation are complete, describe this work as **“age-assurance and UGC-compliance foundation implemented”**, not “Polycircle is fully compliant.”
