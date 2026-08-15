@@ -219,7 +219,7 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
                   : (value) => setState(() => _acceptTerms = value == true),
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text('I am 18+ and accept the Terms of Use'),
-              subtitle: Text('Policy version $currentTermsVersion'),
+              subtitle: const Text('Policy version $currentTermsVersion'),
             ),
             CheckboxListTile(
               value: _acceptGuidelines,
@@ -229,8 +229,8 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
                       setState(() => _acceptGuidelines = value == true),
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text('I accept the Community Guidelines'),
-              subtitle:
-                  Text('Policy version $currentCommunityGuidelinesVersion'),
+              subtitle: const Text(
+                  'Policy version $currentCommunityGuidelinesVersion'),
             ),
             if (_message != null) ...[
               const SizedBox(height: 10),
