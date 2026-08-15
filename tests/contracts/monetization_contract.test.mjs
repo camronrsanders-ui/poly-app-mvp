@@ -54,14 +54,23 @@ test('entitlement response excludes raw billing evidence', () => {
 });
 
 test('ads are restricted to a future Discover intermission and never safety/private surfaces', () => {
-  assert.match(adPolicy, /placement == AdPlacement\.discoverIntermission/);
-  assert.match(adPolicy, /AdPlacement\.messages/);
-  assert.match(adPolicy, /AdPlacement\.safetyCenter/);
-  assert.match(adPolicy, /AdPlacement\.reportFlow/);
-  assert.match(adPolicy, /AdPlacement\.ageAssurance/);
-  assert.match(adPolicy, /AdPlacement\.accountDeletion/);
-  assert.match(adPolicy, /AdPlacement\.circle/);
-  assert.match(adPolicy, /AdPlacement\.privateVault/);
+  assert.match(adPolicy, /return placement == AdPlacement\.discoverIntermission;/);
+  for (const protectedPlacement of [
+    'messages',
+    'safetyCenter',
+    'reportFlow',
+    'blockFlow',
+    'ageAssurance',
+    'accountDeletion',
+    'circle',
+    'privateVault',
+  ]) {
+    assert.match(adPolicy, new RegExp(`\\b${protectedPlacement},`));
+  }
+  assert.doesNotMatch(
+    adPolicy,
+    /placement == AdPlacement\.(messages|safetyCenter|reportFlow|blockFlow|ageAssurance|accountDeletion|circle|privateVault)/,
+  );
   assert.match(adPolicy, /if \(!privacyConsentAllowsAds\) return false/);
 });
 
@@ -71,6 +80,11 @@ test('sensitive relationship and identity data is prohibited for ad targeting', 
     'gender_identity',
     'relationship_structure',
     'circle_relationship_data',
+    'profile_age',
+    'precise_location',
+    'race_or_ethnicity',
+    'religion',
+    'political_beliefs',
     'messages',
     'blocks',
     'reports',
