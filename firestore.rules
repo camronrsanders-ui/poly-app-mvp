@@ -6,7 +6,16 @@ service cloud.firestore {
 
     function userIsActive(uid) {
       return exists(/databases/$(database)/documents/users/$(uid))
-        && get(/databases/$(database)/documents/users/$(uid)).data.accountStatus == 'active';
+        && get(/databases/$(database)/documents/users/$(uid)).data.accountStatus == 'active'
+        // Newly-created accounts explicitly start with adultAccessApproved=false
+        // and cannot use client Firestore interaction paths until the compliance
+        // gate succeeds. The missing-field branch is a temporary migration
+        // allowance for pre-gate test/legacy account documents; the app session
+        // gate still routes those accounts through adult/policy acceptance.
+        && (
+          !get(/databases/$(database)/documents/users/$(uid)).data.keys().hasAny(['adultAccessApproved'])
+          || get(/databases/$(database)/documents/users/$(uid)).data.adultAccessApproved == true
+        );
     }
 
     function conversationExists(conversationId) {
@@ -49,14 +58,22 @@ service cloud.firestore {
     function validUser(data, uid) {
       return data.keys().hasOnly([
           'uid', 'email', 'createdAt', 'onboardingComplete', 'lastActiveAt',
-          'accountStatus'
+          'accountStatus', 'adultAccessApproved', 'termsAcceptedVersion',
+          'communityGuidelinesAcceptedVersion', 'ageAssuranceMethod',
+          'ageSignalStatus', 'ageAssuranceCheckedAt', 'ugcPolicyAcceptedAt'
         ])
         && data.uid == uid
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 320
         && data.createdAt is timestamp
         && data.onboardingComplete is bool
         && data.lastActiveAt is timestamp
-        && data.accountStatus == 'active';
+        && data.accountStatus == 'active'
+        && data.adultAccessApproved == false
+        && !data.keys().hasAny([
+          'termsAcceptedVersion', 'communityGuidelinesAcceptedVersion',
+          'ageAssuranceMethod', 'ageSignalStatus', 'ageAssuranceCheckedAt',
+          'ugcPolicyAcceptedAt'
+        ]);
     }
 
     function validProfile(data, uid) {
@@ -118,13 +135,15 @@ service cloud.firestore {
         && request.resource.data.onboardingComplete == false
         && request.resource.data.createdAt == request.time
         && request.resource.data.lastActiveAt == request.time;
-      // Self-read remains available for session/deletion-recovery routing even
-      // when a trusted backend has paused the account.
+      // Self-read remains available for session/deletion-recovery/compliance
+      // routing even when a trusted backend has paused the account.
       allow read: if isSelf(uid);
       allow update: if isSelf(uid)
         && request.resource.data.keys().hasOnly([
           'uid', 'email', 'createdAt', 'onboardingComplete', 'lastActiveAt',
-          'accountStatus'
+          'accountStatus', 'adultAccessApproved', 'termsAcceptedVersion',
+          'communityGuidelinesAcceptedVersion', 'ageAssuranceMethod',
+          'ageSignalStatus', 'ageAssuranceCheckedAt', 'ugcPolicyAcceptedAt'
         ])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
@@ -133,12 +152,39 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.lastActiveAt == request.time
         && request.resource.data.onboardingComplete is bool
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'onboardingComplete', 'lastActiveAt', 'adultAccessApproved',
+          'termsAcceptedVersion', 'communityGuidelinesAcceptedVersion',
+          'ageAssuranceMethod', 'ageSignalStatus', 'ageAssuranceCheckedAt',
+          'ugcPolicyAcceptedAt'
+        ])
         && (
           request.resource.data.onboardingComplete == resource.data.onboardingComplete
           || (
             resource.data.onboardingComplete == false
             && request.resource.data.onboardingComplete == true
             && exists(/databases/$(database)/documents/profiles/$(uid))
+          )
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'adultAccessApproved', 'termsAcceptedVersion',
+            'communityGuidelinesAcceptedVersion', 'ageAssuranceMethod',
+            'ageSignalStatus', 'ageAssuranceCheckedAt', 'ugcPolicyAcceptedAt'
+          ])
+          || (
+            request.resource.data.adultAccessApproved == true
+            && request.resource.data.termsAcceptedVersion == '2026-08-alpha-v1'
+            && request.resource.data.communityGuidelinesAcceptedVersion == '2026-08-v1'
+            && request.resource.data.ageAssuranceMethod in [
+              'apple_declared_age_range', 'play_age_signals',
+              'self_attested_dob_fallback'
+            ]
+            && request.resource.data.ageSignalStatus is string
+            && request.resource.data.ageSignalStatus.size() >= 1
+            && request.resource.data.ageSignalStatus.size() <= 80
+            && request.resource.data.ageAssuranceCheckedAt == request.time
+            && request.resource.data.ugcPolicyAcceptedAt == request.time
           )
         );
       allow delete: if false;
