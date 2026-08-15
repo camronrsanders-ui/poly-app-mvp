@@ -81,13 +81,15 @@ test('Android integrates supported Play Age Signals and native Flutter bridge', 
   assert.match(androidActivity, /userStatus == AgeSignalsVerificationStatus\.VERIFIED -> "adult"/);
 });
 
-test('iOS declares and invokes privacy-preserving declared age range', () => {
+test('iOS declares age range and fails closed when regulated eligibility is unknown', () => {
   assert.match(iosEntitlements, /com\.apple\.developer\.declared-age-range/);
   assert.match(iosDelegate, /canImport\(DeclaredAgeRange\)/);
   assert.match(iosDelegate, /requestAgeRange/);
   assert.match(iosDelegate, /ageGates: 18/);
   assert.match(iosDelegate, /declinedSharing/);
   assert.match(iosDelegate, /com\.polycircle\.app\/age_assurance/);
+  assert.match(iosDelegate, /var regulatedRegion: Bool\?/);
+  assert.match(iosDelegate, /"regulatedRegion": regulatedRegion \?\? true/);
 });
 
 test('high-risk UGC prefilter is wired to normal posting surfaces but not reports', () => {
