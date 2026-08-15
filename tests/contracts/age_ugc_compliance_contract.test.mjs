@@ -11,6 +11,17 @@ const ugc = read('lib/services/ugc_text_policy.dart');
 const messaging = read('lib/services/messaging_service.dart');
 const profile = read('lib/services/profile_service.dart');
 const circle = read('lib/services/relationship_card_service.dart');
+const safetyUi = read('lib/screens/safety/safety_center_screen.dart');
+const safetyBackend = read('functions/src/safety.ts');
+const backendCompliance = read('functions/src/account_compliance.ts');
+const coreBackend = read('functions/src/index.ts');
+const passBackend = read('functions/src/discovery_actions.ts');
+const circleBackend = read('functions/src/circle_view.ts');
+const connectionBackend = read('functions/src/profile_view.ts');
+const profileAccessBackend = read('functions/src/profile_access.ts');
+const profileMediaBackend = read('functions/src/profile_media.ts');
+const profileMediaListingBackend = read('functions/src/profile_media_listing.ts');
+const firestoreRules = read('firestore.rules');
 const androidGradle = read('android/app/build.gradle.kts');
 const androidActivity = read('android/app/src/main/kotlin/com/polycircle/app/MainActivity.kt');
 const iosDelegate = read('ios/Runner/AppDelegate.swift');
@@ -60,6 +71,36 @@ test('high-risk UGC prefilter is wired to normal posting surfaces but not report
   assert.match(profile, /UgcTextPolicy\.ensureAllowedValues/);
   assert.match(circle, /UgcTextPolicy\.ensureAllowedValues/);
   assert.doesNotMatch(read('lib/services/safety_service.dart'), /UgcTextPolicy/);
+});
+
+test('Firestore independently rejects severe UGC on direct posting paths', () => {
+  assert.match(firestoreRules, /function ugcTextAllowed\(text\)/);
+  assert.match(firestoreRules, /ugcTextAllowed\(data\.bio\)/);
+  assert.match(firestoreRules, /ugcTextAllowed\(data\.note\)/);
+  assert.match(firestoreRules, /ugcTextAllowed\(request\.resource\.data\.text\)/);
+});
+
+test('core member callables use trusted adult and current-policy eligibility', () => {
+  assert.match(backendCompliance, /CURRENT_TERMS_VERSION = '2026-08-alpha-v1'/);
+  assert.match(backendCompliance, /CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-08-v1'/);
+  assert.match(backendCompliance, /adultAccessApproved === true/);
+  assert.match(coreBackend, /assertActiveCompliantMember/);
+  assert.match(coreBackend, /isActiveCompliantMember/);
+  assert.match(passBackend, /assertActiveCompliantMember/);
+  assert.match(circleBackend, /assertActiveCompliantMember/);
+  assert.match(connectionBackend, /assertActiveCompliantMember/);
+  assert.match(safetyBackend, /assertActiveCompliantMember/);
+  assert.match(profileAccessBackend, /assertActiveCompliantMember/);
+  assert.match(profileMediaBackend, /assertActiveCompliantMember/);
+  assert.match(profileMediaListingBackend, /assertActiveCompliantMember/);
+});
+
+test('reporting visibly includes child safety and threat categories', () => {
+  assert.match(safetyBackend, /'child_safety'/);
+  assert.match(safetyBackend, /'threats_violence'/);
+  assert.match(safetyBackend, /'sexual_content'/);
+  assert.match(safetyUi, /child-safety \/ underage/i);
+  assert.match(safetyUi, /threats or violence/i);
 });
 
 test('release gates keep manual store and trusted moderation work explicit', () => {
