@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const circle = fs.readFileSync(
-  'lib/screens/circle/circle_screen.dart',
+  'lib/screens/circle/my_circle_screen.dart',
   'utf8',
 );
 
@@ -14,7 +14,7 @@ test('My Circle uses the spatial relationship universe', () => {
 });
 
 test('My Circle is centered on the signed-in member', () => {
-  assert.match(circle, /class _OwnerSphere/);
+  assert.match(circle, /class _OwnerWorld/);
   assert.match(circle, /photoFuture/);
   assert.match(circle, /'YOU'/);
 });
@@ -38,5 +38,5 @@ test('legacy relationship management remains reachable', () => {
 test('My Circle includes a spatial glass detail layer', () => {
   assert.match(circle, /BackdropFilter/);
   assert.match(circle, /ImageFilter\.blur/);
-  assert.match(circle, /_UniverseBackground/);
+  assert.match(circle, /_SpatialBackground/);
 });

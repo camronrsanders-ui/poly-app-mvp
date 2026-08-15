@@ -46,7 +46,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
     _worldTravel = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 760),
+      duration: const Duration(milliseconds: 620),
       value: 1,
     )..addListener(_handleWorldTravelFrame);
 
@@ -493,7 +493,13 @@ class _WorldCameraTravel extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: animation,
-      child: child,
+
+      // Keep the expensive spatial scene isolated while
+      // only its transform changes frame-to-frame.
+      child: RepaintBoundary(
+        child: child,
+      ),
+
       builder: (context, child) {
         final raw = animation.value.clamp(0.0, 1.0).toDouble();
 
@@ -502,44 +508,44 @@ class _WorldCameraTravel extends StatelessWidget {
         late final double z;
         late final double scale;
         late final double rotationY;
-        late final double opacity;
 
         if (raw < .5) {
           final phase = (raw / .5).clamp(0.0, 1.0).toDouble();
 
           final movement = Curves.easeInCubic.transform(phase);
 
-          x = -direction * 36 * movement;
-          y = -14 * movement;
-          z = -175 * movement;
+          // Current universe retreats into space.
+          x = -direction * 42 * movement;
+          y = -10 * movement;
+          z = -340 * movement;
 
-          rotationY = direction * .18 * movement;
+          rotationY = direction * .14 * movement;
 
-          scale = 1 - (.27 * movement);
-
-          opacity = (1 - (.90 * movement)).clamp(0.0, 1.0).toDouble();
+          scale = 1 - (.66 * movement);
         } else {
           final phase = ((raw - .5) / .5).clamp(0.0, 1.0).toDouble();
 
           final movement = Curves.easeOutCubic.transform(phase);
 
-          // Intentional geometric overshoot.
+          // A tiny physical settle on arrival.
           final spatialOvershoot = Curves.easeOutBack.transform(phase);
 
+          // New universe travels back toward camera.
           x = direction * 48 * (1 - movement);
-          y = 16 * (1 - movement);
-          z = -175 * (1 - movement);
+          y = 12 * (1 - movement);
+          z = -340 * (1 - movement);
 
-          rotationY = -direction * .20 * (1 - movement);
+          rotationY = -direction * .16 * (1 - movement);
 
-          scale = .70 + (.30 * spatialOvershoot);
-
-          // Opacity remains strictly bounded.
-          opacity = (.10 + (.90 * movement)).clamp(0.0, 1.0).toDouble();
+          scale = .34 + (.66 * spatialOvershoot);
         }
 
         final matrix = Matrix4.identity()
-          ..setEntry(3, 2, -.0012)
+          ..setEntry(
+            3,
+            2,
+            -.0011,
+          )
           ..translateByDouble(
             x,
             y,
@@ -556,13 +562,10 @@ class _WorldCameraTravel extends StatelessWidget {
 
         return IgnorePointer(
           ignoring: animation.value < 1,
-          child: Opacity(
-            opacity: opacity,
-            child: Transform(
-              alignment: Alignment.center,
-              transform: matrix,
-              child: child,
-            ),
+          child: Transform(
+            alignment: Alignment.center,
+            transform: matrix,
+            child: child,
           ),
         );
       },

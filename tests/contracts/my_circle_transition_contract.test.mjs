@@ -7,51 +7,59 @@ const circle = fs.readFileSync(
   'utf8',
 );
 
-test('shared worlds use two-phase camera travel', () => {
-  assert.match(circle, /class _WorldCameraTravel/);
+const start = circle.indexOf(
+  'class _WorldCameraTravel',
+);
+
+const end = circle.indexOf(
+  'class _SpatialHeader',
+  start,
+);
+
+const camera = circle.slice(start, end);
+
+test('shared worlds use midpoint camera travel', () => {
   assert.match(circle, /_pendingWorldId/);
   assert.match(circle, /_worldTravelSwapped/);
   assert.match(circle, /_worldTravel\.value < \.5/);
 });
 
-test('world swaps while distant from camera', () => {
+test('camera stage uses retained repaint isolation', () => {
+  assert.match(camera, /RepaintBoundary/);
+});
+
+test('camera uses true perspective and deep Z travel', () => {
+  assert.match(camera, /setEntry\(\s*3,\s*2,/);
+  assert.match(camera, /translateByDouble/);
+  assert.match(camera, /rotateY/);
+  assert.match(camera, /scaleByDouble/);
+  assert.match(camera, /z = -340/);
+});
+
+test('full spatial universe is not faded frame by frame', () => {
+  assert.doesNotMatch(camera, /\bOpacity\(/);
+});
+
+test('world travel uses responsive timing', () => {
   assert.match(
     circle,
-    /_activeWorldId = _pendingWorldId!/,
+    /Duration\(milliseconds:\s*620\)/,
   );
 });
 
-test('camera movement contains true Z-depth', () => {
-  assert.match(circle, /setEntry\(3,\s*2,/);
-  assert.match(circle, /translateByDouble/);
-  assert.match(circle, /rotateY/);
-  assert.match(circle, /scaleByDouble/);
-  assert.match(circle, /z = -175/);
-});
-
-test('overshoot affects geometry rather than opacity', () => {
+test('arrival retains geometric settle', () => {
+  assert.match(camera, /spatialOvershoot/);
   assert.match(
-    circle,
-    /spatialOvershoot/,
-  );
-
-  assert.match(
-    circle,
+    camera,
     /Curves\.easeOutBack\.transform/,
   );
-
-  assert.match(
-    circle,
-    /opacity = \(\.10 \+ \(\.90 \* movement\)\)/,
-  );
 });
 
-test('world travel includes tactile feedback', () => {
+test('world travel retains tactile feedback', () => {
   assert.match(
     circle,
     /HapticFeedback\.lightImpact/,
   );
-
   assert.match(
     circle,
     /HapticFeedback\.selectionClick/,
