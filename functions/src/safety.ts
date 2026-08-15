@@ -1,5 +1,6 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertActiveCompliantMember} from './account_compliance';
 
 const allowedReportReasons = new Set([
   'harassment',
@@ -37,11 +38,7 @@ function timestampMillis(value: unknown): number | null {
 }
 
 async function assertActive(uid: string): Promise<void> {
-  const db = getFirestore();
-  const snap = await db.collection('users').doc(uid).get();
-  if (!snap.exists || snap.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(getFirestore(), uid);
 }
 
 async function enforceRateLimit(uid: string, action: string, max = 20, windowMs = 60_000): Promise<void> {
