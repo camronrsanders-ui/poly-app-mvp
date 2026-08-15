@@ -131,7 +131,14 @@ class SafetyCenterScreen extends StatelessWidget {
             icon: Icons.flag_outlined,
             title: 'Report concerning behavior',
             body:
-                'Profiles and chats include reporting controls for harassment, fake profiles, hate speech, misrepresentation, spam, non-consensual content, and other safety concerns.',
+                'Profiles and chats include reporting controls for harassment, threats or violence, child-safety or underage concerns, sexual or non-consensual content, hate speech, fake profiles, scams/spam, misrepresentation, and other safety concerns. Report details are not blocked by the normal posting filter, so you can describe what happened for moderation review.',
+          ),
+          _section(
+            context,
+            icon: Icons.filter_alt_outlined,
+            title: 'Severe content is blocked before posting',
+            body:
+                'Polycircle blocks narrow, high-confidence patterns such as direct violent threats and dating or sexual solicitation involving minors before profile text, Circle text, or messages are posted. Broader context still requires reporting and human moderation.',
           ),
           _section(
             context,
@@ -166,7 +173,7 @@ class SafetyCenterScreen extends StatelessWidget {
             icon: Icons.no_accounts_outlined,
             title: 'Adults only',
             body:
-                'Polycircle is for people age 18 and older. Sexual or romantic exploitation of minors and sexual content involving minors are prohibited.',
+                'Polycircle is for people age 18 and older. Sexual or romantic exploitation of minors and sexual content involving minors are prohibited. If a profile or conversation suggests someone is underage, use the child-safety / underage report reason.',
           ),
           const SizedBox(height: 8),
           const Text(
