@@ -29,6 +29,10 @@ class AuthService {
         'onboardingComplete': false,
         'lastActiveAt': FieldValue.serverTimestamp(),
         'accountStatus': 'active',
+        // New accounts begin unable to create/read member content. The
+        // pre-onboarding compliance gate must record current 18+ and UGC-policy
+        // acceptance before Firestore member paths become available.
+        'adultAccessApproved': false,
       }, SetOptions(merge: true));
     } catch (_) {
       // Account creation is two-system work (Auth + Firestore). If the account
