@@ -19,12 +19,26 @@ This document is the durable project record for major engineering, security, rel
 1. Keep the Flutter application runnable and reduce preventable test-cycle failures.
 2. Maintain CI, dependency auditing, security contracts, and Firebase rules tests.
 3. Complete Android Firebase runtime/emulator and real-device validation now that the native host and CI debug APK build are established.
-4. Continue iOS real-device/runtime validation.
-5. Preserve App Check, Firestore/Storage protections, and release gates.
-6. Do not enable paid Firebase infrastructure merely to advance development.
-7. Keep PR #4 on `restart-foundation` Draft/unmerged until release criteria justify changing that state.
+4. Continue iOS real-device/runtime validation, including age-assurance behavior on supported devices/accounts.
+5. Complete remaining app-store age/UGC release work: store configuration, trusted backend enforcement/moderation, final legal policies, and operational support/moderation readiness.
+6. Preserve App Check, Firestore/Storage protections, and release gates.
+7. Do not enable paid Firebase infrastructure merely to advance development.
+8. Keep PR #4 on `restart-foundation` Draft/unmerged until release criteria justify changing that state.
 
 ## Engineering record
+
+### 2026-08-14 — Age assurance and app-store UGC compliance foundation
+- Added a mandatory pre-onboarding adult-access and user-policy gate. New accounts must complete the 18+ check and accept the current pre-release Terms of Use and Community Guidelines before entering onboarding/member surfaces.
+- Exact date of birth is used locally to calculate adult eligibility and is not persisted to the Polycircle account. The durable record keeps only the adult-approval state, policy versions, age-assurance method/status, and server timestamps.
+- New account documents start with `adultAccessApproved=false`; Firestore client member-data paths deny newly created accounts until the bounded current compliance record is written. Dedicated Flutter, static-contract, and emulator Firestore tests cover the gate.
+- Added Google Play Age Signals SDK `0.0.4` and a native Android bridge for `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` handling. A shared range below 18 blocks access; an 18+ lower bound can confirm adult access.
+- Added Apple's Declared Age Range entitlement and native iOS bridge. The implementation uses Apple's privacy-preserving age-range signal on supported OS versions and keeps regulated-region/verification failure from silently becoming adult approval.
+- Added a deliberately narrow severe-content pre-submit filter for profile free text, direct messages, and Circle free text. It targets high-confidence direct threats and sexual/dating solicitation involving minors while avoiding broad identity/slur lists that could incorrectly suppress LGBTQ+/ENM discussion. Reports remain able to describe/quote violating material.
+- Existing report, block, connection-ending, protected profile-photo moderation, Safety Center, Community Guidelines, and privileged moderation foundations remain part of the UGC safety model.
+- Added a pre-release Terms draft, a dedicated app-store age/UGC compliance document, and explicit Gate 1/2/3 release requirements. These materials intentionally do **not** claim that Polycircle is fully compliant or store-approved.
+- Verified engineering baseline: Polycircle CI #1033 and Dependency Audit #380 passed on `ad4de553e0658a6a908ab73f1beea1c43813a6a1`, including Flutter analyze/tests, Android debug APK with the Play Age Signals integration, iOS simulator build with the Declared Age Range integration, Functions build/tests/load, static security contracts, and Firestore/Storage adversarial tests.
+- Remaining public/distributed-beta blockers include Play Console 18+ / Restrict Minor Access configuration, production Apple capability/signing configuration, real-device/store-delivered age-signal testing, final counsel-reviewed Terms and Privacy Policy, a real published support contact, trusted backend adult/compliance enforcement for all member callables, trusted text-moderation enforcement, moderator operations/timely-response validation, and removal of the temporary legacy-account migration allowance.
+- Private Vault remains OFF; this work did not enable paid Firebase infrastructure or weaken App Check/Firestore/Storage protections.
 
 ### 2026-08-14 — Android native host and CI APK milestone
 - The native `android/` Flutter host is now committed on `restart-foundation` with the permanent Android application ID `com.polycircle.app`.
@@ -110,6 +124,7 @@ These are future product/business-positioning principles. They do not override c
 - `docs/post-launch-product-vision.md` — longer-term product/business after-plan.
 - `docs/business/investor-readiness-plan.md` — working business plan, investor preparation, fundraising, and acquisition-readiness roadmap.
 - `docs/project-record.md` — durable high-level record of decisions, major maintenance work, test outcomes, and blockers.
+- `docs/app-store-age-ugc-compliance.md` — age-assurance/UGC implementation map, platform requirements, and unresolved release risks.
 - Android/iOS/security/release documentation — operational details and platform-specific procedures remain in their dedicated documents rather than being duplicated here.
 
 ## Maintenance convention
