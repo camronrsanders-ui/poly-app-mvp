@@ -87,7 +87,9 @@ The debug override is UI-development convenience only. It is never written to Fi
 
 ### Trusted backend
 
-`functions/src/monetization.ts` exposes a read-only `getMyEntitlements` callable with App Check enforcement and current adult/policy account eligibility.
+`functions/src/monetization.ts` exposes a read-only `getMyEntitlements` callable with App Check enforcement and a valid active-account requirement.
+
+The entitlement lookup intentionally does **not** require acceptance of the latest participation-policy version. A future Terms/Community Guidelines update must not hide an already-paid subscription or obstruct a future manage/cancel-subscription path. Actual paid member features can and should still enforce current adult/community participation eligibility at their own trusted backend boundary.
 
 The callable reads backend-only `_billing_entitlements/{uid}` state. There is currently **no production writer** for this collection. Real StoreKit / Play Billing verification must be implemented before paid states can legitimately exist.
 
@@ -170,6 +172,11 @@ Subscriptions are the preferred primary revenue model. Advertising is secondary 
 - gender identity;
 - relationship structure/status;
 - Circle graph or relationship-card contents;
+- profile age;
+- precise location;
+- race or ethnicity;
+- religion;
+- political beliefs;
 - private messages;
 - blocks or reports;
 - health/HIV information;
@@ -241,6 +248,7 @@ Before any tester can spend money:
 - entitlement cleanup/data export/retention behavior decided;
 - restore purchases implemented;
 - subscription state transitions tested;
+- subscription visibility and manage/cancel access do not require accepting a newly revised participation policy;
 - no production charges enabled.
 
 ### Gate M2 — production subscriptions
