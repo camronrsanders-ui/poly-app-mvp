@@ -46,6 +46,7 @@ Required in addition to Gate 1:
 - Firebase App Check configured and verified on staging and real devices.
 - Rate limits verified under emulator/staging tests.
 - Crash/error reporting configured without sensitive payload logging.
+- Android beta/release artifacts use a dedicated non-debug signing configuration; the current debug-key release fallback is local-smoke-only and must not be used for distributed builds.
 - Account deletion/recovery passes end-to-end fault-injection tests: Firestore failure, BulkWriter failure, Storage cleanup failure, Auth deletion failure, retry after partial cleanup, and final minimal-tombstone cleanup.
 - Privacy Policy and Terms drafts are completed with operator/jurisdiction/retention decisions and reviewed appropriately before publication.
 - Community Guidelines reviewed/finalized.
