@@ -119,6 +119,30 @@ test('explicit adult approval still requires current policy versions for member 
   await assertFails(getDoc(doc(bob, 'profiles', 'bob')));
 });
 
+test('client cannot directly self-approve adult or policy compliance fields', async () => {
+  await adminSeed([['users', 'alice', {
+    uid: 'alice',
+    email: 'alice@example.com',
+    createdAt: new Date(),
+    onboardingComplete: false,
+    lastActiveAt: new Date(),
+    accountStatus: 'active',
+    adultAccessApproved: false,
+  }]]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  await assertFails(updateDoc(doc(db, 'users', 'alice'), {
+    adultAccessApproved: true,
+    termsAcceptedVersion: '2026-08-alpha-v1',
+    communityGuidelinesAcceptedVersion: '2026-08-v1',
+    ageAssuranceMethod: 'self_attested_dob_fallback',
+    ageSignalStatus: 'unavailable:forged_client',
+    ageAssuranceCheckedAt: serverTimestamp(),
+    ugcPolicyAcceptedAt: serverTimestamp(),
+    lastActiveAt: serverTimestamp(),
+  }));
+});
+
 test('onboarding cannot be marked complete until a profile exists', async () => {
   await adminSeed([['users', 'alice', {
     uid: 'alice',
