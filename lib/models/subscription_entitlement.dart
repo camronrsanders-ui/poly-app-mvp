@@ -33,7 +33,9 @@ class SubscriptionEntitlement {
   bool get hasPaidAccess =>
       tier != SubscriptionTier.free &&
       (status == SubscriptionAccessStatus.active ||
-          status == SubscriptionAccessStatus.gracePeriod);
+          status == SubscriptionAccessStatus.gracePeriod) &&
+      accessUntil != null &&
+      accessUntil!.isAfter(DateTime.now().toUtc());
 
   bool has(PremiumCapability capability) =>
       hasPaidAccess && capabilities.contains(capability);
@@ -49,7 +51,7 @@ class SubscriptionEntitlement {
       status: SubscriptionAccessStatus.active,
       source: 'debug_override',
       capabilities: capabilitiesForTier(tier),
-      accessUntil: DateTime.now().add(const Duration(days: 30)),
+      accessUntil: DateTime.now().toUtc().add(const Duration(days: 30)),
     );
   }
 
@@ -75,37 +77,32 @@ class SubscriptionEntitlement {
         ? DateTime.fromMillisecondsSinceEpoch(accessUntilMs.toInt(), isUtc: true)
         : null;
 
-    final rawCapabilities = data['capabilities'];
-    final capabilities = <PremiumCapability>{};
-    if (rawCapabilities is Iterable) {
-      for (final value in rawCapabilities) {
-        switch (value.toString()) {
-          case 'advanced_discovery':
-            capabilities.add(PremiumCapability.advancedDiscovery);
-          case 'more_likes':
-            capabilities.add(PremiumCapability.moreLikes);
-          case 'rewind':
-            capabilities.add(PremiumCapability.rewind);
-          case 'incognito':
-            capabilities.add(PremiumCapability.incognito);
-          case 'ad_free':
-            capabilities.add(PremiumCapability.adFree);
-          case 'advanced_circle':
-            capabilities.add(PremiumCapability.advancedCircle);
-        }
-      }
-    }
-
     // Fail closed: a malformed/contradictory paid response does not create paid
     // access in the client. Trusted feature authorization must also be checked
     // server-side when a paid capability affects backend behavior.
     final paidStatus = status == SubscriptionAccessStatus.active ||
         status == SubscriptionAccessStatus.gracePeriod;
-    if (tier == SubscriptionTier.free || !paidStatus) {
+    final accessStillValid =
+        accessUntil != null && accessUntil.isAfter(DateTime.now().toUtc());
+    if (tier == SubscriptionTier.free || !paidStatus || !accessStillValid) {
       return SubscriptionEntitlement.free(
-        status: status,
+        status: paidStatus && !accessStillValid
+            ? SubscriptionAccessStatus.expired
+            : status,
         source: data['source']?.toString() ?? 'none',
       );
+    }
+
+    final allowedForTier = capabilitiesForTier(tier);
+    final capabilities = <PremiumCapability>{};
+    final rawCapabilities = data['capabilities'];
+    if (rawCapabilities is Iterable) {
+      for (final value in rawCapabilities) {
+        final capability = _capabilityFromWire(value.toString());
+        if (capability != null && allowedForTier.contains(capability)) {
+          capabilities.add(capability);
+        }
+      }
     }
 
     return SubscriptionEntitlement(
@@ -115,5 +112,17 @@ class SubscriptionEntitlement {
       capabilities: capabilities,
       accessUntil: accessUntil,
     );
+  }
+
+  static PremiumCapability? _capabilityFromWire(String value) {
+    return switch (value) {
+      'advanced_discovery' => PremiumCapability.advancedDiscovery,
+      'more_likes' => PremiumCapability.moreLikes,
+      'rewind' => PremiumCapability.rewind,
+      'incognito' => PremiumCapability.incognito,
+      'ad_free' => PremiumCapability.adFree,
+      'advanced_circle' => PremiumCapability.advancedCircle,
+      _ => null,
+    };
   }
 }
