@@ -3,6 +3,10 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {
+  assertActiveCompliantMember,
+  isActiveCompliantMember,
+} from './account_compliance';
 import {assertCanReceiveNewConnection} from './connection_eligibility';
 import {candidateMatchesPreferences} from './discovery_preferences';
 import {toProfileView} from './profile_view_fields';
@@ -17,10 +21,7 @@ function requireUid(auth: {uid: string} | undefined): string {
 }
 
 async function assertActive(uid: string) {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(db, uid);
 }
 
 function pairId(a: string, b: string): string {
@@ -99,7 +100,7 @@ export const getDiscoverCandidates = onCall(
       blockRefs.length ? db.getAll(...blockRefs) : Promise.resolve([]),
     ]);
     const active = new Set(userSnaps
-      .filter((snap) => snap.exists && snap.get('accountStatus') === 'active')
+      .filter((snap) => isActiveCompliantMember(snap))
       .map((snap) => snap.id));
     const passed = new Set(passSnaps
       .filter((snap) => snap.exists)
@@ -187,10 +188,10 @@ export const likeProfile = onCall(
         tx.get(passRef),
       ]);
 
-      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
-        throw new HttpsError('permission-denied', 'Account is not active.');
+      if (!isActiveCompliantMember(callerUser)) {
+        throw new HttpsError('permission-denied', 'Complete adult access before connecting.');
       }
-      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+      if (!isActiveCompliantMember(targetUser)) {
         throw new HttpsError('permission-denied', 'Interaction unavailable.');
       }
       if (outgoingBlock.exists || incomingBlock.exists) {
@@ -259,10 +260,10 @@ export const createConversation = onCall(
         tx.get(ref),
       ]);
 
-      if (!callerUser.exists || callerUser.get('accountStatus') !== 'active') {
-        throw new HttpsError('permission-denied', 'Account is not active.');
+      if (!isActiveCompliantMember(callerUser)) {
+        throw new HttpsError('permission-denied', 'Complete adult access before opening conversations.');
       }
-      if (!targetUser.exists || targetUser.get('accountStatus') !== 'active') {
+      if (!isActiveCompliantMember(targetUser)) {
         throw new HttpsError('permission-denied', 'Interaction unavailable.');
       }
       if (outgoingBlock.exists || incomingBlock.exists) {
