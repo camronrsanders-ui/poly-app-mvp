@@ -1,5 +1,6 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
+import {assertActiveCompliantMember} from './account_compliance';
 
 const db = getFirestore();
 
@@ -17,10 +18,7 @@ function requireOwnerUid(raw: unknown): string {
 }
 
 async function assertActive(uid: string): Promise<void> {
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || user.get('accountStatus') !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active.');
-  }
+  await assertActiveCompliantMember(db, uid);
 }
 
 async function consumeRateLimit(uid: string): Promise<void> {
