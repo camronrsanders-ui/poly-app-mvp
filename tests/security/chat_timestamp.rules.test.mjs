@@ -32,11 +32,11 @@ async function seedActiveConversation() {
   });
 }
 
-function message(createdAt) {
+function message(createdAt, text = 'hello') {
   return {
     conversationId: 'alice_bob',
     senderUid: 'alice',
-    text: 'hello',
+    text,
     createdAt,
     isDeleted: false,
     messageType: 'text',
@@ -65,6 +65,18 @@ test('chat accepts only an atomic message plus matching conversation activity up
     lastMessageId: messageRef.id,
   });
   await assertSucceeds(batch.commit());
+});
+
+test('chat rejects severe UGC even when the message/conversation batch is otherwise valid', async () => {
+  const db = env.authenticatedContext('alice').firestore();
+  const batch = writeBatch(db);
+  const messageRef = doc(db, 'messages', 'message-prohibited-ugc');
+  batch.set(messageRef, message(serverTimestamp(), 'I will kill you'));
+  batch.update(doc(db, 'conversations', 'alice_bob'), {
+    lastMessageAt: serverTimestamp(),
+    lastMessageId: messageRef.id,
+  });
+  await assertFails(batch.commit());
 });
 
 test('standalone message create cannot bypass conversation activity binding', async () => {
