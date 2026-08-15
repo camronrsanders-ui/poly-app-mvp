@@ -18,7 +18,11 @@ import DeclaredAgeRange
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
-    let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PolycircleAgeAssurance")
+    guard let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "PolycircleAgeAssurance"
+    ) else {
+      return
+    }
     let channel = FlutterMethodChannel(
       name: ageAssuranceChannel,
       binaryMessenger: registrar.messenger()
@@ -34,7 +38,11 @@ import DeclaredAgeRange
 
   private func requestAdultAgeSignal(result: @escaping FlutterResult) {
 #if canImport(DeclaredAgeRange)
-    if #available(iOS 26.0, *) {
+    // isEligibleForAgeFeatures is available beginning with iOS 26.2. Keep the
+    // entire privacy-preserving age-range path behind that availability check;
+    // older OS versions return an explicit unavailable result to Flutter rather
+    // than attempting an unsupported API.
+    if #available(iOS 26.2, *) {
       Task { @MainActor in
         do {
           let regulatedRegion = try await AgeRangeService.shared.isEligibleForAgeFeatures
