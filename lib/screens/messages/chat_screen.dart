@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
+import '../../services/ugc_text_policy.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -56,6 +57,19 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await _messages.sendMessage(
           conversationId: widget.conversationId, text: text);
+    } on UgcPolicyViolation catch (error) {
+      // Keep rejected text editable so the member can remove the prohibited
+      // content rather than losing their draft. Reports are a separate path and
+      // are intentionally not passed through this posting filter.
+      if (mounted && _controller.text.isEmpty) {
+        _controller.text = text;
+        _controller.selection = TextSelection.collapsed(offset: text.length);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.userMessage)),
+        );
+      }
     } catch (_) {
       // Do not make a transient network/backend error eat the user's draft.
       // If they already started typing a new message while this request was in
@@ -107,16 +121,19 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _report() async {
-    const reasons = [
-      'harassment',
-      'fake_profile',
-      'hate_speech',
-      'misrepresentation',
-      'spam',
-      'nonconsensual_content',
-      'other',
-    ];
-    var reason = reasons.first;
+    const reasons = <String, String>{
+      'harassment': 'Harassment',
+      'threats_violence': 'Threats or violence',
+      'child_safety': 'Child safety / underage concern',
+      'sexual_content': 'Sexual content or solicitation',
+      'nonconsensual_content': 'Non-consensual content',
+      'hate_speech': 'Hate speech',
+      'fake_profile': 'Fake profile',
+      'misrepresentation': 'Misrepresentation',
+      'spam': 'Spam or scam',
+      'other': 'Other',
+    };
+    var reason = reasons.keys.first;
     final details = TextEditingController();
     final submitted = await showDialog<bool>(
       context: context,
@@ -127,10 +144,10 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<String>(
                 initialValue: reason,
-                items: reasons
-                    .map((r) => DropdownMenuItem(
-                        value: r, child: Text(r.replaceAll('_', ' '))))
-                    .toList(),
+                items: reasons.entries
+                    .map((entry) => DropdownMenuItem(
+                        value: entry.key, child: Text(entry.value)))
+                    .toList(growable: false),
                 onChanged: (v) => setLocalState(() => reason = v ?? reason),
                 decoration: const InputDecoration(labelText: 'Reason'),
               ),
