@@ -26,7 +26,8 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /flutter analyze(?:\r?\n|$)/);
   assert.doesNotMatch(preflight, /flutter analyze lib/);
   assert.match(preflight, /flutter test/);
-  assert.match(preflight, /npm --prefix functions install/);
+  assert.match(preflight, /npm --prefix functions ci/);
+  assert.doesNotMatch(preflight, /npm --prefix functions install/);
   assert.match(preflight, /npm --prefix functions run build/);
   assert.match(preflight, /npm --prefix functions test/);
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
