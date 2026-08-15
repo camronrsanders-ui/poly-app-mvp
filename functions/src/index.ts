@@ -543,3 +543,12 @@ export {
 export {listProfilePhotosForReview} from './profile_media_moderation';
 export {listMyProfilePhotos} from './profile_media_listing';
 export {listMyConnections} from './profile_view';
+
+
+export {
+  createCircle,
+  inviteCircleMember,
+  respondToCircleInvite,
+  leaveCircle,
+  listMyCircles,
+} from './circle_membership';
