@@ -14,6 +14,7 @@ const allowedReportReasons = new Set([
   'nonconsensual_content',
   'other',
 ]);
+const allowedReportContentTypes = new Set(['account', 'profile', 'message']);
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -26,6 +27,14 @@ function requireTargetUid(raw: unknown, currentUid: string): string {
     throw new HttpsError('invalid-argument', 'Invalid target user.');
   }
   return uid;
+}
+
+function requireOptionalReference(raw: unknown, label: string): string {
+  const value = String(raw ?? '').trim();
+  if (!value || value.length > 128 || !/^[A-Za-z0-9:_-]+$/.test(value)) {
+    throw new HttpsError('invalid-argument', `Invalid ${label}.`);
+  }
+  return value;
 }
 
 function pairId(a: string, b: string): string {
@@ -94,6 +103,53 @@ async function revokePrivateAccessBetween(a: string, b: string, reason: string):
   await writer.close();
 }
 
+async function validateReportedContent(
+  db: FirebaseFirestore.Firestore,
+  reporterUid: string,
+  reportedUid: string,
+  contentType: string,
+  rawContentId: unknown,
+  rawConversationId: unknown,
+): Promise<{contentId?: string; conversationId?: string}> {
+  if (contentType === 'account') return {};
+
+  if (contentType === 'profile') {
+    const contentId = rawContentId == null
+      ? reportedUid
+      : requireOptionalReference(rawContentId, 'profile reference');
+    if (contentId !== reportedUid) {
+      throw new HttpsError('invalid-argument', 'Profile report does not match the reported account.');
+    }
+    const profile = await db.collection('profiles').doc(reportedUid).get();
+    if (!profile.exists) throw new HttpsError('not-found', 'Reported profile was not found.');
+    return {contentId};
+  }
+
+  const contentId = requireOptionalReference(rawContentId, 'message reference');
+  const conversationId = requireOptionalReference(rawConversationId, 'conversation reference');
+  const [message, conversation] = await Promise.all([
+    db.collection('messages').doc(contentId).get(),
+    db.collection('conversations').doc(conversationId).get(),
+  ]);
+  if (!message.exists || !conversation.exists) {
+    throw new HttpsError('not-found', 'Reported message was not found.');
+  }
+  if (String(message.get('conversationId') ?? '') !== conversationId) {
+    throw new HttpsError('permission-denied', 'Reported message context is invalid.');
+  }
+  if (String(message.get('senderUid') ?? '') !== reportedUid) {
+    throw new HttpsError('permission-denied', 'Reported message was not sent by that account.');
+  }
+  const participants = conversation.get('participantUids');
+  if (!Array.isArray(participants)
+      || !participants.includes(reporterUid)
+      || !participants.includes(reportedUid)) {
+    throw new HttpsError('permission-denied', 'You cannot report this message.');
+  }
+
+  return {contentId, conversationId};
+}
+
 export const submitReport = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
@@ -102,9 +158,13 @@ export const submitReport = onCall(
     const reportedUid = requireTargetUid(request.data?.reportedUid, reporterUid);
     const reason = String(request.data?.reason ?? '').trim();
     const details = String(request.data?.details ?? '').trim();
+    const contentType = String(request.data?.contentType ?? 'account').trim();
 
     if (!allowedReportReasons.has(reason)) {
       throw new HttpsError('invalid-argument', 'Invalid report reason.');
+    }
+    if (!allowedReportContentTypes.has(contentType)) {
+      throw new HttpsError('invalid-argument', 'Invalid report content type.');
     }
     if (details.length > 2000) {
       throw new HttpsError('invalid-argument', 'Report details are too long.');
@@ -118,6 +178,15 @@ export const submitReport = onCall(
     const target = await db.collection('users').doc(reportedUid).get();
     if (!target.exists) throw new HttpsError('not-found', 'Reported account was not found.');
 
+    const content = await validateReportedContent(
+      db,
+      reporterUid,
+      reportedUid,
+      contentType,
+      request.data?.contentId,
+      request.data?.conversationId,
+    );
+
     const ref = db.collection('reports').doc();
     await ref.set({
       reportId: ref.id,
@@ -125,6 +194,9 @@ export const submitReport = onCall(
       reportedUid,
       reason,
       details,
+      contentType,
+      ...(content.contentId ? {contentId: content.contentId} : {}),
+      ...(content.conversationId ? {conversationId: content.conversationId} : {}),
       createdAt: FieldValue.serverTimestamp(),
       status: 'open',
     });
