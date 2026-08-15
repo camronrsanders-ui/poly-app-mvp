@@ -78,6 +78,23 @@ test('active owner can create profile only with server timestamps', async () => 
   })));
 });
 
+test('profile write rejects severe UGC at the Firestore boundary', async () => {
+  await seed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  await assertFails(setDoc(doc(db, 'profiles', 'alice'), {
+    ...profile('alice'),
+    bio: 'I am going to hurt you',
+  }));
+
+  await assertFails(setDoc(doc(db, 'profiles', 'alice'), {
+    ...profile('alice'),
+    lookingForNote: 'Looking for an underage kid to meet',
+  }));
+});
+
 test('profile update preserves creation time and requires server updatedAt', async () => {
   const createdAt = new Date('2026-01-01T00:00:00.000Z');
   await seed([
