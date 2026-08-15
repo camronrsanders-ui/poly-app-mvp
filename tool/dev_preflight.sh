@@ -153,7 +153,7 @@ flutter analyze
 flutter test
 ok "Flutter source checks passed"
 
-npm --prefix functions install
+npm --prefix functions ci
 npm --prefix functions run build
 npm --prefix functions test
 node --test tests/contracts/*.test.mjs
@@ -161,7 +161,7 @@ ok "Functions build/tests and client-backend contracts passed"
 
 if (( FULL == 1 )); then
   printf '\nRunning full Firebase rules suite...\n'
-  npm --prefix tests/security install
+  npm --prefix tests/security ci
   firebase emulators:exec \
     --project demo-polycircle \
     --only firestore,storage \
