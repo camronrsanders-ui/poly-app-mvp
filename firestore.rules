@@ -3,18 +3,35 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function currentTermsVersion() { return '2026-08-alpha-v1'; }
+    function currentCommunityGuidelinesVersion() { return '2026-08-v1'; }
+
+    // This is intentionally a narrow, high-confidence pre-post rule. Broad
+    // keyword/slur lists create harmful false positives for identity,
+    // educational, survivor-support, and reclaimed language. Reports are not
+    // passed through this filter so members can describe abuse to moderators.
+    function ugcTextAllowed(text) {
+      return !(text.lower().matches('.*(i will|i am going to)[ ]+(kill|rape|hurt)[ ]+(you|u).*')
+        || text.lower().matches('.*kill[ ]+yourself.*')
+        || text.lower().matches('.*(looking[ ]+for|seeking|want[ ]+to[ ]+meet|dm[ ]+me[ ]+if).{0,32}(minor|underage|child|kid).*')
+        || text.lower().matches('.*(sex|nudes?|naked|porn|explicit).{0,24}(with|from|of).{0,24}(minor|underage|child|kid).*')
+        || text.lower().matches('.*(minor|underage|child|kid).{0,24}(sex|nudes?|naked|porn|explicit).*'));
+    }
 
     function userIsActive(uid) {
       return exists(/databases/$(database)/documents/users/$(uid))
         && get(/databases/$(database)/documents/users/$(uid)).data.accountStatus == 'active'
         // Newly-created accounts explicitly start with adultAccessApproved=false
-        // and cannot use client Firestore interaction paths until the compliance
-        // gate succeeds. The missing-field branch is a temporary migration
-        // allowance for pre-gate test/legacy account documents; the app session
-        // gate still routes those accounts through adult/policy acceptance.
+        // and cannot use member paths until the current compliance gate succeeds.
+        // The missing-field branch is a temporary migration allowance for old
+        // local/test account documents and must be removed before public release.
         && (
           !get(/databases/$(database)/documents/users/$(uid)).data.keys().hasAny(['adultAccessApproved'])
-          || get(/databases/$(database)/documents/users/$(uid)).data.adultAccessApproved == true
+          || (
+            get(/databases/$(database)/documents/users/$(uid)).data.adultAccessApproved == true
+            && get(/databases/$(database)/documents/users/$(uid)).data.termsAcceptedVersion == currentTermsVersion()
+            && get(/databases/$(database)/documents/users/$(uid)).data.communityGuidelinesAcceptedVersion == currentCommunityGuidelinesVersion()
+          )
         );
     }
 
@@ -110,7 +127,11 @@ service cloud.firestore {
         && data.preferredStructures is list && data.preferredStructures.size() <= 12
         && data.preferredIntentions is list && data.preferredIntentions.size() <= 12
         && data.profileVisibility in ['public', 'hidden', 'matches_only']
-        && data.mapVisibility in ['public', 'matches_only', 'private'];
+        && data.mapVisibility in ['public', 'matches_only', 'private']
+        && ugcTextAllowed(data.displayName)
+        && ugcTextAllowed(data.bio)
+        && ugcTextAllowed(data.headline)
+        && ugcTextAllowed(data.lookingForNote);
     }
 
     function validRelationshipCard(data, ownerUid) {
@@ -126,7 +147,10 @@ service cloud.firestore {
         && data.note is string && data.note.size() <= 1000
         && data.visibility in ['public', 'matches_only', 'private', 'unnamed_public']
         && data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 10000
-        && data.isActive is bool;
+        && data.isActive is bool
+        && ugcTextAllowed(data.label)
+        && ugcTextAllowed(data.displayNameOptional)
+        && ugcTextAllowed(data.note);
     }
 
     match /users/{uid} {
@@ -174,8 +198,8 @@ service cloud.firestore {
           ])
           || (
             request.resource.data.adultAccessApproved == true
-            && request.resource.data.termsAcceptedVersion == '2026-08-alpha-v1'
-            && request.resource.data.communityGuidelinesAcceptedVersion == '2026-08-v1'
+            && request.resource.data.termsAcceptedVersion == currentTermsVersion()
+            && request.resource.data.communityGuidelinesAcceptedVersion == currentCommunityGuidelinesVersion()
             && request.resource.data.ageAssuranceMethod in [
               'apple_declared_age_range', 'play_age_signals',
               'self_attested_dob_fallback'
@@ -288,6 +312,7 @@ service cloud.firestore {
         && request.resource.data.senderUid == request.auth.uid
         && request.resource.data.messageType == 'text' && request.resource.data.isDeleted == false
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && ugcTextAllowed(request.resource.data.text)
         && request.resource.data.createdAt == request.time
         && request.resource.data.readBy is list && request.resource.data.readBy.size() == 1
         && request.resource.data.readBy[0] == request.auth.uid
