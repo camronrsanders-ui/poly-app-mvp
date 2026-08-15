@@ -7,7 +7,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import {doc, serverTimestamp, setDoc, updateDoc} from 'firebase/firestore';
+import {doc, getDoc, serverTimestamp, setDoc, updateDoc} from 'firebase/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
@@ -93,6 +93,30 @@ test('new account cannot skip onboarding during bootstrap', async () => {
   await assertFails(setDoc(doc(db, 'users', 'alice'), userDoc('alice', {
     onboardingComplete: true,
   })));
+});
+
+test('explicit adult approval still requires current policy versions for member data access', async () => {
+  const currentCompliance = {
+    accountStatus: 'active',
+    adultAccessApproved: true,
+    termsAcceptedVersion: '2026-08-alpha-v1',
+    communityGuidelinesAcceptedVersion: '2026-08-v1',
+  };
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', ...currentCompliance}],
+    ['users', 'bob', {
+      uid: 'bob',
+      ...currentCompliance,
+      termsAcceptedVersion: 'stale-terms',
+    }],
+    ['profiles', 'alice', profileDoc('alice')],
+    ['profiles', 'bob', profileDoc('bob')],
+  ]);
+
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  await assertSucceeds(getDoc(doc(alice, 'profiles', 'alice')));
+  await assertFails(getDoc(doc(bob, 'profiles', 'bob')));
 });
 
 test('onboarding cannot be marked complete until a profile exists', async () => {
