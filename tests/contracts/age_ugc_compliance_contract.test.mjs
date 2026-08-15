@@ -70,15 +70,18 @@ test('adult policy approval is recorded through an App-Check-protected trusted c
   assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly\(\[\s*'onboardingComplete', 'lastActiveAt'/);
 });
 
-test('Android integrates supported Play Age Signals and native Flutter bridge', () => {
+test('Android integrates supported Play Age Signals 0.0.4 and native Flutter bridge', () => {
   assert.match(androidGradle, /com\.google\.android\.play:age-signals:0\.0\.4/);
   assert.match(androidActivity, /com\.polycircle\.app\/age_assurance/);
   assert.match(androidActivity, /requestAgeSignalsAccess/);
   assert.match(androidActivity, /AgeSignalsStatus\.VERIFICATION_REQUIRED/);
   assert.match(androidActivity, /checkAgeSignals/);
-  assert.match(androidActivity, /ageResult\.userStatus\(\)/);
-  assert.match(androidActivity, /AgeSignalsVerificationStatus\.VERIFIED/);
-  assert.match(androidActivity, /userStatus == AgeSignalsVerificationStatus\.VERIFIED -> "adult"/);
+  assert.match(androidActivity, /ageResult\.ageRangeSource\(\)/);
+  assert.match(androidActivity, /upper != null && upper < ADULT_AGE -> "minor"/);
+  assert.match(androidActivity, /lower != null && lower >= ADULT_AGE -> "adult"/);
+  assert.doesNotMatch(androidActivity, /AgeSignalsVerificationStatus/);
+  assert.doesNotMatch(androidActivity, /ageResult\.userStatus\(\)/);
+  assert.match(androidActivity, /"regulatedRegion" to true/);
 });
 
 test('iOS declares age range and fails closed when regulated eligibility is unknown', () => {
