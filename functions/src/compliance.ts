@@ -32,34 +32,6 @@ function requireSignalStatus(raw: unknown): string {
   return status;
 }
 
-async function consumeRateLimit(
-  db: FirebaseFirestore.Firestore,
-  uid: string,
-): Promise<void> {
-  const action = 'compliance_accept';
-  const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
-  const now = Date.now();
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const start = Number(snap.get('windowStartMs') ?? 0);
-    const count = Number(snap.get('count') ?? 0);
-    if (!snap.exists || now - start >= 60 * 60_000) {
-      tx.set(ref, {
-        uid,
-        action,
-        windowStartMs: now,
-        count: 1,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return;
-    }
-    if (count >= 20) {
-      throw new HttpsError('resource-exhausted', 'Too many compliance attempts. Try again later.');
-    }
-    tx.set(ref, {count: count + 1, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-  });
-}
-
 export const recordAdultPolicyAcceptance = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
@@ -81,8 +53,6 @@ export const recordAdultPolicyAcceptance = onCall(
         || signalStatus.startsWith('verificationRequired:')) {
       throw new HttpsError('permission-denied', 'Adult access is not available for this account.');
     }
-
-    await consumeRateLimit(db, uid);
 
     const userRef = db.collection('users').doc(uid);
     await db.runTransaction(async (tx) => {
