@@ -11,7 +11,7 @@ Must pass in CI:
 - Android debug APK build
 - Functions TypeScript build and pure behavior tests
 - client/backend security contract tests
-- Firebase Firestore/Storage security tests, including inactive-account, adult-compliance, and moderation-internal boundaries
+- Firebase Firestore/Storage security tests, including inactive-account, adult-compliance, UGC-posting, and moderation-internal boundaries
 - development shell scripts parse cleanly
 
 Before manual simulator/device test cycles, run the local development preflight:
@@ -35,6 +35,7 @@ Required:
 - Profile editing persists and profile load failures cannot silently overwrite stored data with blank defaults.
 - Circle relationship-card CRUD/reorder works and malformed legacy enums cannot crash the editor.
 - Severe UGC text prefilter is exercised for profiles, messages, and Circle free text without blocking ordinary LGBTQ+/ENM identity discussion.
+- Firestore independently rejects the same narrow severe UGC categories on direct profile/message/Circle writes so a modified client cannot bypass only the Flutter prefilter.
 - Reports remain usable to describe violating content and are not blocked by the normal posting prefilter.
 - Discover uses trusted backend candidate retrieval with reciprocal private preferences, sanitized output, bounded reads, and no known N+1 block lookup.
 - Like/match creation uses trusted backend transaction.
@@ -58,9 +59,9 @@ Required in addition to Gate 1:
 - Google Play Age Signals `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` paths are exercised on real Play-installed test builds/accounts.
 - Apple Declared Age Range capability is enabled for the production App ID/signing profile and the 18+ range flow is exercised with Apple-supported sandbox/real-device testing.
 - App Store Connect/Play Console age rating, social/UGC, target-audience, and safety declarations are reviewed against the shipping build.
-- Every trusted callable that exposes or mutates member data enforces the approved adult/compliance state in addition to account activity; client/session gating alone is insufficient for public distribution.
-- The temporary Firestore missing-field migration allowance for legacy adult-compliance records is removed after migration/testing.
-- Trusted backend moderation/enforcement exists for user-authored profile/message/public Circle text or an equivalent reviewed architecture; the client prefilter alone is defense-in-depth, not the final moderation boundary.
+- Every ordinary member-facing trusted callable that exposes or mutates community/member content enforces the approved adult/compliance state in addition to account activity. Deliberate privacy/exit paths such as own-data access and account deletion may remain available without accepting newer participation terms; privileged moderator/admin operations use their separate least-privilege security model.
+- The temporary Firestore/backend missing-field migration allowance for legacy adult-compliance records is removed after migration/testing.
+- Trusted moderation/enforcement exists for user-authored profile/message/public Circle text or an equivalent reviewed architecture. The Flutter prefilter and deterministic Firestore severe-content rules are defense-in-depth controls, not a substitute for contextual moderation and timely report handling.
 - Account deletion/recovery passes end-to-end fault-injection tests: Firestore failure, BulkWriter failure, Storage cleanup failure, Auth deletion failure, retry after partial cleanup, and final minimal-tombstone cleanup.
 - Privacy Policy and Terms are completed with operator/jurisdiction/retention/age-assurance decisions and reviewed appropriately before publication; the current pre-release Terms draft is not the final public legal document.
 - Community Guidelines reviewed/finalized.
