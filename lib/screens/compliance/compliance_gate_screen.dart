@@ -7,11 +7,9 @@ import '../../services/compliance_service.dart';
 class ComplianceGateScreen extends StatefulWidget {
   const ComplianceGateScreen({
     super.key,
-    required this.uid,
     required this.onSignOut,
   });
 
-  final String uid;
   final Future<void> Function() onSignOut;
 
   @override
@@ -120,12 +118,12 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
       final signalStatus = statusParts.join(':');
 
       await _compliance.recordAdultPolicyAcceptance(
-        uid: widget.uid,
         ageAssuranceMethod: method,
         ageSignalStatus: signalStatus,
       );
-      // The parent session gate watches the account document. Once the policy
-      // fields are recorded it automatically advances to onboarding/app shell.
+      // The parent session gate watches the account document. Once the trusted
+      // callable records the policy fields it automatically advances to
+      // onboarding/app shell.
     } catch (_) {
       if (!mounted) return;
       setState(() {
