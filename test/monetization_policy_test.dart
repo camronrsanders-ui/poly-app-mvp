@@ -59,6 +59,11 @@ void main() {
     expect(AdPolicy.prohibitedTargetingData, contains('sexual_orientation'));
     expect(AdPolicy.prohibitedTargetingData, contains('gender_identity'));
     expect(AdPolicy.prohibitedTargetingData, contains('relationship_structure'));
+    expect(AdPolicy.prohibitedTargetingData, contains('profile_age'));
+    expect(AdPolicy.prohibitedTargetingData, contains('precise_location'));
+    expect(AdPolicy.prohibitedTargetingData, contains('race_or_ethnicity'));
+    expect(AdPolicy.prohibitedTargetingData, contains('religion'));
+    expect(AdPolicy.prohibitedTargetingData, contains('political_beliefs'));
     expect(AdPolicy.prohibitedTargetingData, contains('messages'));
     expect(AdPolicy.prohibitedTargetingData, contains('reports'));
     expect(AdPolicy.prohibitedTargetingData, contains('age_assurance_metadata'));
