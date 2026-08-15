@@ -344,6 +344,20 @@ service cloud.firestore {
     match /private_media_grants/{grantId} { allow read, write: if false; }
     match /private_media_requests/{requestId} { allow read, write: if false; }
     match /private_media_request_preferences/{preferenceId} { allow read, write: if false; }
+    // Circle lifecycle state is backend-owned.
+    // Clients receive permission-filtered views through callable Functions.
+    match /circles/{circleId} {
+      allow read, write: if false;
+    }
+
+    match /circle_memberships/{membershipId} {
+      allow read, write: if false;
+    }
+
+    match /circle_invites/{inviteId} {
+      allow read, write: if false;
+    }
+
     match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }
