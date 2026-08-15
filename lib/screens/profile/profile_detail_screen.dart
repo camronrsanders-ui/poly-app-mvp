@@ -107,11 +107,14 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     if (_uid.isEmpty || _acting) return;
     const reasons = <String, String>{
       'harassment': 'Harassment',
-      'fake_profile': 'Fake profile',
-      'hate_speech': 'Hate speech',
-      'misrepresentation': 'Misrepresentation',
-      'spam': 'Spam',
+      'threats_violence': 'Threats or violence',
+      'child_safety': 'Child safety / underage concern',
+      'sexual_content': 'Sexual content or solicitation',
       'nonconsensual_content': 'Non-consensual content',
+      'hate_speech': 'Hate speech',
+      'fake_profile': 'Fake profile',
+      'misrepresentation': 'Misrepresentation',
+      'spam': 'Spam or scam',
       'other': 'Other',
     };
     var reason = 'harassment';
