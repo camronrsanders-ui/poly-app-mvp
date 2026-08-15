@@ -120,7 +120,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _report() async {
+  Future<void> _report({String? messageId}) async {
     const reasons = <String, String>{
       'harassment': 'Harassment',
       'threats_violence': 'Threats or violence',
@@ -135,13 +135,22 @@ class _ChatScreenState extends State<ChatScreen> {
     };
     var reason = reasons.keys.first;
     final details = TextEditingController();
+    final reportingMessage = messageId != null;
     final submitted = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
-          title: Text('Report ${widget.otherDisplayName}'),
+          title: Text(reportingMessage
+              ? 'Report this message'
+              : 'Report ${widget.otherDisplayName}'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (reportingMessage) ...[
+                const Text(
+                  'The report will include a protected reference to this message so moderators can review the correct content. The message text is not copied into your report details automatically.',
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<String>(
                 initialValue: reason,
                 items: reasons.entries
@@ -178,6 +187,9 @@ class _ChatScreenState extends State<ChatScreen> {
           reportedUid: widget.otherUid,
           reason: reason,
           details: details.text,
+          contentType: reportingMessage ? 'message' : 'account',
+          contentId: messageId,
+          conversationId: reportingMessage ? widget.conversationId : null,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -215,7 +227,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (value == 'block') _block();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('Report')),
+              PopupMenuItem(value: 'report', child: Text('Report person')),
               PopupMenuItem(value: 'block', child: Text('Block')),
             ],
           ),
@@ -252,7 +264,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       final data = doc.data();
                       final senderUid = data['senderUid'] as String? ?? '';
                       final isMine = senderUid == uid;
-                      final text = data['isDeleted'] == true
+                      final isDeleted = data['isDeleted'] == true;
+                      final text = isDeleted
                           ? 'Message removed'
                           : (data['text'] as String? ?? '');
                       if (!isMine) {
@@ -260,24 +273,31 @@ class _ChatScreenState extends State<ChatScreen> {
                             List<String>.from(data['readBy'] ?? const []);
                         _queueMarkRead(doc.id, readBy, uid);
                       }
-                      return Align(
-                        alignment: isMine
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isMine
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(18),
+                      return GestureDetector(
+                        onLongPress: !isMine && !isDeleted
+                            ? () => _report(messageId: doc.id)
+                            : null,
+                        child: Align(
+                          alignment: isMine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isMine
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Text(text),
                           ),
-                          child: Text(text),
                         ),
                       );
                     },
