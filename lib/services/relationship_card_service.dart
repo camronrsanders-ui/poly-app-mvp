@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'ugc_text_policy.dart';
+
 class RelationshipCardService {
   RelationshipCardService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -29,6 +31,7 @@ class RelationshipCardService {
     String displayNameOptional = '',
     required int sortOrder,
   }) async {
+    UgcTextPolicy.ensureAllowedValues([label, displayNameOptional, note]);
     await _cards.add({
       'ownerUid': ownerUid,
       'label': label.trim(),
@@ -49,6 +52,11 @@ class RelationshipCardService {
     required String ownerUid,
     required Map<String, dynamic> values,
   }) async {
+    UgcTextPolicy.ensureAllowedValues([
+      values['label']?.toString() ?? '',
+      values['displayNameOptional']?.toString() ?? '',
+      values['note']?.toString() ?? '',
+    ]);
     await _cards.doc(cardId).update({
       ...values,
       'ownerUid': ownerUid,
