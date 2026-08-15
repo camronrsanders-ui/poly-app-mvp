@@ -47,7 +47,9 @@ Platform policies and laws change. Re-verify the primary sources before every pu
 - Flutter has a native bridge that requests age-sharing access before checking the age range.
 - `VERIFICATION_REQUIRED` is treated as a blocking state.
 - A shared range with an upper bound below 18 blocks access; an 18+ lower bound confirms adult status.
-- CI has successfully compiled the Android debug APK with the current Age Signals integration.
+- Google Play's `VERIFIED` user status is treated as confirmed adult even when `ageLower()` / `ageUpper()` are null, because the API defines `VERIFIED` as an over-18 verified user.
+- Shared signals that remain ambiguous around the 18+ boundary fail closed rather than being interpreted as adult.
+- CI must continue compiling the Android debug APK after any Age Signals bridge change; real Play-delivered validation remains separate.
 
 ### UGC policy acceptance
 
@@ -94,6 +96,10 @@ Privileged moderator/admin operations are separate operator-security paths and s
 ### UGC controls already present
 
 - in-app reporting from profiles and chats;
+- message-level reporting from chat by pressing and holding another member's message;
+- trusted validation that a reported message belongs to the stated conversation, was sent by the reported account, and came from a conversation the reporter participated in;
+- reports store a content reference rather than automatically copying the reported message text into report details;
+- moderator report listings expose the validated content type/reference needed to investigate the correct item;
 - in-app blocking and blocked-member management;
 - connection ending/unmatch safety behavior;
 - report reasons for harassment, threats/violence, child-safety or underage concerns, sexual content/solicitation, non-consensual content, hate speech, fake profiles, scams/spam, misrepresentation, and other concerns;
@@ -122,7 +128,7 @@ This is still **not a complete moderation system**. Firestore Rules are determin
 - In Play Console, select **18 and over** as the only target age group.
 - Enable Google's **Restrict Minor Access** functionality for the dating/matchmaking app. The in-app age gate and Play Age Signals API do not replace this store-level requirement.
 - Complete/configure the Play Age Signals setup needed for the production application ID and test the real Play-delivered build.
-- Test `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` behaviors on supported real devices/accounts.
+- Test `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` behaviors on supported real devices/accounts, including a verified-adult response with null age bounds and supervised/declared-user ranges.
 - Review Play's Data safety, target audience, content-rating, UGC, sexual-content, and account-deletion disclosures against the shipping build.
 - Replace debug signing with dedicated distribution signing before any distributed beta/release.
 - Threat-model the trust placed in age signals and evaluate Play Integrity or equivalent platform anti-tamper protections appropriate to the production design.
@@ -146,6 +152,7 @@ This is still **not a complete moderation system**. Firestore Rules are determin
 8. **Server/Admin UGC review:** continue to audit any server-generated or Admin-SDK UGC write paths because Firestore client rules do not apply to Admin SDK writes.
 9. **Real platform validation:** production/sandbox Apple age-range and Play Age Signals behaviors must be validated on real supported devices/store-delivered builds.
 10. **Android tamper resistance:** evaluate Play Integrity around production age-signal flows and document the threat model.
+11. **Report evidence lifecycle:** finalize how referenced messages/content are retained, redacted, or deleted when a report is open, an account is deleted, or the underlying content is removed.
 
 ## Privacy principles
 
@@ -156,6 +163,7 @@ This is still **not a complete moderation system**. Firestore Rules are determin
 - Do not collect identity documents directly merely to imitate platform age-verification services.
 - Minors must not receive a reduced dating experience inside Polycircle; the current product is adult-only, so confirmed minors are blocked.
 - Do not require acceptance of new participation terms merely to let a user delete their account or exercise a legitimate own-data access process.
+- Do not silently duplicate harmful message text into report metadata when a stable validated content reference is enough for moderation review.
 
 ## Release-language rule
 
