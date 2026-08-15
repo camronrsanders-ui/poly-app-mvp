@@ -11,6 +11,7 @@ const ugc = read('lib/services/ugc_text_policy.dart');
 const messaging = read('lib/services/messaging_service.dart');
 const profile = read('lib/services/profile_service.dart');
 const circle = read('lib/services/relationship_card_service.dart');
+const profileDetail = read('lib/screens/profile/profile_detail_screen.dart');
 const chatScreen = read('lib/screens/messages/chat_screen.dart');
 const safetyService = read('lib/services/safety_service.dart');
 const safetyUi = read('lib/screens/safety/safety_center_screen.dart');
@@ -107,6 +108,12 @@ test('reporting visibly includes child safety and threat categories', () => {
   assert.match(safetyBackend, /'sexual_content'/);
   assert.match(safetyUi, /child-safety \/ underage/i);
   assert.match(safetyUi, /threats or violence/i);
+});
+
+test('profile reports identify the profile being reported', () => {
+  assert.match(profileDetail, /contentType: 'profile'/);
+  assert.match(profileDetail, /contentId: _uid/);
+  assert.match(safetyBackend, /Profile report does not match the reported account/);
 });
 
 test('message reports carry validated content context without copying message text', () => {
