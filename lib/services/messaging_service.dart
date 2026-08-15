@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'ugc_text_policy.dart';
+
 class MessagingService {
   MessagingService({
     FirebaseFirestore? firestore,
@@ -53,6 +55,7 @@ class MessagingService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     if (trimmed.length > 2000) throw ArgumentError('Message is too long.');
+    UgcTextPolicy.ensureAllowed(trimmed);
 
     final batch = _firestore.batch();
     final messageRef = _firestore.collection('messages').doc();
