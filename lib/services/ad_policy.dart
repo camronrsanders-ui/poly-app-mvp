@@ -38,14 +38,18 @@ class AdPolicy {
 
   /// Polycircle must not construct ad-targeting profiles from sensitive member
   /// information. Future ad integrations should use contextual placement data
-  /// only and must not derive targeting from profile identity, relationship
-  /// structure, Circle, messages, reports, blocks, health/intimate data, or age
-  /// assurance metadata.
+  /// only and must not derive targeting from identity, relationships, private
+  /// behavior, precise location, or other intimate/sensitive characteristics.
   static const Set<String> prohibitedTargetingData = {
     'sexual_orientation',
     'gender_identity',
     'relationship_structure',
     'circle_relationship_data',
+    'profile_age',
+    'precise_location',
+    'race_or_ethnicity',
+    'religion',
+    'political_beliefs',
     'messages',
     'blocks',
     'reports',
