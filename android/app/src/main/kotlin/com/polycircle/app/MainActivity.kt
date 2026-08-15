@@ -5,7 +5,6 @@ import com.google.android.play.agesignals.AgeSignalsManager
 import com.google.android.play.agesignals.AgeSignalsManagerFactory
 import com.google.android.play.agesignals.AgeSignalsRequest
 import com.google.android.play.agesignals.model.AgeSignalsStatus
-import com.google.android.play.agesignals.model.AgeSignalsVerificationStatus
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -54,25 +53,19 @@ class MainActivity : FlutterActivity() {
                     )
                 }
             }
-            .addOnFailureListener { error ->
+            .addOnFailureListener {
+                // We cannot safely determine whether mandatory sharing applies
+                // when the access check itself fails. Require a successful retry
+                // rather than silently downgrading an unknown jurisdiction to
+                // self-attestation.
                 result.success(
                     mapOf(
                         "status" to "unavailable",
-                        "platformStatus" to (error.javaClass.simpleName.ifEmpty { "play_age_signals_error" }),
-                        "regulatedRegion" to false,
+                        "platformStatus" to "play_age_signals_error",
+                        "regulatedRegion" to true,
                     ),
                 )
             }
-    }
-
-    private fun verificationStatusLabel(userStatus: Int?): String = when (userStatus) {
-        AgeSignalsVerificationStatus.VERIFIED -> "verified"
-        AgeSignalsVerificationStatus.SUPERVISED -> "supervised"
-        AgeSignalsVerificationStatus.SUPERVISED_APPROVAL_PENDING -> "supervised_approval_pending"
-        AgeSignalsVerificationStatus.SUPERVISED_APPROVAL_DENIED -> "supervised_approval_denied"
-        AgeSignalsVerificationStatus.UNKNOWN -> "unknown"
-        AgeSignalsVerificationStatus.DECLARED -> "declared"
-        else -> "unrecognized"
     }
 
     private fun retrieveAgeSignals(
@@ -83,46 +76,38 @@ class MainActivity : FlutterActivity() {
             .addOnSuccessListener { ageResult ->
                 val lower = ageResult.ageLower()
                 val upper = ageResult.ageUpper()
-                val userStatus = ageResult.userStatus()
-                val statusLabel = verificationStatusLabel(userStatus)
+                val source = ageResult.ageRangeSource()
 
-                // Google documents VERIFIED as an over-18 status. In that case
-                // ageLower/ageUpper can both be null, so bounds alone are not a
-                // sufficient adult check. For all other statuses, use the age
-                // range defensively and fail closed when a shared signal remains
-                // ambiguous around the 18+ boundary.
+                // Play Age Signals 0.0.4 removed the old userStatus field. The
+                // supported response model is ageRangeSource plus age bounds.
+                // For an adult-only app, the bounds are sufficient: an upper
+                // bound below 18 is a minor, and a lower bound at least 18 is an
+                // adult. Any shared-but-ambiguous response fails closed.
                 val status = when {
-                    userStatus == AgeSignalsVerificationStatus.VERIFIED -> "adult"
                     upper != null && upper < ADULT_AGE -> "minor"
                     lower != null && lower >= ADULT_AGE -> "adult"
-                    userStatus == AgeSignalsVerificationStatus.UNKNOWN -> "verification_required"
-                    userStatus == AgeSignalsVerificationStatus.SUPERVISED_APPROVAL_PENDING -> "verification_required"
-                    userStatus == AgeSignalsVerificationStatus.SUPERVISED_APPROVAL_DENIED -> "verification_required"
-                    lower != null || upper != null -> "verification_required"
-                    else -> "not_shared"
+                    else -> "verification_required"
                 }
-
-                val regulatedRegion =
-                    userStatus == AgeSignalsVerificationStatus.UNKNOWN ||
-                        status == "verification_required"
 
                 result.success(
                     mapOf(
                         "status" to status,
-                        "platformStatus" to "shared_$statusLabel",
+                        "platformStatus" to "shared",
                         "lowerBound" to lower,
                         "upperBound" to upper,
-                        "source" to ageResult.ageRangeSource()?.toString(),
-                        "regulatedRegion" to regulatedRegion,
+                        "source" to source?.toString(),
+                        "regulatedRegion" to (status == "verification_required"),
                     ),
                 )
             }
-            .addOnFailureListener { error ->
+            .addOnFailureListener {
+                // Access was shared but the actual signal could not be read. Do
+                // not use a self-attested fallback for an indeterminate signal.
                 result.success(
                     mapOf(
                         "status" to "unavailable",
-                        "platformStatus" to (error.javaClass.simpleName.ifEmpty { "play_age_signals_error" }),
-                        "regulatedRegion" to false,
+                        "platformStatus" to "play_age_signals_error",
+                        "regulatedRegion" to true,
                     ),
                 )
             }
