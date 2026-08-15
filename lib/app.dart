@@ -2,9 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'config/compliance_policy.dart';
 import 'config/firebase_runtime.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
+import 'screens/compliance/compliance_gate_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/account_service.dart';
@@ -72,10 +74,10 @@ class _SessionGateState extends State<_SessionGate> {
         }
 
         // Watch the trusted account document rather than checking it only once
-        // at login. A suspension, ban, deletion pause, or onboarding completion
-        // therefore removes or advances the app shell as soon as Firestore
-        // delivers the authoritative change. Backend rules remain the final
-        // enforcement boundary even if the device is temporarily offline.
+        // at login. A suspension, ban, deletion pause, compliance change, or
+        // onboarding completion therefore removes or advances the app shell as
+        // soon as Firestore delivers the authoritative change. Backend rules
+        // remain the final enforcement boundary if the device is offline.
         return StreamBuilder<Map<String, dynamic>?>(
           key: ValueKey('${user.uid}-$_refresh'),
           stream: _profiles.watchAccount(user.uid),
@@ -111,6 +113,12 @@ class _SessionGateState extends State<_SessionGate> {
             }
             if (status != 'active') {
               return _AccountUnavailableScreen(onSignOut: _auth.signOut);
+            }
+            if (!accountHasCurrentCompliance(account)) {
+              return ComplianceGateScreen(
+                uid: user.uid,
+                onSignOut: _auth.signOut,
+              );
             }
             if (account['onboardingComplete'] != true) {
               return const OnboardingScreen(onComplete: _noop);
