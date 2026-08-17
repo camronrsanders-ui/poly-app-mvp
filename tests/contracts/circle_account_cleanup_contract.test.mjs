@@ -41,6 +41,20 @@ test('Circle account cleanup covers ownership, membership and invitations', () =
   assert.match(cleanup, /FieldValue\.increment\(-1\)/);
 });
 
+test('active non-owner membership deletion and count adjustment are atomic', () => {
+  assert.match(cleanup, /runTransaction/);
+  assert.match(cleanup, /transaction\.get\(membershipRef\)/);
+  assert.match(cleanup, /transaction\.delete\(membershipRef\)/);
+  assert.match(cleanup, /transaction\.update\(circleRef/);
+  assert.match(cleanup, /atomicallyRemovedMembershipPaths/);
+
+  assert.doesNotMatch(
+    cleanup,
+    /writer\.update\([\s\S]*memberCount:\s*FieldValue\.increment\(-1\)/,
+    'memberCount must not be decremented separately from membership deletion',
+  );
+});
+
 test('Circle account cleanup removes every user-scoped Circle rate limit', () => {
   for (const action of ['create', 'invite', 'respond', 'leave', 'list']) {
     assert.match(
