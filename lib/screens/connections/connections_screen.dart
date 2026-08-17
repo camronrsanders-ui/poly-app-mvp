@@ -322,6 +322,65 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     return Color.alphaBlend(base.withAlpha(24), surface);
   }
 
+  Color _connectionChipBg(String label) {
+    final value = label.toLowerCase();
+
+    if (value.contains('dating')) {
+      return const Color(0xFFF6E3EC);
+    }
+    if (value.contains('partner')) {
+      return const Color(0xFFEDE3F7);
+    }
+    if (value.contains('open')) {
+      return const Color(0xFFE4F3E9);
+    }
+    if (value.contains('friend')) {
+      return const Color(0xFFE8EEF8);
+    }
+
+    return const Color(0xFFF0E8F4);
+  }
+
+  Color _connectionChipFg(String label) {
+    final value = label.toLowerCase();
+
+    if (value.contains('dating')) {
+      return const Color(0xFF7A3155);
+    }
+    if (value.contains('partner')) {
+      return const Color(0xFF5A3075);
+    }
+    if (value.contains('open')) {
+      return const Color(0xFF2C6345);
+    }
+    if (value.contains('friend')) {
+      return const Color(0xFF355A7A);
+    }
+
+    return const Color(0xFF5D3C69);
+  }
+
+  Widget _connectionStatusChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _connectionChipBg(label),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: _connectionChipFg(label),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+
   Widget _pill(
     String text, {
     IconData? icon,
@@ -437,7 +496,6 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   Widget _spotlightCard(Map<String, dynamic> person, int index) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final uid = person['uid']?.toString() ?? '';
     final name = _nameFor(person);
     final relationship = _relationshipLabel(person);
 
@@ -472,14 +530,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
             Expanded(
               flex: 6,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 14, 18),
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _pill(
-                      index == 0
-                          ? 'CONNECTION OF THE WEEK'
-                          : 'CONNECTION SPOTLIGHT',
+                      index == 0 ? 'FEATURED' : 'SPOTLIGHT',
                       icon: index == 0
                           ? Icons.star_rounded
                           : Icons.auto_awesome_rounded,
@@ -487,10 +543,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      '$name is worth\ncelebrating',
-                      maxLines: 2,
+                      '$name is worth celebrating',
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.headlineSmall?.copyWith(
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                         height: 1.02,
                         letterSpacing: -0.5,
@@ -515,7 +571,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                           vertical: 12,
                         ),
                       ),
-                      child: const Text('Celebrate connection'),
+                      child: const Text('Celebrate'),
                     ),
                   ],
                 ),
@@ -523,38 +579,47 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
             ),
             Expanded(
               flex: 4,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _profilePhoto(uid, fallbackIconSize: 58),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          colors.surface.withAlpha(150),
-                          Colors.transparent,
-                        ],
+              child: Container(
+                margin: const EdgeInsets.all(10),
+                padding: const EdgeInsets.fromLTRB(8, 18, 8, 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      accent.withAlpha(150),
+                      colors.primary.withAlpha(230),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    _avatar(person, size: 86),
+                    const SizedBox(height: 14),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        name.toUpperCase(),
+                        maxLines: 1,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 8,
-                    right: 8,
-                    bottom: 12,
-                    child: Align(
-                      alignment: Alignment.center,
-                      child: _pill(
-                        relationship,
-                        icon: Icons.favorite_rounded,
-                        color: accent,
-                      ),
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: _connectionStatusChip(relationship),
                     ),
-                  ),
-                ],
+                    const Spacer(),
+                  ],
+                ),
               ),
-            ),
+            )
           ],
         ),
       ),
@@ -568,7 +633,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 252,
+          height: 320,
           child: PageView.builder(
             controller: _spotlightController,
             padEnds: false,
@@ -635,8 +700,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ],
           ),
@@ -695,23 +760,11 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                             ),
                           ),
                         ),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: colors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Flexible(
-                          child: Text(
-                            relationship,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _connectionStatusChip(relationship),
                           ),
                         ),
                       ],
