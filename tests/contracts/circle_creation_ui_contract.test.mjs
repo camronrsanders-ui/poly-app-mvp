@@ -53,10 +53,42 @@ test('real Circles receive unique universe IDs', () => {
   );
 });
 
-test('new Circles do not inherit ordinary connections', () => {
+test('real Circles use only consent-backed Circle members', () => {
+  const start =
+    circle.indexOf(
+      'for (final circle in model.circles)',
+    );
+
+  const end =
+    circle.indexOf(
+      '// Shared Worlds',
+      start,
+    );
+
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+
+  const realCircleBlock =
+    circle.slice(start, end);
+
   assert.match(
-    circle,
-    /people:\s*const <Map<String, dynamic>>\[\]/,
+    realCircleBlock,
+    /circle\.members/,
+  );
+
+  assert.match(
+    realCircleBlock,
+    /final circlePeople/,
+  );
+
+  assert.match(
+    realCircleBlock,
+    /people:\s*circlePeople/,
+  );
+
+  assert.doesNotMatch(
+    realCircleBlock,
+    /people:\s*people\b/,
   );
 });
 

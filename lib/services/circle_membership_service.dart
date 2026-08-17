@@ -8,6 +8,7 @@ class CircleSummary {
     required this.ownerUid,
     required this.role,
     required this.memberCount,
+    this.members = const <Map<String, dynamic>>[],
   });
 
   final String circleId;
@@ -15,12 +16,31 @@ class CircleSummary {
   final String ownerUid;
   final String role;
   final int memberCount;
+  final List<Map<String, dynamic>> members;
 
   bool get isOwner => role == 'owner';
 
   factory CircleSummary.fromMap(
     Map<String, dynamic> data,
   ) {
+    final rawMembers = data['members'];
+
+    final members = rawMembers is List
+        ? rawMembers
+            .whereType<Map>()
+            .map(
+              (item) => Map<String, dynamic>.from(
+                item,
+              ),
+            )
+            .where(
+              (member) => member['uid']?.toString().isNotEmpty == true,
+            )
+            .toList(
+              growable: false,
+            )
+        : const <Map<String, dynamic>>[];
+
     return CircleSummary(
       circleId: data['circleId']?.toString() ?? '',
       name: data['name']?.toString() ?? '',
@@ -30,6 +50,7 @@ class CircleSummary {
             data['memberCount']?.toString() ?? '',
           ) ??
           1,
+      members: members,
     );
   }
 }

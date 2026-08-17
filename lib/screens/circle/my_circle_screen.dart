@@ -514,6 +514,11 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   ) {
     final people = model.connections;
 
+    final connectionsByUid = <String, Map<String, dynamic>>{
+      for (final person in people)
+        if (_uidOf(person).isNotEmpty) _uidOf(person): person,
+    };
+
     final worlds = <_CircleWorld>[
       _CircleWorld(
         id: 'mine',
@@ -525,6 +530,33 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     ];
 
     for (final circle in model.circles) {
+      final circlePeople = circle.members.map(
+        (member) {
+          final uid = _uidOf(member);
+
+          final connection = connectionsByUid[uid];
+
+          // If this Circle member is
+          // already one of YOUR active
+          // connections, reuse the richer
+          // profile view you already have.
+          //
+          // Otherwise keep only the
+          // minimal Circle identity sent
+          // by the membership backend.
+          if (connection == null) {
+            return member;
+          }
+
+          return <String, dynamic>{
+            ...member,
+            ...connection,
+          };
+        },
+      ).toList(
+        growable: false,
+      );
+
       worlds.add(
         _CircleWorld(
           id: 'circle:${circle.circleId}',
@@ -534,11 +566,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
               : 'Shared Circle',
           icon: Icons.bubble_chart_rounded,
           memberCount: circle.memberCount,
-
-          // Membership identities intentionally
-          // arrive in the next consent-backed API.
-          // Never substitute ordinary connections.
-          people: const <Map<String, dynamic>>[],
+          people: circlePeople,
         ),
       );
     }
@@ -903,6 +931,16 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     required List<_CircleWorld> worlds,
     required _CircleWorld active,
   }) {
+    final activeCircleId = active.id.startsWith('circle:')
+        ? active.id.substring(
+            'circle:'.length,
+          )
+        : '';
+
+    final activeCircleIsOwner = model.circles.any(
+      (circle) => circle.circleId == activeCircleId && circle.isOwner,
+    );
+
     return Stack(
       children: [
         const Positioned.fill(
@@ -938,33 +976,35 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                 child: _EmptyCircleStage(
                   name: active.name,
                   displayName: model.profile['displayName']?.toString() ?? '',
-                  onInvite: () {
-                    CircleSummary? circle;
+                  onInvite: activeCircleIsOwner
+                      ? () {
+                          CircleSummary? circle;
 
-                    final circleId = active.id.startsWith(
-                      'circle:',
-                    )
-                        ? active.id.substring(
-                            'circle:'.length,
+                          final circleId = active.id.startsWith(
+                            'circle:',
                           )
-                        : '';
+                              ? active.id.substring(
+                                  'circle:'.length,
+                                )
+                              : '';
 
-                    for (final candidate in model.circles) {
-                      if (candidate.circleId == circleId) {
-                        circle = candidate;
-                        break;
-                      }
-                    }
+                          for (final candidate in model.circles) {
+                            if (candidate.circleId == circleId) {
+                              circle = candidate;
+                              break;
+                            }
+                          }
 
-                    if (circle == null || !circle.isOwner) {
-                      return;
-                    }
+                          if (circle == null || !circle.isOwner) {
+                            return;
+                          }
 
-                    _inviteToCircle(
-                      circle: circle,
-                      connections: model.connections,
-                    );
-                  },
+                          _inviteToCircle(
+                            circle: circle,
+                            connections: model.connections,
+                          );
+                        }
+                      : null,
                 ),
               ),
               const SizedBox(height: 10),

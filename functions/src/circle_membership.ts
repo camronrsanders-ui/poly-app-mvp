@@ -88,6 +88,64 @@ function inviteId(
   return `${circleId}_${uid}`;
 }
 
+
+function blockedCirclePeers(
+  uid: string,
+  snapshots:
+    FirebaseFirestore.DocumentSnapshot[],
+): Set<string> {
+  const blocked = new Set<string>();
+
+  for (const snap of snapshots) {
+    if (!snap.exists) continue;
+
+    const blockerUid = String(
+      snap.get('blockerUid') ?? '',
+    );
+
+    const blockedUid = String(
+      snap.get('blockedUid') ?? '',
+    );
+
+    if (
+      blockerUid === uid &&
+      blockedUid
+    ) {
+      blocked.add(blockedUid);
+    }
+
+    if (
+      blockedUid === uid &&
+      blockerUid
+    ) {
+      blocked.add(blockerUid);
+    }
+  }
+
+  return blocked;
+}
+
+function toCircleMemberView(
+  uid: string,
+  profile:
+    FirebaseFirestore.DocumentData,
+): FirebaseFirestore.DocumentData {
+  const rawName =
+    typeof profile.displayName === 'string'
+      ? profile.displayName.trim()
+      : '';
+
+  return {
+    uid,
+    ...(rawName
+      ? {
+          displayName:
+            rawName.slice(0, 80),
+        }
+      : {}),
+  };
+}
+
 async function consumeCircleRateLimit(
   uid: string,
   action: string,
@@ -1067,6 +1125,230 @@ export const listMyCircles = onCall(
       }
     }
 
+    const activeCircleIds = [
+      ...new Set(
+        activeMemberships
+          .map((membership) =>
+            String(
+              membership.get(
+                'circleId',
+              ) ?? '',
+            ),
+          )
+          .filter(
+            (id) =>
+              id.length > 0 &&
+              circlesById.has(id),
+          ),
+      ),
+    ];
+
+    const circleMemberDocs:
+      FirebaseFirestore.QueryDocumentSnapshot[] =
+        [];
+
+    // Firestore "in" queries are deliberately
+    // chunked so one member belonging to many
+    // Circles does not create one query per Circle.
+    for (
+      let offset = 0;
+      offset < activeCircleIds.length;
+      offset += 10
+    ) {
+      const chunk =
+        activeCircleIds.slice(
+          offset,
+          offset + 10,
+        );
+
+      if (chunk.length === 0) {
+        continue;
+      }
+
+      const snapshot = await db
+        .collection(
+          'circle_memberships',
+        )
+        .where(
+          'circleId',
+          'in',
+          chunk,
+        )
+        .get();
+
+      circleMemberDocs.push(
+        ...snapshot.docs.filter(
+          (doc) =>
+            doc.get('status') ===
+            'active',
+        ),
+      );
+    }
+
+    const peerUids = [
+      ...new Set(
+        circleMemberDocs
+          .map((doc) =>
+            String(
+              doc.get('uid') ?? '',
+            ),
+          )
+          .filter(
+            (peerUid) =>
+              peerUid.length > 0 &&
+              peerUid !== uid,
+          ),
+      ),
+    ];
+
+    const peerUserRefs =
+      peerUids.map(
+        (peerUid) =>
+          db
+            .collection('users')
+            .doc(peerUid),
+      );
+
+    const peerProfileRefs =
+      peerUids.map(
+        (peerUid) =>
+          db
+            .collection('profiles')
+            .doc(peerUid),
+      );
+
+    const peerBlockRefs =
+      peerUids.flatMap(
+        (peerUid) => [
+          db
+            .collection('blocks')
+            .doc(
+              `${uid}_${peerUid}`,
+            ),
+          db
+            .collection('blocks')
+            .doc(
+              `${peerUid}_${uid}`,
+            ),
+        ],
+      );
+
+    const [
+      peerUsers,
+      peerProfiles,
+      peerBlocks,
+    ] = await Promise.all([
+      peerUserRefs.length > 0
+        ? db.getAll(...peerUserRefs)
+        : Promise.resolve([]),
+
+      peerProfileRefs.length > 0
+        ? db.getAll(
+            ...peerProfileRefs,
+          )
+        : Promise.resolve([]),
+
+      peerBlockRefs.length > 0
+        ? db.getAll(
+            ...peerBlockRefs,
+          )
+        : Promise.resolve([]),
+    ]);
+
+    const activePeerUids =
+      new Set(
+        peerUsers
+          .filter((snap) =>
+            isActiveCompliantMember(
+              snap,
+            ),
+          )
+          .map((snap) => snap.id),
+      );
+
+    const blockedPeerUids =
+      blockedCirclePeers(
+        uid,
+        peerBlocks,
+      );
+
+    const profilesByUid =
+      new Map(
+        peerProfiles
+          .filter(
+            (snap) => snap.exists,
+          )
+          .map(
+            (snap) => [
+              snap.id,
+              snap.data() ??
+                {},
+            ],
+          ),
+      );
+
+    const membersByCircle =
+      new Map<
+        string,
+        FirebaseFirestore.DocumentData[]
+      >();
+
+    for (
+      const membership
+      of circleMemberDocs
+    ) {
+      const circleIdValue =
+        String(
+          membership.get(
+            'circleId',
+          ) ?? '',
+        );
+
+      const peerUid =
+        String(
+          membership.get('uid') ??
+            '',
+        );
+
+      // YOU are rendered by the center
+      // sphere and must never be
+      // duplicated into your own orbit.
+      if (
+        !circleIdValue ||
+        !peerUid ||
+        peerUid === uid ||
+        !activePeerUids.has(
+          peerUid,
+        ) ||
+        blockedPeerUids.has(
+          peerUid,
+        )
+      ) {
+        continue;
+      }
+
+      const list =
+        membersByCircle.get(
+          circleIdValue,
+        ) ??
+        [];
+
+      list.push(
+        toCircleMemberView(
+          peerUid,
+          profilesByUid.get(
+            peerUid,
+          ) ??
+            {},
+        ),
+      );
+
+      membersByCircle.set(
+        circleIdValue,
+        list,
+      );
+    }
+
     const circleOutput =
       activeMemberships
         .map((membership) => {
@@ -1120,6 +1402,11 @@ export const listMyCircles = onCall(
                   ) ?? 1,
                 ),
               ),
+
+            members:
+              membersByCircle.get(
+                circle.id,
+              ) ?? [],
 
             status: 'active',
           };

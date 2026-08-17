@@ -351,6 +351,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _signOut() async {
+    await _authService.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).popUntil(
+      (route) => route.isFirst,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -540,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(_saving ? 'Saving…' : 'Save profile')),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: (_saving || _deleting) ? null : _authService.signOut,
+          onPressed: (_saving || _deleting) ? null : _signOut,
           icon: const Icon(Icons.logout),
           label: const Text('Log out'),
         ),

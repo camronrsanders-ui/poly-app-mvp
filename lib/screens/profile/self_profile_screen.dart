@@ -144,6 +144,16 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
     if (mounted) await _reload();
   }
 
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).popUntil(
+      (route) => route.isFirst,
+    );
+  }
+
   String _text(Map<String, dynamic> profile, String key, {int? maxLength}) {
     final raw = profile[key];
     if (raw is! String) return '';
@@ -474,6 +484,24 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
                       ),
                     ],
                   ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.logout_rounded,
+                  ),
+                  title: const Text(
+                    'Log out',
+                  ),
+                  subtitle: const Text(
+                    'Sign out of this device',
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                  ),
+                  onTap: _signOut,
                 ),
               ),
               const SizedBox(height: 16),
