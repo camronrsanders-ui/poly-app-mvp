@@ -34,6 +34,41 @@ async function queryCircleScopedDocs(
   return docs;
 }
 
+async function removeMembershipAndAdjustCountAtomically(
+  membershipRef: FirebaseFirestore.DocumentReference,
+): Promise<void> {
+  const db = getFirestore();
+
+  await db.runTransaction(async (transaction) => {
+    const membership = await transaction.get(membershipRef);
+    if (!membership.exists) return;
+
+    const circleId = String(membership.get('circleId') ?? '').trim();
+    const active = membership.get('status') === 'active';
+    const role = String(membership.get('role') ?? 'member');
+
+    if (!active || role === 'owner' || !circleId) {
+      transaction.delete(membershipRef);
+      return;
+    }
+
+    const circleRef = db.collection('circles').doc(circleId);
+    const circle = await transaction.get(circleRef);
+
+    transaction.delete(membershipRef);
+
+    if (!circle.exists) return;
+
+    // The membership deletion and persisted count adjustment must commit
+    // together. Otherwise a partial BulkWriter failure could leave a stale
+    // memberCount or cause a later retry to decrement the same member twice.
+    transaction.update(circleRef, {
+      memberCount: FieldValue.increment(-1),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 /**
  * Circle data is lifecycle-coupled to account deletion.
  *
@@ -82,27 +117,15 @@ export const cleanupCircleDataForDeletingAccount = onDocumentUpdated(
       queryCircleScopedDocs('circle_invites', ownedCircleIds),
     ]);
 
-    const writer = db.bulkWriter();
-    const deletedPaths = new Set<string>();
+    const atomicallyRemovedMembershipPaths = new Set<string>();
 
-    const deleteDoc = (doc: FirebaseFirestore.DocumentSnapshot) => {
-      if (!doc.exists || deletedPaths.has(doc.ref.path)) return;
-      deletedPaths.add(doc.ref.path);
-      writer.delete(doc.ref);
-    };
-
-    for (const circle of ownedCircles.docs) deleteDoc(circle);
-    for (const membership of ownedMemberships) deleteDoc(membership);
-    for (const invite of ownedInvites) deleteDoc(invite);
-    for (const invite of incomingInvites.docs) deleteDoc(invite);
-    for (const invite of outgoingInvites.docs) deleteDoc(invite);
-
+    // Active non-owner memberships in Circles that survive this account
+    // deletion require an atomic membership-delete + count-decrement pair.
+    // Process them before the idempotent bulk deletion below.
     for (const membership of ownMemberships.docs) {
-      const circleId = String(membership.get('circleId') ?? '');
+      const circleId = String(membership.get('circleId') ?? '').trim();
       const active = membership.get('status') === 'active';
       const role = String(membership.get('role') ?? 'member');
-
-      deleteDoc(membership);
 
       if (
         !active ||
@@ -113,17 +136,31 @@ export const cleanupCircleDataForDeletingAccount = onDocumentUpdated(
         continue;
       }
 
-      // An active non-owner membership contributed exactly one to memberCount.
-      // update() deliberately fails rather than creating a phantom Circle if
-      // that Circle was concurrently removed by its owner.
-      writer.update(
-        db.collection('circles').doc(circleId),
-        {
-          memberCount: FieldValue.increment(-1),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-      );
+      await removeMembershipAndAdjustCountAtomically(membership.ref);
+      atomicallyRemovedMembershipPaths.add(membership.ref.path);
     }
+
+    const writer = db.bulkWriter();
+    const deletedPaths = new Set<string>();
+
+    const deleteDoc = (doc: FirebaseFirestore.DocumentSnapshot) => {
+      if (
+        !doc.exists ||
+        deletedPaths.has(doc.ref.path) ||
+        atomicallyRemovedMembershipPaths.has(doc.ref.path)
+      ) {
+        return;
+      }
+      deletedPaths.add(doc.ref.path);
+      writer.delete(doc.ref);
+    };
+
+    for (const circle of ownedCircles.docs) deleteDoc(circle);
+    for (const membership of ownedMemberships) deleteDoc(membership);
+    for (const invite of ownedInvites) deleteDoc(invite);
+    for (const invite of incomingInvites.docs) deleteDoc(invite);
+    for (const invite of outgoingInvites.docs) deleteDoc(invite);
+    for (const membership of ownMemberships.docs) deleteDoc(membership);
 
     for (const action of [
       'create',
