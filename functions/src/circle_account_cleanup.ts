@@ -38,8 +38,8 @@ async function queryCircleScopedDocs(
  * Circle data is lifecycle-coupled to account deletion.
  *
  * The main deletion callable pauses the account before destructive cleanup.
- * Listening for that durable transition gives Circle cleanup a retriable path
- * even if a later Storage/Auth/tombstone step needs another deletion attempt.
+ * Listening for that durable state gives Circle cleanup a retriable path even
+ * if a later Storage/Auth/tombstone step needs another deletion attempt.
  *
  * There is intentionally no ownership transfer policy yet. If a deleting
  * member owns a Circle, the Circle and its memberships/invitations are removed.
@@ -52,17 +52,14 @@ export const cleanupCircleDataForDeletingAccount = onDocumentUpdated(
     maxInstances: 10,
   },
   async (event) => {
-    const before = event.data?.before;
     const after = event.data?.after;
     const uid = String(event.params.uid ?? '').trim();
 
     if (!uid || !after || !isDeletionPending(after)) return;
 
-    // Run only when the account crosses into deletion-pending state. Firestore
-    // event delivery may retry this invocation, so the cleanup below is also
-    // intentionally idempotent.
-    if (before && isDeletionPending(before)) return;
-
+    // Run on every update while deletion is pending. The cleanup is idempotent,
+    // so a later retry/minimal-marker update can finish work left by a transient
+    // failure without requiring the account to transition out of paused state.
     const db = getFirestore();
 
     const [
@@ -117,15 +114,14 @@ export const cleanupCircleDataForDeletingAccount = onDocumentUpdated(
       }
 
       // An active non-owner membership contributed exactly one to memberCount.
-      // The owner always contributes the baseline member, so a valid count
-      // cannot cross below one from this decrement.
-      writer.set(
+      // update() deliberately fails rather than creating a phantom Circle if
+      // that Circle was concurrently removed by its owner.
+      writer.update(
         db.collection('circles').doc(circleId),
         {
           memberCount: FieldValue.increment(-1),
           updatedAt: FieldValue.serverTimestamp(),
         },
-        {merge: true},
       );
     }
 
