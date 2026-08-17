@@ -36,7 +36,7 @@ class _MainShellState extends State<MainShell> {
   Widget _buildPage(int index) {
     return switch (index) {
       0 => const DiscoverScreen(),
-      1 => const ConnectionsScreen(),
+      1 => ConnectionsScreen(onFindPeople: () => _selectTab(0)),
       2 => const MyCircleScreen(),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
@@ -72,8 +72,10 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final ownsItsHeader = _index == 1 || _index == 2;
+
     return Scaffold(
-      appBar: _index == 2
+      appBar: ownsItsHeader
           ? null
           : AppBar(
               title: Text(_titles[_index]),
@@ -102,25 +104,30 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Discover'),
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: 'Discover',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.people_alt_outlined),
-              selectedIcon: Icon(Icons.people_alt),
-              label: 'Connections'),
+            icon: Icon(Icons.people_alt_outlined),
+            selectedIcon: Icon(Icons.people_alt),
+            label: 'Connections',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.hub_outlined),
-              selectedIcon: Icon(Icons.hub),
-              label: 'Circle'),
+            icon: Icon(Icons.hub_outlined),
+            selectedIcon: Icon(Icons.hub),
+            label: 'Circle',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline),
-              selectedIcon: Icon(Icons.chat_bubble),
-              label: 'Messages'),
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Messages',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile'),
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ],
       ),
     );
