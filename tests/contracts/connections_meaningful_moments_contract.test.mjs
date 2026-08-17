@@ -14,8 +14,8 @@ const shell = fs.readFileSync(
 
 test('Connections owns a unique meaningful-moments experience', () => {
   assert.match(connections, /Nurture what matters\./);
-  assert.match(connections, /CONNECTION OF THE WEEK/);
-  assert.match(connections, /Celebrate connection/);
+  assert.match(connections, /SPOTLIGHT/);
+  assert.match(connections, /Celebrate/);
   assert.match(connections, /Keep in touch/);
   assert.match(connections, /Moments keep connections strong\./);
   assert.match(connections, /Build your circle with intention/);
