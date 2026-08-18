@@ -82,6 +82,16 @@ Password: LocalOnly123!
 
 The fixture includes two Discover profiles, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle can be exercised without a paid deployment.
 
+### Local Orbit density fixtures
+
+Orbit Discovery can be previewed with exactly 2, 5, 10, or 15 local candidates. Set the emulator-only fixture count before invoking the approved runner:
+
+```bash
+POLYCIRCLE_DISCOVER_FIXTURE_COUNT=5 bash tool/run_ios_local.sh "iPhone 17 Pro"
+```
+
+Replace `5` with `2`, `10`, or `15` for the other supported densities. The default remains `2`. The runner and seed both reject any other value, and the seed still requires the loopback Auth/Firestore hosts plus the explicit real-project emulator acknowledgement. Reseeding clears prior local Cam-to-fixture Pass, Like, match, block, and conversation state so the requested visual population is reachable; it does not touch Jordan's existing local connection or any live Firebase data.
+
 ## Manual emulator workflow
 
 The steps below remain useful when the emulators need to stay running across multiple app launches. Prefer the one-command runner unless you specifically need this mode.

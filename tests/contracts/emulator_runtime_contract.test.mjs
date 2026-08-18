@@ -37,6 +37,15 @@ test('real Polycircle project ID is accepted only with explicit emulator-only ac
   assert.match(seed, /projectId\.startsWith\('demo-'\)/);
 });
 
+test('Orbit stress fixtures are emulator-only and limited to reviewed densities', () => {
+  assert.match(seed, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
+  assert.match(seed, /new Set\(\[2, 5, 10, 15\]\)/);
+  assert.match(seed, /discoverStressPeople\.slice\(0, discoverFixtureCount - 2\)/);
+  assert.match(seed, /resetDiscoverFixtureState/);
+  assert.match(seed, /local-discover-/);
+  assert.doesNotMatch(read('lib/services/discovery_service.dart'), /local-discover-/);
+});
+
 test('seeded profile and Circle fixtures stay inside production document schemas', () => {
   // Email and emulator-only auth claims belong to Auth/user records, never the
   // public profile document. The remaining fixture fields must stay compatible

@@ -53,6 +53,20 @@ initializeApp({projectId});
 const auth = getAuth();
 const db = getFirestore();
 const password = 'LocalOnly123!';
+const allowedDiscoverFixtureCounts = new Set([2, 5, 10, 15]);
+
+function readDiscoverFixtureCount() {
+  const raw = process.env.POLYCIRCLE_DISCOVER_FIXTURE_COUNT ?? '2';
+  const count = Number(raw);
+  if (!Number.isInteger(count) || !allowedDiscoverFixtureCounts.has(count)) {
+    throw new Error(
+      `POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be one of 2, 5, 10, or 15; received "${raw}".`,
+    );
+  }
+  return count;
+}
+
+const discoverFixtureCount = readDiscoverFixtureCount();
 
 const people = [
   {
@@ -158,6 +172,57 @@ const people = [
     authClaims: {moderator: true},
   },
 ];
+
+// These people exist only inside the guarded emulator seed. They are never
+// referenced by production code and allow realistic Orbit density checks
+// without weakening profile, discovery, or protected-media behavior.
+const discoverStressDetails = [
+  ['Morgan', 34, 'Boston', 'MA', 'they/them', 'Solo poly', 'Museum afternoons and honest conversation', ['Art', 'Cycling', 'Community']],
+  ['Jules', 29, 'Brookline', 'MA', 'she/they', 'Non-hierarchical poly', 'Soft mornings, bold food, clear intentions', ['Cooking', 'Books', 'Gardens']],
+  ['Avery', 32, 'Cambridge', 'MA', 'he/they', 'Relationship anarchy', 'Curious people make the best stories', ['Film', 'Travel', 'Design']],
+  ['Quinn', 28, 'Somerville', 'MA', 'they/them', 'Exploring', 'Here for friendship, laughter, and possibility', ['Comedy', 'Coffee', 'Hiking']],
+  ['Sage', 36, 'Jamaica Plain', 'MA', 'she/her', 'Polyamorous', 'Building community one dinner at a time', ['Food', 'Music', 'Volunteering']],
+  ['Rowan', 30, 'Medford', 'MA', 'he/him', 'Open relationship', 'Live music and emotionally fluent humans', ['Concerts', 'Photography', 'Running']],
+  ['Devon', 27, 'Boston', 'MA', 'they/he', 'Solo poly', 'Making room for meaningful surprises', ['Theater', 'Games', 'Travel']],
+  ['Skyler', 33, 'Quincy', 'MA', 'she/they', 'Polyamorous', 'Slow connection, big curiosity', ['Ceramics', 'Nature', 'Podcasts']],
+  ['Ellis', 31, 'Cambridge', 'MA', 'they/them', 'Relationship anarchy', 'Kindness, candor, and a little adventure', ['Climbing', 'Books', 'Cooking']],
+  ['Parker', 35, 'Boston', 'MA', 'he/him', 'Non-hierarchical poly', 'City walks and conversations that wander', ['Architecture', 'Coffee', 'Jazz']],
+  ['Drew', 26, 'Somerville', 'MA', 'she/her', 'Exploring', 'Community first, chemistry welcome', ['Dance', 'Movies', 'Food']],
+  ['Taylor', 38, 'Newton', 'MA', 'they/she', 'Open relationship', 'Grounded, playful, and always learning', ['Gardening', 'Travel', 'Live music']],
+  ['Reese', 29, 'Malden', 'MA', 'he/they', 'Polyamorous', 'Looking for warmth, wit, and intention', ['Gaming', 'Art', 'Community']],
+];
+
+const discoverStressPeople = discoverStressDetails.map((details, index) => {
+  const [displayName, age, city, region, pronouns, relationshipStructure, headline, interests] = details;
+  const ordinal = String(index + 1).padStart(2, '0');
+  return {
+    uid: `local-discover-${ordinal}`,
+    email: `discover-${ordinal}@local.polycircle.test`,
+    displayName,
+    age,
+    city,
+    region,
+    headline,
+    bio: 'Emulator-only Orbit stress profile for local visual testing.',
+    genderIdentity: 'Self-described',
+    pronouns,
+    orientation: 'Queer',
+    relationshipStructure,
+    relationshipStatus: 'Open to connections',
+    partnered: index % 3 !== 0,
+    openToConnections: true,
+    intentionTags: index % 2 === 0 ? ['Friendship', 'Dating'] : ['Community', 'Dating'],
+    interests,
+    lookingForNote: 'Intentional connection with room for people to be themselves.',
+  };
+});
+
+const baselineDiscoverPeople = people.filter(
+  (person) => person.uid === 'local-alex' || person.uid === 'local-riley',
+);
+const selectedStressPeople = discoverStressPeople.slice(0, discoverFixtureCount - 2);
+const selectedDiscoverPeople = [...baselineDiscoverPeople, ...selectedStressPeople];
+const seededPeople = [...people, ...selectedStressPeople];
 
 async function upsertAuthUser(person) {
   try {
@@ -273,8 +338,61 @@ async function seedRelationshipCards() {
   });
 }
 
+async function resetDiscoverFixtureState() {
+  const ownerUid = 'local-cam';
+  const selectedUids = new Set(selectedDiscoverPeople.map((person) => person.uid));
+  const allCandidateUids = [
+    ...baselineDiscoverPeople.map((person) => person.uid),
+    ...discoverStressPeople.map((person) => person.uid),
+  ];
+  const batch = db.batch();
+
+  for (const candidateUid of allCandidateUids) {
+    const pair = [ownerUid, candidateUid].sort().join('_');
+    batch.delete(db.collection('profile_passes').doc(`${ownerUid}_${candidateUid}`));
+    batch.delete(db.collection('likes').doc(`${ownerUid}_${candidateUid}`));
+    batch.delete(db.collection('likes').doc(`${candidateUid}_${ownerUid}`));
+    batch.delete(db.collection('matches').doc(pair));
+    batch.delete(db.collection('conversations').doc(pair));
+    batch.delete(db.collection('blocks').doc(`${ownerUid}_${candidateUid}`));
+    batch.delete(db.collection('blocks').doc(`${candidateUid}_${ownerUid}`));
+
+    if (!selectedUids.has(candidateUid) && candidateUid.startsWith('local-discover-')) {
+      batch.delete(db.collection('profiles').doc(candidateUid));
+      batch.delete(db.collection('users').doc(candidateUid));
+    }
+  }
+
+  for (const action of ['discover', 'like', 'pass']) {
+    batch.delete(db.collection('_rate_limits').doc(`${action}_${ownerUid}`));
+  }
+  await batch.commit();
+
+  const messageSnapshots = await Promise.all(
+    allCandidateUids.map((candidateUid) => {
+      const pair = [ownerUid, candidateUid].sort().join('_');
+      return db.collection('messages').where('conversationId', '==', pair).get();
+    }),
+  );
+  const messageBatch = db.batch();
+  for (const snapshot of messageSnapshots) {
+    for (const document of snapshot.docs) messageBatch.delete(document.ref);
+  }
+  await messageBatch.commit();
+
+  for (const person of discoverStressPeople) {
+    if (selectedUids.has(person.uid)) continue;
+    try {
+      await auth.deleteUser(person.uid);
+    } catch (error) {
+      if (error?.code !== 'auth/user-not-found') throw error;
+    }
+  }
+}
+
 async function main() {
-  for (const person of people) await seedPerson(person);
+  await resetDiscoverFixtureState();
+  for (const person of seededPeople) await seedPerson(person);
   await seedExistingConnection();
   await seedRelationshipCards();
 
@@ -282,7 +400,10 @@ async function main() {
   console.log('Member login: cam@local.polycircle.test');
   console.log('Moderator login: moderator@local.polycircle.test');
   console.log(`Local-only password: ${password}`);
-  console.log('Discover fixtures: Alex and Riley. Existing connection: Jordan.');
+  console.log(
+    `Discover fixtures (${discoverFixtureCount}): ${selectedDiscoverPeople.map((person) => person.displayName).join(', ')}.`,
+  );
+  console.log('Existing connection: Jordan.');
 }
 
 main().then(() => process.exit(0)).catch((error) => {

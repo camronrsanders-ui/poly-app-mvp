@@ -61,6 +61,12 @@ test('one-command iOS runner matches the native Firebase project while routing e
   assert.doesNotMatch(iosRunner, /firebase deploy/);
 });
 
+test('one-command iOS runner exposes only reviewed local Discover fixture counts', () => {
+  assert.match(iosRunner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
+  assert.match(iosRunner, /2\|5\|10\|15/);
+  assert.match(iosRunner, /Discover fixture count/);
+});
+
 test('one-command iOS runner detects common local setup collisions before Firebase starts', () => {
   assert.match(iosRunner, /restart-foundation/);
   assert.match(iosRunner, /lsof/);
