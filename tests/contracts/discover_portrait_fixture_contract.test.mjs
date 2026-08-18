@@ -44,6 +44,10 @@ test('portrait fixtures flow through protected media only inside emulators', () 
   assert.match(seed, /bucket\.file\(storagePath\)/);
   assert.match(seed, /collection\('profile_media'\)/);
   assert.match(seed, /emulatorFixture: true/);
+  assert.match(seed, /\(index % 15\) \+ 1/);
+  assert.match(seed, /saveDiscoverFixturePhoto/);
+  assert.match(seed, /maximumAttempts = 4/);
+  assert.match(seed, /waitForLocalEmulator\(250\)/);
   assert.match(seed, /seedDiscoverPhotos\(\)/);
 
   for (const clientPath of [

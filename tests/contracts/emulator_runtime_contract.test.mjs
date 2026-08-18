@@ -40,7 +40,7 @@ test('real Polycircle project ID is accepted only with explicit emulator-only ac
 
 test('Orbit stress fixtures are emulator-only and limited to reviewed densities', () => {
   assert.match(seed, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
-  assert.match(seed, /new Set\(\[2, 5, 10, 15\]\)/);
+  assert.match(seed, /new Set\(\[2, 5, 10, 15, 45\]\)/);
   assert.match(seed, /POLYCIRCLE_DISCOVER_FIXTURE_RADIUS/);
   assert.match(seed, /new Set\(\[5, 10, 20, 30, 50, 100\]\)/);
   assert.match(seed, /discoverStressPeople\.slice\(0, discoverFixtureCount - 2\)/);

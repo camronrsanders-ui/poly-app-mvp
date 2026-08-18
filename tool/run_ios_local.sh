@@ -18,9 +18,9 @@ EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data"
 mkdir -p "$EMULATOR_STATE_DIR"
 
 case "$DISCOVER_FIXTURE_COUNT" in
-  2|5|10|15) ;;
+  2|5|10|15|45) ;;
   *)
-    printf "POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be 2, 5, 10, or 15 (received '%s').\n" "$DISCOVER_FIXTURE_COUNT" >&2
+    printf "POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be 2, 5, 10, 15, or 45 (received '%s').\n" "$DISCOVER_FIXTURE_COUNT" >&2
     exit 1
     ;;
 esac

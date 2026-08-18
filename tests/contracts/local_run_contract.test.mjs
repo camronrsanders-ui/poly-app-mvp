@@ -64,7 +64,7 @@ test('one-command iOS runner matches the native Firebase project while routing e
 test('one-command iOS runner exposes only reviewed local Discover fixture counts', () => {
   assert.match(iosRunner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
   assert.match(iosRunner, /POLYCIRCLE_DISCOVER_FIXTURE_RADIUS/);
-  assert.match(iosRunner, /2\|5\|10\|15/);
+  assert.match(iosRunner, /2\|5\|10\|15\|45/);
   assert.match(iosRunner, /5\|10\|20\|30\|50\|100/);
   assert.match(iosRunner, /Discover fixture count/);
   assert.match(iosRunner, /simctl location/);

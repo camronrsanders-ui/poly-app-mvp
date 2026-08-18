@@ -67,7 +67,7 @@ const auth = getAuth();
 const db = getFirestore();
 const storage = getStorage();
 const password = 'LocalOnly123!';
-const allowedDiscoverFixtureCounts = new Set([2, 5, 10, 15]);
+const allowedDiscoverFixtureCounts = new Set([2, 5, 10, 15, 45]);
 const allowedDiscoverFixtureRadii = new Set([5, 10, 20, 30, 50, 100]);
 
 function readDiscoverFixtureCount() {
@@ -75,7 +75,7 @@ function readDiscoverFixtureCount() {
   const count = Number(raw);
   if (!Number.isInteger(count) || !allowedDiscoverFixtureCounts.has(count)) {
     throw new Error(
-      `POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be one of 2, 5, 10, or 15; received "${raw}".`,
+      `POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be one of 2, 5, 10, 15, or 45; received "${raw}".`,
     );
   }
   return count;
@@ -105,6 +105,8 @@ const discoverPortraitDirectory = path.join(
 const localDiscoverOrigin = {latitude: 12.3456, longitude: -45.6789};
 const discoverFixtureDistancesMiles = [
   2, 7, 15, 28, 60, 3, 9, 18, 35, 75, 4, 12, 24, 45, 90,
+  1, 6, 14, 27, 58, 3.5, 8, 19, 38, 78, 4.5, 11, 23, 48, 92,
+  2.5, 7.5, 16, 30, 62, 4, 10, 21, 42, 82, 5, 13, 26, 50, 95,
 ];
 
 const people = [
@@ -229,6 +231,36 @@ const discoverStressDetails = [
   ['Drew', 26, 'Somerville', 'MA', 'she/her', 'Exploring', 'Community first, chemistry welcome', ['Dance', 'Movies', 'Food']],
   ['Taylor', 38, 'Newton', 'MA', 'they/she', 'Open relationship', 'Grounded, playful, and always learning', ['Gardening', 'Travel', 'Live music']],
   ['Reese', 29, 'Malden', 'MA', 'he/they', 'Polyamorous', 'Looking for warmth, wit, and intention', ['Gaming', 'Art', 'Community']],
+  ['Remy', 34, 'Watertown', 'MA', 'they/them', 'Solo poly', 'Making space for care and good questions', ['Poetry', 'Hiking', 'Food']],
+  ['Noa', 30, 'Arlington', 'MA', 'she/her', 'Polyamorous', 'A little wonder goes a long way', ['Science', 'Dance', 'Travel']],
+  ['Mika', 37, 'Boston', 'MA', 'he/him', 'Open relationship', 'Thoughtful plans and spontaneous detours', ['Music', 'Running', 'Cooking']],
+  ['Lane', 28, 'Somerville', 'MA', 'they/she', 'Relationship anarchy', 'Here for sincerity and shared delight', ['Theater', 'Books', 'Coffee']],
+  ['Kit', 33, 'Cambridge', 'MA', 'they/he', 'Non-hierarchical poly', 'Learning, laughing, and showing up', ['Design', 'Games', 'Community']],
+  ['Jamie', 31, 'Medford', 'MA', 'she/her', 'Exploring', 'Kind company for everyday adventures', ['Cycling', 'Film', 'Gardens']],
+  ['Ari', 35, 'Brookline', 'MA', 'he/they', 'Polyamorous', 'Clear communication and curious weekends', ['Art', 'Travel', 'Food']],
+  ['Robin', 29, 'Boston', 'MA', 'they/them', 'Solo poly', 'Warm conversation and room to grow', ['Books', 'Yoga', 'Podcasts']],
+  ['Marin', 36, 'Quincy', 'MA', 'she/they', 'Open relationship', 'Community care with a playful streak', ['Volunteering', 'Music', 'Cooking']],
+  ['Shiloh', 32, 'Cambridge', 'MA', 'he/him', 'Relationship anarchy', 'Slow mornings and bright ideas', ['Coffee', 'Architecture', 'Running']],
+  ['Emery', 27, 'Somerville', 'MA', 'they/she', 'Exploring', 'Friendship, chemistry, and honest pacing', ['Dance', 'Film', 'Climbing']],
+  ['Finley', 39, 'Newton', 'MA', 'they/them', 'Polyamorous', 'Grounded connection and joyful curiosity', ['Gardening', 'Jazz', 'Travel']],
+  ['Cameron', 30, 'Malden', 'MA', 'he/they', 'Solo poly', 'Making meaningful room for one another', ['Gaming', 'Community', 'Art']],
+  ['Dakota', 34, 'Boston', 'MA', 'she/her', 'Open relationship', 'Good food and direct communication', ['Cooking', 'Museums', 'Cycling']],
+  ['Charlie', 28, 'Arlington', 'MA', 'they/them', 'Relationship anarchy', 'Delightfully earnest about connection', ['Poetry', 'Nature', 'Theater']],
+  ['Frankie', 37, 'Watertown', 'MA', 'she/they', 'Non-hierarchical poly', 'Seeking warmth without shortcuts', ['Books', 'Food', 'Design']],
+  ['Kai', 31, 'Cambridge', 'MA', 'he/him', 'Polyamorous', 'Care, humor, and the occasional road trip', ['Travel', 'Comedy', 'Music']],
+  ['Sam', 33, 'Medford', 'MA', 'they/he', 'Solo poly', 'Independent lives, intentional connection', ['Photography', 'Running', 'Games']],
+  ['Micah', 29, 'Boston', 'MA', 'they/them', 'Exploring', 'Curiosity with clear boundaries', ['Science', 'Coffee', 'Film']],
+  ['Lennon', 35, 'Brookline', 'MA', 'she/her', 'Open relationship', 'Creative days and honest nights', ['Ceramics', 'Dance', 'Gardens']],
+  ['Tatum', 32, 'Somerville', 'MA', 'they/she', 'Relationship anarchy', 'Building trust one conversation at a time', ['Community', 'Books', 'Hiking']],
+  ['River', 38, 'Quincy', 'MA', 'he/they', 'Polyamorous', 'Playful spirit, practical communicator', ['Cooking', 'Music', 'Travel']],
+  ['Casey', 27, 'Boston', 'MA', 'they/them', 'Solo poly', 'Friendship is a wonderful beginning', ['Art', 'Cycling', 'Movies']],
+  ['Bailey', 36, 'Newton', 'MA', 'she/they', 'Non-hierarchical poly', 'Present, curious, and community-minded', ['Volunteering', 'Gardening', 'Jazz']],
+  ['Hayden', 30, 'Cambridge', 'MA', 'he/him', 'Open relationship', 'Coffee walks and thoughtful follow-through', ['Coffee', 'Architecture', 'Podcasts']],
+  ['Arden', 34, 'Malden', 'MA', 'they/she', 'Relationship anarchy', 'Tenderness, candor, and room to roam', ['Poetry', 'Travel', 'Nature']],
+  ['Blake', 28, 'Medford', 'MA', 'he/they', 'Exploring', 'Making friends and seeing what unfolds', ['Games', 'Film', 'Food']],
+  ['Wren', 31, 'Boston', 'MA', 'they/them', 'Solo poly', 'Here for people who mean what they say', ['Books', 'Music', 'Community']],
+  ['Sydney', 37, 'Arlington', 'MA', 'she/her', 'Polyamorous', 'Big-hearted, well-boundaried, and curious', ['Dance', 'Cooking', 'Museums']],
+  ['Rory', 33, 'Watertown', 'MA', 'they/he', 'Open relationship', 'Good questions and unhurried connection', ['Hiking', 'Photography', 'Coffee']],
 ];
 
 const discoverStressPeople = discoverStressDetails.map((details, index) => {
@@ -327,6 +359,32 @@ function fictionalCoordinateAtDistance(distanceMiles) {
   };
 }
 
+const waitForLocalEmulator = (milliseconds) => new Promise(
+  (resolve) => setTimeout(resolve, milliseconds),
+);
+
+async function saveDiscoverFixturePhoto(file, bytes, metadata) {
+  const maximumAttempts = 4;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      await file.save(bytes, {
+        resumable: false,
+        metadata,
+      });
+      // Storage finalize events are asynchronous. A small local-only pause
+      // prevents the Functions/Storage emulators from receiving all 45
+      // protected-photo events in one burst on modest development machines.
+      await waitForLocalEmulator(250);
+      return;
+    } catch (error) {
+      const retryable = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT']
+        .includes(error?.code);
+      if (!retryable || attempt === maximumAttempts) throw error;
+      await waitForLocalEmulator(attempt * 400);
+    }
+  }
+}
+
 async function seedDiscoverLocations() {
   const batch = db.batch();
   const now = Timestamp.now();
@@ -370,19 +428,17 @@ async function seedDiscoverPhotos() {
       continue;
     }
 
+    const portraitOrdinal = String((index % 15) + 1).padStart(2, '0');
     const bytes = await readFile(
-      path.join(discoverPortraitDirectory, `profile-${ordinal}.jpg`),
+      path.join(discoverPortraitDirectory, `profile-${portraitOrdinal}.jpg`),
     );
-    await file.save(bytes, {
-      resumable: false,
+    await saveDiscoverFixturePhoto(file, bytes, {
+      contentType: 'image/jpeg',
       metadata: {
-        contentType: 'image/jpeg',
-        metadata: {
-          ownerUid: person.uid,
-          photoId,
-          processed: 'true',
-          emulatorFixture: 'true',
-        },
+        ownerUid: person.uid,
+        photoId,
+        processed: 'true',
+        emulatorFixture: 'true',
       },
     });
     await mediaRef.set({
@@ -483,6 +539,7 @@ async function resetDiscoverFixtureState() {
   }
 
   batch.delete(db.collection('member_locations').doc(ownerUid));
+  batch.delete(db.collection('_discover_sessions').doc(ownerUid));
   for (const action of ['discover', 'discover_location', 'like', 'pass']) {
     batch.delete(db.collection('_rate_limits').doc(`${action}_${ownerUid}`));
   }
