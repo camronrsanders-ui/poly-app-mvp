@@ -46,6 +46,18 @@ Potential durable differentiators to validate with users:
 - strong privacy/safety architecture as a product advantage rather than only a compliance requirement;
 - an eventual community network effect built around relationships and trusted connections, not just profile inventory.
 
+### Approved product experience direction
+
+The August 18, 2026 Discover and Messages mockups are now part of the business-plan record as an approved **Decision**, with the exact visuals preserved in an editable Canva appendix. See [Approved Product Experience Visuals](approved-product-experience-visuals.md).
+
+The product story shown in those visuals is:
+
+- **Discover:** Orbit Discovery → Profile World → Why Our Worlds Cross.
+- **Messages:** Conversation Space → intentionally saved Shared Moments → structured Plans.
+- **Cross-product narrative:** explore their world → understand where your worlds intersect → create a world together → see how your worlds connect in My Circle.
+
+Investor/demo materials must distinguish this approved direction from released functionality and must not present unfinished Moments, Plans, or other roadmap capabilities as already shipped.
+
 ## Business plan workstreams
 
 ### 1. Executive summary
