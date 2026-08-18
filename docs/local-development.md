@@ -43,7 +43,7 @@ Then run the development preflight:
 bash tool/dev_preflight.sh
 ```
 
-The preflight checks the required tools/runtime versions, verifies important iOS Firebase settings when the native iOS directory is present, runs Flutter source analysis and tests, builds/tests the Functions package, and runs the client/backend contract suite. For the slower emulator-backed Firestore/Storage security suite, use:
+The preflight checks the required tools/runtime versions, verifies the native iOS and Android Firebase identifiers/configuration when those host directories are present, runs Flutter source analysis and tests, builds/tests the Functions package, and runs the client/backend contract suite. For the slower emulator-backed Firestore/Storage security suite, use:
 
 ```bash
 bash tool/dev_preflight.sh --full
@@ -144,9 +144,9 @@ flutter run \
 
 ## Android Emulator
 
-The Android Emulator normally reaches the host Mac at `10.0.2.2`. Android native Firebase configuration still needs to be completed and validated before Android manual testing is considered ready.
+The native Android host is configured for Polycircle with application ID `com.polycircle.app`, the Google Services Gradle plugin, Java/Kotlin 17 compatibility, and cleartext disabled for production builds. The local development preflight now treats a missing or mismatched `android/app/google-services.json` as a hard failure and verifies both the Firebase project ID (`poly-circle-j5v6dy`) and Android package registration before a test cycle proceeds.
 
-Once that configuration is complete, the expected debug routing shape is:
+The Android Emulator normally reaches the host Mac at `10.0.2.2`. With a matching local `android/app/google-services.json` present, the expected debug emulator-routing command is:
 
 ```bash
 flutter run \
@@ -155,6 +155,8 @@ flutter run \
 ```
 
 Do not use the real-project seed against `10.0.2.2`; the seed script intentionally requires local loopback because it runs on the Mac itself.
+
+Automated Android debug APK builds are part of CI, but a successful CI build does not replace manual emulator/device validation. Real-device Android behavior, production signing, App Check enforcement against deployed staging services, and release networking must still pass their release gates before external beta.
 
 ## App Check
 
