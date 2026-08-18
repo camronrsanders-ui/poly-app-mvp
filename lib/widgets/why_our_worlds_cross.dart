@@ -25,9 +25,8 @@ class _WhyOurWorldsCrossSectionState extends State<WhyOurWorldsCrossSection> {
   void initState() {
     super.initState();
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    _viewerProfileFuture = uid == null
-        ? Future.value(null)
-        : _profiles.getProfile(uid);
+    _viewerProfileFuture =
+        uid == null ? Future.value(null) : _profiles.getProfile(uid);
   }
 
   IconData _iconFor(String title) {

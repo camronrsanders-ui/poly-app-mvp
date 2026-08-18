@@ -23,7 +23,8 @@ void main() {
   });
 
   test('sexual solicitation involving minors is blocked before posting', () {
-    expect(UgcTextPolicy.violationFor('looking for an underage kid'), isNotNull);
+    expect(
+        UgcTextPolicy.violationFor('looking for an underage kid'), isNotNull);
     expect(UgcTextPolicy.violationFor('send nudes from a minor'), isNotNull);
   });
 }

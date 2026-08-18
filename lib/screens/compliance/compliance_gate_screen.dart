@@ -124,9 +124,8 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
         return;
       }
 
-      final method = signal.confirmsAdult
-          ? signal.method
-          : 'self_attested_dob_fallback';
+      final method =
+          signal.confirmsAdult ? signal.method : 'self_attested_dob_fallback';
 
       await _compliance.recordAdultPolicyAcceptance(
         ageAssuranceMethod: method,
@@ -167,7 +166,9 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             Icon(
-              _blocked ? Icons.no_accounts_outlined : Icons.verified_user_outlined,
+              _blocked
+                  ? Icons.no_accounts_outlined
+                  : Icons.verified_user_outlined,
               size: 58,
             ),
             const SizedBox(height: 14),

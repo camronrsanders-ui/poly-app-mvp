@@ -58,12 +58,17 @@ void main() {
       expect(profile.customIdentityTags, isEmpty);
     });
 
-    test('ignores malformed legacy list and scalar values instead of crashing', () {
+    test('ignores malformed legacy list and scalar values instead of crashing',
+        () {
       final profile = Profile.fromMap('legacy', {
         'displayName': 42,
         'age': 'thirty',
         'partnered': 'yes',
-        'customIdentityTags': ['polyamorous', 7, {'nested': true}],
+        'customIdentityTags': [
+          'polyamorous',
+          7,
+          {'nested': true}
+        ],
         'interests': 'not-a-list',
         'openToConnections': 'yes',
         'profileVisibility': 123,

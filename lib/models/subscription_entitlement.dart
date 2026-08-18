@@ -74,7 +74,8 @@ class SubscriptionEntitlement {
 
     final accessUntilMs = data['accessUntilMs'];
     final accessUntil = accessUntilMs is num
-        ? DateTime.fromMillisecondsSinceEpoch(accessUntilMs.toInt(), isUtc: true)
+        ? DateTime.fromMillisecondsSinceEpoch(accessUntilMs.toInt(),
+            isUtc: true)
         : null;
 
     // Fail closed: a malformed/contradictory paid response does not create paid

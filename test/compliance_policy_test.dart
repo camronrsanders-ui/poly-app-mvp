@@ -8,14 +8,14 @@ void main() {
     expect(ageOnDate(birthDate, DateTime(2026, 8, 15)), 18);
   });
 
-  test('current compliance requires adult approval and both policy versions', () {
+  test('current compliance requires adult approval and both policy versions',
+      () {
     expect(accountHasCurrentCompliance(<String, dynamic>{}), isFalse);
     expect(
       accountHasCurrentCompliance(<String, dynamic>{
         'adultAccessApproved': true,
         'termsAcceptedVersion': currentTermsVersion,
-        'communityGuidelinesAcceptedVersion':
-            currentCommunityGuidelinesVersion,
+        'communityGuidelinesAcceptedVersion': currentCommunityGuidelinesVersion,
       }),
       isTrue,
     );
@@ -23,8 +23,7 @@ void main() {
       accountHasCurrentCompliance(<String, dynamic>{
         'adultAccessApproved': true,
         'termsAcceptedVersion': 'stale-version',
-        'communityGuidelinesAcceptedVersion':
-            currentCommunityGuidelinesVersion,
+        'communityGuidelinesAcceptedVersion': currentCommunityGuidelinesVersion,
       }),
       isFalse,
     );

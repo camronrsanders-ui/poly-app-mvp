@@ -43,9 +43,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit> {
   void _rotate(int delta) {
     if (widget.profiles.length < 2) return;
     setState(() {
-      _selectedIndex =
-          (_selectedIndex + delta + widget.profiles.length) %
-              widget.profiles.length;
+      _selectedIndex = (_selectedIndex + delta + widget.profiles.length) %
+          widget.profiles.length;
     });
   }
 
@@ -254,9 +253,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit> {
   }) {
     final count = widget.profiles.length;
     final relative = (index - _selectedIndex + count) % count;
-    final slot = visibleCount == count
-        ? relative
-        : _visibleIndices().indexOf(index);
+    final slot =
+        visibleCount == count ? relative : _visibleIndices().indexOf(index);
     final angle = -math.pi / 2 + (2 * math.pi * slot / visibleCount);
     final selected = index == _selectedIndex;
     final size = selected ? 72.0 : 58.0;

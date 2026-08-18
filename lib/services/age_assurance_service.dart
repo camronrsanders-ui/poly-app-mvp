@@ -103,7 +103,8 @@ class AgeAssuranceService {
     }
 
     try {
-      final result = await _channel.invokeMethod<dynamic>('requestAdultAgeSignal');
+      final result =
+          await _channel.invokeMethod<dynamic>('requestAdultAgeSignal');
       if (result is! Map) {
         return AgeAssuranceResult(
           decision: AgeAssuranceDecision.error,
