@@ -120,6 +120,45 @@ void main() {
       expect(DiscoveryOrbitMath.distanceToIndex(0, 11, 12), -1);
       expect(DiscoveryOrbitMath.distanceToIndex(11, 0, 12), 1);
     });
+
+    test('depth visuals keep focus dominant without disabling rear profiles',
+        () {
+      for (final count in <int>[1, 2, 3, 5, 8, 10, 15, 25]) {
+        final base = DiscoveryOrbitVisuals.baseNodeSize(count);
+        final focused = base *
+            DiscoveryOrbitVisuals.nodeScale(
+              count: count,
+              depth01: 1,
+              perspective: 1.44,
+              selected: true,
+            );
+        final rear = base *
+            DiscoveryOrbitVisuals.nodeScale(
+              count: count,
+              depth01: 0,
+              perspective: 0.76,
+              selected: false,
+            );
+
+        expect(focused, greaterThan(rear * 1.7));
+        expect(rear, greaterThanOrEqualTo(47));
+      }
+
+      expect(
+        DiscoveryOrbitVisuals.nodeOpacity(
+          depth01: 0,
+          selected: false,
+        ),
+        greaterThanOrEqualTo(0.78),
+      );
+      expect(
+        DiscoveryOrbitVisuals.nodeOpacity(
+          depth01: 1,
+          selected: true,
+        ),
+        1,
+      );
+    });
   });
 
   testWidgets('one profile remains usable and opens its Profile World',
@@ -192,6 +231,14 @@ void main() {
     expect((blairCenter.dx - scene.center.dx).abs(), lessThan(2));
     expect(tester.getSize(alexAvatar).width,
         greaterThan(tester.getSize(blairAvatar).width));
+    expect(
+      tester.getSize(alexAvatar).width,
+      greaterThan(tester
+          .getSize(
+            find.byKey(const ValueKey('discovery-you-orb')),
+          )
+          .width),
+    );
 
     await _next(tester);
     expect(find.text('Blair, 31'), findsOneWidget);
@@ -302,6 +349,17 @@ void main() {
     expect(find.bySemanticsLabel('Next profile'), findsOneWidget);
     expect(find.bySemanticsLabel('Profile 1 of 3'), findsOneWidget);
 
+    final previousSize = tester.getSize(
+      find.byKey(const ValueKey('discovery-previous-profile')),
+    );
+    final nextSize = tester.getSize(
+      find.byKey(const ValueKey('discovery-next-profile')),
+    );
+    expect(previousSize.width, greaterThanOrEqualTo(44));
+    expect(previousSize.height, greaterThanOrEqualTo(44));
+    expect(nextSize.width, greaterThanOrEqualTo(44));
+    expect(nextSize.height, greaterThanOrEqualTo(44));
+
     await _next(tester);
     expect(find.text('Profile 1, 21'), findsOneWidget);
     expect(find.bySemanticsLabel('Profile 2 of 3'), findsOneWidget);
@@ -331,6 +389,53 @@ void main() {
       find.byKey(const ValueKey('discovery-avatar-profile-6')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('protected photos own the node surface with antialiased clipping',
+      (tester) async {
+    await tester.pumpWidget(
+      _testApp(_orbit(profiles: _profiles(5))),
+    );
+
+    final photo = find.byKey(const ValueKey('photo-profile-uid-profile-0'));
+    expect(photo, findsOneWidget);
+    final clip = find.ancestor(
+      of: photo,
+      matching: find.byType(ClipOval),
+    );
+    expect(clip, findsOneWidget);
+    expect(tester.widget<ClipOval>(clip).clipBehavior, Clip.antiAlias);
+    expect(find.descendant(of: clip, matching: find.byType(ColoredBox)),
+        findsOneWidget);
+  });
+
+  testWidgets('25-profile view keeps focus largest and visible nodes legible',
+      (tester) async {
+    await tester.pumpWidget(
+      _testApp(_orbit(profiles: _profiles(25))),
+    );
+
+    final frames = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('discovery-frame-profile-');
+    });
+    expect(frames, findsNWidgets(DiscoveryOrbitMath.maxVisibleProfiles));
+
+    final focused = tester
+        .getSize(
+          find.byKey(const ValueKey('discovery-frame-profile-0')),
+        )
+        .width;
+    final otherSizes = frames
+        .evaluate()
+        .map((element) => tester.getSize(find.byWidget(element.widget)).width)
+        .where((size) => size != focused)
+        .toList(growable: false);
+
+    expect(otherSizes, isNotEmpty);
+    expect(otherSizes.every((size) => size < focused), isTrue);
+    expect(otherSizes.every((size) => size >= 47), isTrue);
   });
 
   testWidgets('selected profile information follows focus', (tester) async {

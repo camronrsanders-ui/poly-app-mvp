@@ -34,6 +34,10 @@ test('Orbit scene and world preview are integrated without a surrounding card', 
   assert.match(orbit, /discovery-orbit-scene/);
   assert.match(orbit, /discovery-world-preview/);
   assert.match(orbit, /WORLD PREVIEW/);
-  assert.match(orbit, /Drag the orbit or tap a person to change focus/);
+  assert.match(orbit, /Drag the orbit, tap a person, or use the arrows/);
+  assert.match(orbit, /DiscoveryOrbitVisuals/);
+  assert.match(orbit, /Clip\.antiAlias/);
+  assert.match(discover, /fit: BoxFit\.cover/);
+  assert.match(discover, /filterQuality: FilterQuality\.high/);
   assert.doesNotMatch(orbit, /Move around the orbit to discover whose world draws you in/);
 });

@@ -64,6 +64,47 @@ class DiscoveryOrbitMath {
   }
 }
 
+/// Deterministic presentation values for keeping the Orbit legible across
+/// sparse and virtualized candidate populations.
+class DiscoveryOrbitVisuals {
+  const DiscoveryOrbitVisuals._();
+
+  static double baseNodeSize(int count) {
+    if (count <= 1) return 88;
+    if (count <= 3) return 84;
+    if (count <= DiscoveryOrbitMath.maxVisibleProfiles) return 80;
+    return 76;
+  }
+
+  static double nodeScale({
+    required int count,
+    required double depth01,
+    required double perspective,
+    required bool selected,
+  }) {
+    final depth = depth01.clamp(0.0, 1.0);
+    final minimum = count <= 3 ? 0.7 : 0.63;
+    final maximum = count <= 3 ? 1.1 : 1.06;
+    final projected = perspective * (0.7 + depth * 0.3);
+    final depthScale = projected.clamp(minimum, maximum).toDouble();
+    if (!selected) return depthScale;
+
+    final focusScale = 1.2 + depth * (count <= 3 ? 0.2 : 0.23);
+    return math.max(depthScale, focusScale).clamp(1.2, 1.43).toDouble();
+  }
+
+  static double nodeOpacity({
+    required double depth01,
+    required bool selected,
+  }) {
+    if (selected) return 1;
+    final depth = depth01.clamp(0.0, 1.0);
+    return (0.78 + Curves.easeOut.transform(depth) * 0.22)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+}
+
 class DiscoveryOrbit extends StatefulWidget {
   const DiscoveryOrbit({
     super.key,
@@ -394,10 +435,10 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   Widget _orbitScene() {
     final viewport = MediaQuery.sizeOf(context);
     final sceneHeight = viewport.width <= 340
-        ? 300.0
+        ? 292.0
         : viewport.height < 760
-            ? 320.0
-            : 356.0;
+            ? 312.0
+            : 340.0;
 
     return RepaintBoundary(
       child: SizedBox(
@@ -407,17 +448,17 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final height = constraints.maxHeight;
-            final center = Offset(width / 2, height * 0.44);
+            final center = Offset(width / 2, height * 0.42);
             final radius = math.min(
-              math.min(width * 0.46, height * 0.47),
-              172.0,
+              math.min(width * 0.455, height * 0.49),
+              170.0,
             );
             final projector = _DiscoveryOrbitProjector(
               center: center,
               radius: radius,
-              cameraDistance: radius * 3.05,
-              focalLength: radius * 2.82,
-              tilt: 0.52,
+              cameraDistance: radius * 2.75,
+              focalLength: radius * 2.5,
+              tilt: 0.56,
             );
             final visible = DiscoveryOrbitMath.visibleIndices(
               _position,
@@ -498,8 +539,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                   ),
                   for (final node in backNodes) _candidateNode(node),
                   Positioned(
-                    left: center.dx - 39,
-                    top: center.dy - 39,
+                    left: center.dx - 36,
+                    top: center.dy - 36,
                     child: const _DiscoveryCenter(),
                   ),
                   Positioned.fill(
@@ -529,23 +570,28 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     final uid = profile['uid']?.toString().trim() ?? '';
     final selected = node.index == _selectedIndex;
     final name = _displayName(profile);
-    final minimumScale = widget.profiles.length <= 2 ? 0.76 : 0.64;
-    final depthScale = (node.perspective * (0.7 + node.depth01 * 0.3))
-        .clamp(minimumScale, 1.22)
-        .toDouble();
-    final finalScale = selected ? depthScale * 1.14 : depthScale;
-    final baseSize = widget.profiles.length <= 2 ? 84.0 : 80.0;
+    final finalScale = DiscoveryOrbitVisuals.nodeScale(
+      count: widget.profiles.length,
+      depth01: node.depth01,
+      perspective: node.perspective,
+      selected: selected,
+    );
+    final baseSize = DiscoveryOrbitVisuals.baseNodeSize(
+      widget.profiles.length,
+    );
     final size = baseSize * finalScale;
-    final opacity = selected
-        ? 1.0
-        : (0.68 + node.depth01 * 0.32).clamp(0.0, 1.0).toDouble();
+    final opacity = DiscoveryOrbitVisuals.nodeOpacity(
+      depth01: node.depth01,
+      selected: selected,
+    );
     final identity = _identity(profile, node.index);
     final avatarKey = uid.isEmpty ? identity : uid;
+    final framePadding = selected ? 4.2 : 2.4;
 
     return Positioned(
       key: ValueKey('position-$identity'),
       left: node.position.dx - size / 2,
-      top: node.position.dy - size / 2,
+      top: node.position.dy - size / 2 - (selected ? 4 : 0),
       child: Semantics(
         button: true,
         selected: selected,
@@ -567,54 +613,78 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
             child: Opacity(
               opacity: opacity,
               child: Container(
+                key: ValueKey('discovery-frame-$avatarKey'),
                 width: size,
                 height: size,
-                padding: EdgeInsets.all(selected ? 3.4 : 2),
+                padding: EdgeInsets.all(framePadding),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(
-                        alpha: node.depth >= 0 ? 0.96 : 0.74,
-                      ),
-                      const Color(0xFFBE89FF),
-                      const Color(0xFF6F24B9),
-                    ],
+                    colors: selected
+                        ? const [
+                            Color(0xFFFFFAFF),
+                            Color(0xFFD9B7FF),
+                            Color(0xFF8C3DDE),
+                          ]
+                        : [
+                            const Color(0xFFDCC2F7).withValues(
+                              alpha: 0.72 + node.depth01 * 0.2,
+                            ),
+                            const Color(0xFF9A62CF),
+                            const Color(0xFF552273),
+                          ],
                   ),
                   border: Border.all(
                     color: selected
-                        ? const Color(0xFFF0DDFF)
-                        : const Color(0xFFA66ADE).withValues(alpha: 0.72),
-                    width: selected ? 3.2 : 1.2,
+                        ? const Color(0xFFF7E9FF)
+                        : const Color(0xFFB584E1).withValues(
+                            alpha: 0.42 + node.depth01 * 0.28,
+                          ),
+                    width: selected ? 1.4 : 0.8,
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF9C5CFF).withValues(
-                        alpha: selected ? 0.72 : 0.18 + node.depth01 * 0.2,
+                        alpha: selected ? 0.68 : 0.1 + node.depth01 * 0.18,
                       ),
-                      blurRadius: selected ? 34 : 10 + node.depth01 * 16,
-                      spreadRadius: selected ? 5 : 0.5,
-                      offset: Offset(0, 3 + node.depth01 * 7),
+                      blurRadius: selected ? 38 : 8 + node.depth01 * 14,
+                      spreadRadius: selected ? 5 : 0,
+                      offset: Offset(0, selected ? 10 : 3 + node.depth01 * 5),
                     ),
                     if (selected)
                       BoxShadow(
-                        color: const Color(0xFFD8B1FF).withValues(alpha: 0.3),
-                        blurRadius: 10,
+                        color: const Color(0xFFE2C3FF).withValues(alpha: 0.28),
+                        blurRadius: 12,
                         spreadRadius: 1,
                       ),
                   ],
                 ),
-                child: ClipOval(
-                  child: RepaintBoundary(
-                    key: ValueKey('photo-$identity'),
-                    child: uid.isEmpty
-                        ? const ColoredBox(
-                            color: Color(0xFF2A1838),
-                            child: Icon(Icons.person, color: Colors.white70),
-                          )
-                        : widget.imageBuilder(uid),
+                child: Container(
+                  foregroundDecoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? const Color(0xB3FFFFFF)
+                          : const Color(0x5CDCC2F7),
+                      width: selected ? 1.1 : 0.65,
+                    ),
+                  ),
+                  child: ClipOval(
+                    clipBehavior: Clip.antiAlias,
+                    child: RepaintBoundary(
+                      key: ValueKey('photo-$identity'),
+                      child: uid.isEmpty
+                          ? const ColoredBox(
+                              color: Color(0xFF2A1838),
+                              child: Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFFDCC8EC),
+                              ),
+                            )
+                          : widget.imageBuilder(uid),
+                    ),
                   ),
                 ),
               ),
@@ -631,15 +701,18 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     return Center(
       child: Container(
         key: const ValueKey('discovery-orbit-controls'),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         decoration: BoxDecoration(
-          color: const Color(0x99150C20),
+          color: const Color(0x80150C20),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFF48285F)),
+          border: Border.all(
+            color: const Color(0xB34E2B67),
+            width: 0.8,
+          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF7135A7).withValues(alpha: 0.14),
-              blurRadius: 18,
+              color: const Color(0xFF7135A7).withValues(alpha: 0.1),
+              blurRadius: 14,
             ),
           ],
         ),
@@ -654,27 +727,34 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                 tooltip: 'Previous profile',
                 onPressed: enabled ? () => _moveFocus(-1) : null,
                 icon: const Icon(Icons.arrow_back_rounded),
-                color: const Color(0xFFF2E7FF),
+                iconSize: 21,
+                color: const Color(0xFFD9C7E8),
                 disabledColor: Colors.white30,
-                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 44,
+                  height: 44,
+                ),
+                padding: const EdgeInsets.all(10),
+                visualDensity: VisualDensity.standard,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 3),
             Semantics(
               liveRegion: true,
               excludeSemantics: true,
               label:
                   'Profile ${_selectedIndex + 1} of ${widget.profiles.length}',
               child: Text(
-                '${_selectedIndex + 1}  /  ${widget.profiles.length}',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFD4C5E2),
+                '${_selectedIndex + 1} / ${widget.profiles.length}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFFC8B8D5),
                   fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 3),
             Semantics(
               button: true,
               label: 'Next profile',
@@ -683,9 +763,15 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                 tooltip: 'Next profile',
                 onPressed: enabled ? () => _moveFocus(1) : null,
                 icon: const Icon(Icons.arrow_forward_rounded),
-                color: const Color(0xFFF2E7FF),
+                iconSize: 21,
+                color: const Color(0xFFD9C7E8),
                 disabledColor: Colors.white30,
-                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 44,
+                  height: 44,
+                ),
+                padding: const EdgeInsets.all(10),
+                visualDensity: VisualDensity.standard,
               ),
             ),
           ],
@@ -721,25 +807,28 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
       label: 'Focused profile details for $name',
       child: Container(
         key: const ValueKey('discovery-world-preview'),
-        padding: const EdgeInsets.all(17),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 17),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xE8261735),
-              Color(0xED150D20),
-              Color(0xEB0D0914),
+              Color(0xEB291838),
+              Color(0xF0180E24),
+              Color(0xF20D0914),
             ],
           ),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: const Color(0xFF70429A)),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: const Color(0xFF70429A),
+            width: 0.9,
+          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF7C38B8).withValues(alpha: 0.24),
-              blurRadius: 34,
-              spreadRadius: -4,
-              offset: const Offset(0, 14),
+              color: const Color(0xFF7C38B8).withValues(alpha: 0.2),
+              blurRadius: 30,
+              spreadRadius: -5,
+              offset: const Offset(0, 12),
             ),
             const BoxShadow(
               color: Color(0x1FDDBBFF),
@@ -756,8 +845,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
               Row(
                 children: [
                   Container(
-                    width: 7,
-                    height: 7,
+                    width: 6,
+                    height: 6,
                     decoration: const BoxDecoration(
                       color: Color(0xFFC891FF),
                       shape: BoxShape.circle,
@@ -774,67 +863,77 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                   Text(
                     'WORLD PREVIEW',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFFB99CCF),
+                          color: const Color(0xFFC5A8DA),
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 1.45,
+                          letterSpacing: 1.55,
                         ),
                   ),
                 ],
               ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 8),
               Text(
                 age == null ? name : '$name, $age',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: primaryText,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.35,
                     ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               if (location.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Row(
                   children: [
                     const Icon(
                       Icons.location_on_outlined,
-                      size: 16,
+                      size: 15,
                       color: secondaryText,
                     ),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         location,
-                        style: const TextStyle(color: secondaryText),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: secondaryText,
+                              height: 1.2,
+                            ),
                       ),
                     ),
                   ],
                 ),
               ],
               if (headline.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
                   headline,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: primaryText,
-                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        height: 1.28,
                       ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
               if (intentions.isNotEmpty) ...[
-                const SizedBox(height: 14),
+                const SizedBox(height: 11),
                 Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: intentions
                       .map(
                         (value) => Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
+                            horizontal: 10,
+                            vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF342047),
+                            color: const Color(0xB3342047),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: const Color(0xFF8658BA),
+                              color: const Color(0xB38658BA),
+                              width: 0.8,
                             ),
                           ),
                           child: Text(
@@ -844,6 +943,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                                 .labelMedium
                                 ?.copyWith(
                                   color: const Color(0xFFE8D7FF),
+                                  fontWeight: FontWeight.w600,
                                 ),
                           ),
                         ),
@@ -851,7 +951,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                       .toList(growable: false),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 13),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -867,16 +967,20 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                           ? const Color(0xFF44364D)
                           : const Color(0xFF8050A9),
                     ),
-                    minimumSize: const Size.fromHeight(48),
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
-                  icon: const Icon(Icons.public_outlined),
+                  icon: const Icon(Icons.public_outlined, size: 18),
                   label: const Text('Enter their profile world'),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 9),
               Row(
                 children: [
                   Expanded(
+                    flex: 4,
                     child: OutlinedButton.icon(
                       key: const ValueKey('discovery-pass'),
                       onPressed: acting ? null : () => widget.onPass(profile),
@@ -888,14 +992,17 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                               acting ? Colors.white24 : const Color(0xFF836B90),
                         ),
                         minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Icons.close_rounded, size: 19),
                       label: const Text('Pass'),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 9),
                   Expanded(
-                    flex: 2,
+                    flex: 7,
                     child: FilledButton.icon(
                       key: const ValueKey('discovery-connect'),
                       onPressed: acting ? null : () => widget.onLike(profile),
@@ -907,6 +1014,9 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                         minimumSize: const Size.fromHeight(48),
                         elevation: acting ? 0 : 3,
                         shadowColor: const Color(0xFF9B52E5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                       icon: acting
                           ? const SizedBox(
@@ -938,25 +1048,27 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
       children: [
         _orbitScene(),
         Transform.translate(
-          offset: const Offset(0, -5),
+          offset: const Offset(0, -3),
           child: _orbitControls(),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 2, 18, 0),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
           child: Text(
             widget.profiles.length > 1
-                ? 'Drag the orbit or tap a person to change focus.'
+                ? 'Drag the orbit, tap a person, or use the arrows.'
                 : 'Tap the focused person to enter their world.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: const Color(0xFF9E90AA),
+                  fontSize: 11.5,
+                  letterSpacing: 0.1,
                 ),
           ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 5),
         Container(
           width: 1,
-          height: 13,
+          height: 11,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -986,63 +1098,77 @@ class _DiscoveryCenter extends StatelessWidget {
       label: 'You are at the center of your discovery orbit',
       child: ExcludeSemantics(
         child: SizedBox(
-          width: 78,
-          height: 78,
+          key: const ValueKey('discovery-you-orb'),
+          width: 72,
+          height: 72,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Container(
-                width: 78,
-                height: 78,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFFA962FF).withValues(alpha: 0.34),
-                      const Color(0xFF5C238E).withValues(alpha: 0.15),
+                      const Color(0xFFA962FF).withValues(alpha: 0.28),
+                      const Color(0xFF5C238E).withValues(alpha: 0.12),
                       Colors.transparent,
                     ],
                   ),
                 ),
               ),
+              const Positioned.fill(
+                child: CustomPaint(
+                  painter: _DiscoveryCenterEnergyPainter(),
+                ),
+              ),
               Container(
-                width: 60,
-                height: 60,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const RadialGradient(
                     center: Alignment(-0.3, -0.35),
                     colors: [
-                      Color(0xFF6F36A8),
-                      Color(0xFF351249),
-                      Color(0xFF190921),
+                      Color(0xFF69339C),
+                      Color(0xFF311143),
+                      Color(0xFF16081E),
                     ],
                   ),
                   border: Border.all(
-                    color: const Color(0xFFCAA4F5),
-                    width: 1.5,
+                    color: const Color(0xFFBE94EB),
+                    width: 1.15,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFA654F0).withValues(alpha: 0.35),
-                      blurRadius: 20,
-                      spreadRadius: 2,
+                      color: const Color(0xFFA654F0).withValues(alpha: 0.28),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                    const BoxShadow(
+                      color: Color(0x24F3E2FF),
+                      blurRadius: 5,
+                      offset: Offset(-1, -1),
                     ),
                   ],
                 ),
                 child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.auto_awesome,
-                        color: Color(0xFFEBD7FF), size: 17),
-                    SizedBox(height: 2),
+                    Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFFE8D1FF),
+                      size: 15,
+                    ),
+                    SizedBox(height: 1),
                     Text(
                       'YOU',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 9.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
+                        letterSpacing: 1.4,
                       ),
                     ),
                   ],
@@ -1053,6 +1179,31 @@ class _DiscoveryCenter extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _DiscoveryCenterEnergyPainter extends CustomPainter {
+  const _DiscoveryCenterEnergyPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
+    final arc = Paint()
+      ..color = const Color(0xFFCB9EFF).withValues(alpha: 0.42)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(bounds.deflate(4.5), -2.65, 0.92, false, arc);
+
+    arc
+      ..color = const Color(0xFF8C49C7).withValues(alpha: 0.3)
+      ..strokeWidth = 0.8;
+    canvas.drawArc(bounds.deflate(3.5), 0.3, 0.72, false, arc);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DiscoveryCenterEnergyPainter oldDelegate) {
+    return false;
   }
 }
 
@@ -1213,27 +1364,32 @@ class _DiscoveryRailPainter extends CustomPainter {
       if (isFront != front) continue;
 
       final depth = (first.depth01 + second.depth01) / 2;
+      final depthEmphasis = Curves.easeIn.transform(depth.clamp(0.0, 1.0));
       canvas.drawLine(
         first.position,
         second.position,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
-          ..strokeWidth = front ? 1.4 + depth * 1.6 : 0.75
-          ..color = const Color(0xFFB274FF).withValues(
-            alpha: front ? 0.26 + depth * 0.24 : 0.11,
+          ..strokeWidth = front ? 0.9 + depthEmphasis * 1.05 : 0.55
+          ..color = primary.withValues(
+            alpha: front
+                ? 0.13 + depthEmphasis * 0.18
+                : 0.05 + depthEmphasis * 0.035,
           ),
       );
 
-      if (front && depth > 0.62) {
+      if (front && depth > 0.68) {
         canvas.drawLine(
           first.position,
           second.position,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round
-            ..strokeWidth = 8
-            ..color = primary.withValues(alpha: 0.04),
+            ..strokeWidth = 6
+            ..color = secondary.withValues(
+              alpha: 0.018 + depthEmphasis * 0.022,
+            ),
         );
       }
     }
@@ -1263,8 +1419,9 @@ class _DiscoveryRailPainter extends CustomPainter {
         second.position,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = front ? 0.85 : 0.5
-          ..color = secondary.withValues(alpha: front ? 0.11 : 0.06),
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = front ? 0.7 : 0.45
+          ..color = secondary.withValues(alpha: front ? 0.075 : 0.035),
       );
     }
   }

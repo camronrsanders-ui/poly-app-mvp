@@ -136,7 +136,7 @@ void main() {
     expect(repository.savedDistances, [50]);
     expect(repository.candidateLoads, 2);
     expect(find.text('Within 50 mi'), findsOneWidget);
-    expect(find.text('1  /  5'), findsOneWidget);
+    expect(find.text('1 / 5'), findsOneWidget);
   });
 
   testWidgets('permission denied is clear, retryable, and links to settings',

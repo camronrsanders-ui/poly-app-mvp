@@ -285,6 +285,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+            gaplessPlayback: true,
+            cacheWidth: 640,
             errorBuilder: (_, __, ___) => _photoFallback(),
           );
         }
@@ -314,20 +318,33 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: RadialGradient(
-          center: Alignment(-0.3, -0.35),
+          center: Alignment(-0.35, -0.4),
+          radius: 0.95,
           colors: [
-            Color(0xFF5B367B),
-            Color(0xFF281536),
-            Color(0xFF120B19),
+            Color(0xFF68418A),
+            Color(0xFF321A43),
+            Color(0xFF130B1B),
           ],
         ),
       ),
-      child: Center(
-        child: Icon(
-          Icons.person_rounded,
-          size: 34,
-          color: Color(0xFFE8D7F9),
-        ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.person_rounded,
+            size: 33,
+            color: Color(0xFFE8D7F9),
+          ),
+          Positioned(
+            top: 9,
+            right: 10,
+            child: Icon(
+              Icons.auto_awesome,
+              size: 10,
+              color: Color(0xB3DDB8FF),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -615,7 +632,7 @@ class _DiscoverWorld extends StatelessWidget {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 10, 7),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 10, 3),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -661,9 +678,10 @@ class _DiscoverWorld extends StatelessWidget {
                                     distanceBusy ? null : onChangeDistance,
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFFEBD9FF),
-                                  backgroundColor: const Color(0x8A21122F),
+                                  backgroundColor: const Color(0x7321122F),
                                   side: const BorderSide(
                                     color: Color(0xFF69408D),
+                                    width: 0.9,
                                   ),
                                   minimumSize: const Size(0, 34),
                                   padding: const EdgeInsets.symmetric(
@@ -673,6 +691,7 @@ class _DiscoverWorld extends StatelessWidget {
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                   visualDensity: VisualDensity.compact,
+                                  shape: const StadiumBorder(),
                                 ),
                                 icon: distanceBusy
                                     ? const SizedBox(
