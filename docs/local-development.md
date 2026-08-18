@@ -90,7 +90,18 @@ Orbit Discovery can be previewed with exactly 2, 5, 10, or 15 local candidates. 
 POLYCIRCLE_DISCOVER_FIXTURE_COUNT=5 bash tool/run_ios_local.sh "iPhone 17 Pro"
 ```
 
-Replace `5` with `2`, `10`, or `15` for the other supported densities. The default remains `2`. The runner and seed both reject any other value, and the seed still requires the loopback Auth/Firestore hosts plus the explicit real-project emulator acknowledgement. Reseeding clears prior local Cam-to-fixture Pass, Like, match, block, and conversation state so the requested visual population is reachable; it does not touch Jordan's existing local connection or any live Firebase data.
+Replace `5` with `2`, `10`, or `15` for the other supported densities. The default remains `2`. The runner and seed both reject any other value, and the seed requires loopback Auth, Firestore, and Storage hosts plus the explicit real-project emulator acknowledgement. Reseeding clears prior local Cam-to-fixture Pass, Like, match, block, and conversation state so the requested visual population is reachable; it does not touch Jordan's existing local connection or any live Firebase data.
+
+For a high-density visual review, keep the production default unchanged while
+seeding Cam's local saved preference explicitly:
+
+```bash
+POLYCIRCLE_DISCOVER_FIXTURE_COUNT=15 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=50 bash tool/run_ios_local.sh "iPhone 17 Pro"
+```
+
+The optional local radius accepts only the same reviewed values as the app and defaults to 20 miles when omitted.
+
+Each Discover candidate also receives a fictional local-only portrait in the Storage emulator with a matching server-owned `profile_media` record. The app retrieves these through the normal protected profile-media callable, so the founder can review photographic Orbit nodes without adding public image URLs or production demo members. Source fixtures are documented under `functions/fixtures/discover_portraits/` and are never referenced by production client code.
 
 The selected candidates use deterministic fictional distances in this order: approximately 2, 7, 15, 28, 60, 3, 9, 18, 35, 75, 4, 12, 24, 45, and 90 miles. With a 15-person fixture, changing Cam's radius visibly moves candidates into or out of the Orbit: 5 miles shows the nearest group, 10 and 20 add progressively more, 50 shows most, and 100 shows all eligible fixtures. Exact coordinates remain in the emulator-only `member_locations` collection and are never production/demo profile fields.
 

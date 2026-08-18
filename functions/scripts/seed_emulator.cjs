@@ -1,6 +1,9 @@
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {FieldValue, Timestamp, getFirestore} = require('firebase-admin/firestore');
+const {getStorage} = require('firebase-admin/storage');
+const {readFile} = require('node:fs/promises');
+const path = require('node:path');
 
 const nativeFirebaseProjectId = 'poly-circle-j5v6dy';
 
@@ -12,12 +15,22 @@ function isLoopbackEmulatorHost(value) {
 function requireEmulatorEnvironment() {
   const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
   const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
   if (!firestoreHost || !authHost) {
     throw new Error(
       'Refusing to seed: FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST must both be set.',
     );
   }
-  if (!isLoopbackEmulatorHost(firestoreHost) || !isLoopbackEmulatorHost(authHost)) {
+  if (!storageHost) {
+    throw new Error(
+      'Refusing to seed profile photos: FIREBASE_STORAGE_EMULATOR_HOST must be set.',
+    );
+  }
+  if (
+    !isLoopbackEmulatorHost(firestoreHost)
+    || !isLoopbackEmulatorHost(authHost)
+    || !isLoopbackEmulatorHost(storageHost)
+  ) {
     throw new Error(
       'Refusing to seed: emulator hosts must be loopback addresses (127.0.0.1, localhost, or ::1).',
     );
@@ -52,8 +65,10 @@ initializeApp({projectId});
 
 const auth = getAuth();
 const db = getFirestore();
+const storage = getStorage();
 const password = 'LocalOnly123!';
 const allowedDiscoverFixtureCounts = new Set([2, 5, 10, 15]);
+const allowedDiscoverFixtureRadii = new Set([5, 10, 20, 30, 50, 100]);
 
 function readDiscoverFixtureCount() {
   const raw = process.env.POLYCIRCLE_DISCOVER_FIXTURE_COUNT ?? '2';
@@ -66,7 +81,25 @@ function readDiscoverFixtureCount() {
   return count;
 }
 
+function readDiscoverFixtureRadius() {
+  const raw = process.env.POLYCIRCLE_DISCOVER_FIXTURE_RADIUS ?? '20';
+  const radius = Number(raw);
+  if (!Number.isInteger(radius) || !allowedDiscoverFixtureRadii.has(radius)) {
+    throw new Error(
+      `POLYCIRCLE_DISCOVER_FIXTURE_RADIUS must be 5, 10, 20, 30, 50, or 100; received "${raw}".`,
+    );
+  }
+  return radius;
+}
+
 const discoverFixtureCount = readDiscoverFixtureCount();
+const discoverFixtureRadius = readDiscoverFixtureRadius();
+const discoverPortraitDirectory = path.join(
+  __dirname,
+  '..',
+  'fixtures',
+  'discover_portraits',
+);
 // Fictional point in the North Atlantic, used only by guarded local emulators.
 // No real member or founder coordinates belong in fixture data.
 const localDiscoverOrigin = {latitude: 12.3456, longitude: -45.6789};
@@ -226,6 +259,7 @@ const discoverStressPeople = discoverStressDetails.map((details, index) => {
 const baselineDiscoverPeople = people.filter(
   (person) => person.uid === 'local-alex' || person.uid === 'local-riley',
 );
+const allDiscoverPeople = [...baselineDiscoverPeople, ...discoverStressPeople];
 const selectedStressPeople = discoverStressPeople.slice(0, discoverFixtureCount - 2);
 const selectedDiscoverPeople = [...baselineDiscoverPeople, ...selectedStressPeople];
 const seededPeople = [...people, ...selectedStressPeople];
@@ -274,7 +308,7 @@ async function seedPerson(person) {
     customIdentityTags: [],
     ageMin: 18,
     ageMax: 99,
-    distanceRadius: person.uid === 'local-cam' ? 20 : 100,
+    distanceRadius: person.uid === 'local-cam' ? discoverFixtureRadius : 100,
     preferredStructures: [],
     preferredIntentions: [],
     profileVisibility: person.profileVisibility ?? 'public',
@@ -315,6 +349,54 @@ async function seedDiscoverLocations() {
     });
   });
   await batch.commit();
+}
+
+async function seedDiscoverPhotos() {
+  const selectedUids = new Set(selectedDiscoverPeople.map((person) => person.uid));
+  const bucket = storage.bucket(`${projectId}.firebasestorage.app`);
+  const now = Timestamp.now();
+
+  for (let index = 0; index < allDiscoverPeople.length; index += 1) {
+    const person = allDiscoverPeople[index];
+    const ordinal = String(index + 1).padStart(2, '0');
+    const photoId = `local-discover-photo-${ordinal}`;
+    const storagePath = `users/${person.uid}/profile/${photoId}.jpg`;
+    const mediaRef = db.collection('profile_media').doc(photoId);
+    const file = bucket.file(storagePath);
+
+    if (!selectedUids.has(person.uid)) {
+      await mediaRef.delete();
+      await file.delete({ignoreNotFound: true});
+      continue;
+    }
+
+    const bytes = await readFile(
+      path.join(discoverPortraitDirectory, `profile-${ordinal}.jpg`),
+    );
+    await file.save(bytes, {
+      resumable: false,
+      metadata: {
+        contentType: 'image/jpeg',
+        metadata: {
+          ownerUid: person.uid,
+          photoId,
+          processed: 'true',
+          emulatorFixture: 'true',
+        },
+      },
+    });
+    await mediaRef.set({
+      photoId,
+      ownerUid: person.uid,
+      status: 'active',
+      contentType: 'image/jpeg',
+      storagePath,
+      createdAt: now,
+      processedAt: now,
+      reviewedAt: now,
+      emulatorFixture: true,
+    });
+  }
 }
 
 async function seedExistingConnection() {
@@ -380,10 +462,7 @@ async function seedRelationshipCards() {
 async function resetDiscoverFixtureState() {
   const ownerUid = 'local-cam';
   const selectedUids = new Set(selectedDiscoverPeople.map((person) => person.uid));
-  const allCandidateUids = [
-    ...baselineDiscoverPeople.map((person) => person.uid),
-    ...discoverStressPeople.map((person) => person.uid),
-  ];
+  const allCandidateUids = allDiscoverPeople.map((person) => person.uid);
   const batch = db.batch();
 
   for (const candidateUid of allCandidateUids) {
@@ -435,6 +514,7 @@ async function main() {
   await resetDiscoverFixtureState();
   for (const person of seededPeople) await seedPerson(person);
   await seedDiscoverLocations();
+  await seedDiscoverPhotos();
   await seedExistingConnection();
   await seedRelationshipCards();
 
@@ -447,6 +527,10 @@ async function main() {
   );
   console.log(
     `Discover distances (miles): ${discoverFixtureDistancesMiles.slice(0, discoverFixtureCount).join(', ')}.`,
+  );
+  console.log(`Discover fixture radius: ${discoverFixtureRadius} miles.`);
+  console.log(
+    `Discover protected portrait fixtures: ${discoverFixtureCount} fictional emulator-only photos.`,
   );
   console.log('Existing connection: Jordan.');
 }

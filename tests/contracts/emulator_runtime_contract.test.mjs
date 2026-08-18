@@ -25,6 +25,7 @@ test('Firebase emulator routing is explicit, guarded, and off by default', () =>
 test('local seed requires loopback emulator hosts before it can write anything', () => {
   assert.match(seed, /FIRESTORE_EMULATOR_HOST/);
   assert.match(seed, /FIREBASE_AUTH_EMULATOR_HOST/);
+  assert.match(seed, /FIREBASE_STORAGE_EMULATOR_HOST/);
   assert.match(seed, /isLoopbackEmulatorHost/);
   assert.match(seed, /127\\\.0\\\.0\\\.1/);
   assert.match(seed, /Refusing to seed: emulator hosts must be loopback addresses/);
@@ -40,12 +41,18 @@ test('real Polycircle project ID is accepted only with explicit emulator-only ac
 test('Orbit stress fixtures are emulator-only and limited to reviewed densities', () => {
   assert.match(seed, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
   assert.match(seed, /new Set\(\[2, 5, 10, 15\]\)/);
+  assert.match(seed, /POLYCIRCLE_DISCOVER_FIXTURE_RADIUS/);
+  assert.match(seed, /new Set\(\[5, 10, 20, 30, 50, 100\]\)/);
   assert.match(seed, /discoverStressPeople\.slice\(0, discoverFixtureCount - 2\)/);
   assert.match(seed, /resetDiscoverFixtureState/);
   assert.match(seed, /local-discover-/);
   assert.match(seed, /discoverFixtureDistancesMiles/);
   assert.match(seed, /collection\('member_locations'\)/);
   assert.match(seed, /source: 'emulator_fixture'/);
+  assert.match(seed, /seedDiscoverPhotos/);
+  assert.match(seed, /collection\('profile_media'\)/);
+  assert.match(seed, /status: 'active'/);
+  assert.match(seed, /storage\.bucket\(`\$\{projectId\}\.firebasestorage\.app`\)/);
   assert.doesNotMatch(read('lib/services/discovery_service.dart'), /local-discover-/);
 });
 
