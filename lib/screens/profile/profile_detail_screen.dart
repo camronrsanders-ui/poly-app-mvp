@@ -4,6 +4,7 @@ import '../../services/circle_view_service.dart';
 import '../../services/connection_service.dart';
 import '../../services/profile_media_service.dart';
 import '../../services/safety_service.dart';
+import '../../widgets/why_our_worlds_cross.dart';
 
 class ProfileDetailScreen extends StatefulWidget {
   const ProfileDetailScreen({
@@ -76,11 +77,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Block')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Block'),
+          ),
         ],
       ),
     );
@@ -95,7 +98,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Could not block this person right now.')),
+            content: Text('Could not block this person right now.'),
+          ),
         );
       }
     } finally {
@@ -132,8 +136,12 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 initialValue: reason,
                 decoration: const InputDecoration(labelText: 'Reason'),
                 items: reasons.entries
-                    .map((entry) => DropdownMenuItem(
-                        value: entry.key, child: Text(entry.value)))
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
                     .toList(growable: false),
                 onChanged: (value) =>
                     setDialogState(() => reason = value ?? 'harassment'),
@@ -143,18 +151,21 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 controller: details,
                 maxLength: 2000,
                 maxLines: 4,
-                decoration:
-                    const InputDecoration(labelText: 'Details (optional)'),
+                decoration: const InputDecoration(
+                  labelText: 'Details (optional)',
+                ),
               ),
             ],
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Submit report')),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Submit report'),
+            ),
           ],
         ),
       ),
@@ -176,15 +187,18 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Report submitted. Thank you for helping keep Polycircle safer.')),
+            content: Text(
+              'Report submitted. Thank you for helping keep Polycircle safer.',
+            ),
+          ),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Could not submit the report right now.')),
+            content: Text('Could not submit the report right now.'),
+          ),
         );
       }
     } finally {
@@ -216,8 +230,10 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
         final photos = snapshot.data ?? const <VisibleProfilePhoto>[];
         if (snapshot.hasError || photos.isEmpty) {
           return const Center(
-            child:
-                CircleAvatar(radius: 48, child: Icon(Icons.person, size: 46)),
+            child: CircleAvatar(
+              radius: 48,
+              child: Icon(Icons.person, size: 46),
+            ),
           );
         }
         return SizedBox(
@@ -235,7 +251,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Center(
                       child: CircleAvatar(
-                          radius: 48, child: Icon(Icons.person, size: 46)),
+                        radius: 48,
+                        child: Icon(Icons.person, size: 46),
+                      ),
                     ),
                   ),
                 ),
@@ -304,20 +322,39 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             Text(location, textAlign: TextAlign.center),
           ],
           const SizedBox(height: 22),
+          Text(
+            'Step into their world',
+            style: Theme.of(context).textTheme.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Explore the details they chose to share, then see where your worlds naturally overlap.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          WhyOurWorldsCrossSection(otherProfile: widget.profile),
+          const SizedBox(height: 22),
           if (pronouns.isNotEmpty ||
               gender.isNotEmpty ||
               orientation.isNotEmpty)
-            _chips([pronouns, gender, orientation]
-                .where((value) => value.isNotEmpty)
-                .toList()),
+            _chips(
+              [pronouns, gender, orientation]
+                  .where((value) => value.isNotEmpty)
+                  .toList(),
+            ),
           if (structure.isNotEmpty || status.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text('Relationship style',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Relationship style',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 6),
-            Text([structure, status]
-                .where((value) => value.isNotEmpty)
-                .join(' • ')),
+            Text(
+              [structure, status]
+                  .where((value) => value.isNotEmpty)
+                  .join(' • '),
+            ),
           ],
           if (bio.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -349,7 +386,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           Text('Their Circle', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 6),
           const Text(
-              'Relationship details appear only when their Circle and individual card privacy settings allow it.'),
+            'Relationship details appear only when their Circle and individual card privacy settings allow it.',
+          ),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _uid.isEmpty
@@ -368,7 +406,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
               final cards = snapshot.data ?? const [];
               if (cards.isEmpty) {
                 return const Text(
-                    'No Circle details are currently shared with you.');
+                  'No Circle details are currently shared with you.',
+                );
               }
               return Column(
                 children: cards.map((card) {
