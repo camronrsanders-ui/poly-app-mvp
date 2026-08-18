@@ -1,8 +1,9 @@
 class FeatureFlags {
   const FeatureFlags._();
 
-  /// Private Vault stays disabled until P0 safety/security issue #2 is closed
-  /// and release-gate requirements have passed in CI/emulators.
+  /// Private Vault stays disabled until the dedicated release gate in
+  /// docs/release-gates.md is fully satisfied. Closing an issue or completing
+  /// backend scaffolding is never sufficient by itself to enable the feature.
   static const bool privateVaultEnabled = false;
 
   /// Future visual polycule graph is intentionally deferred until the
