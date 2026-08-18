@@ -2,41 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/widgets/discovery_orbit.dart';
 
+Widget _testApp(DiscoveryOrbit orbit) {
+  return MaterialApp(
+    home: Scaffold(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: orbit,
+        ),
+      ),
+    ),
+  );
+}
+
 void main() {
   testWidgets('orbit rotates between profiles and opens the selected world',
       (tester) async {
     final viewed = <String>[];
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DiscoveryOrbit(
-            profiles: const [
-              {
-                'uid': 'alex',
-                'displayName': 'Alex',
-                'age': 30,
-                'city': 'Boston',
-                'region': 'MA',
-                'headline': 'Coffee, community, and travel',
-                'intentionTags': ['Friendship'],
-              },
-              {
-                'uid': 'blair',
-                'displayName': 'Blair',
-                'age': 31,
-                'city': 'Cambridge',
-                'region': 'MA',
-                'headline': 'Building intentional connections',
-                'intentionTags': ['Dating'],
-              },
-            ],
-            imageBuilder: (_) => const ColoredBox(color: Colors.blue),
-            onViewProfile: (profile) => viewed.add(profile['uid'] as String),
-            onLike: (_) {},
-            onPass: (_) {},
-            isActing: (_) => false,
-          ),
+      _testApp(
+        DiscoveryOrbit(
+          profiles: const [
+            {
+              'uid': 'alex',
+              'displayName': 'Alex',
+              'age': 30,
+              'city': 'Boston',
+              'region': 'MA',
+              'headline': 'Coffee, community, and travel',
+              'intentionTags': ['Friendship'],
+            },
+            {
+              'uid': 'blair',
+              'displayName': 'Blair',
+              'age': 31,
+              'city': 'Cambridge',
+              'region': 'MA',
+              'headline': 'Building intentional connections',
+              'intentionTags': ['Dating'],
+            },
+          ],
+          imageBuilder: (_) => const ColoredBox(color: Colors.blue),
+          onViewProfile: (profile) => viewed.add(profile['uid'] as String),
+          onLike: (_) {},
+          onPass: (_) {},
+          isActing: (_) => false,
         ),
       ),
     );
@@ -48,7 +59,9 @@ void main() {
 
     expect(find.text('Blair, 31'), findsOneWidget);
 
-    await tester.tap(find.text('Enter their profile world'));
+    final enterWorld = find.text('Enter their profile world');
+    await tester.ensureVisible(enterWorld);
+    await tester.tap(enterWorld);
     await tester.pump();
 
     expect(viewed, ['blair']);
@@ -57,22 +70,20 @@ void main() {
   testWidgets('single-profile orbit stays usable without rotation',
       (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DiscoveryOrbit(
-            profiles: const [
-              {
-                'uid': 'alex',
-                'displayName': 'Alex',
-                'age': 30,
-              },
-            ],
-            imageBuilder: (_) => const ColoredBox(color: Colors.blue),
-            onViewProfile: (_) {},
-            onLike: (_) {},
-            onPass: (_) {},
-            isActing: (_) => false,
-          ),
+      _testApp(
+        DiscoveryOrbit(
+          profiles: const [
+            {
+              'uid': 'alex',
+              'displayName': 'Alex',
+              'age': 30,
+            },
+          ],
+          imageBuilder: (_) => const ColoredBox(color: Colors.blue),
+          onViewProfile: (_) {},
+          onLike: (_) {},
+          onPass: (_) {},
+          isActing: (_) => false,
         ),
       ),
     );
