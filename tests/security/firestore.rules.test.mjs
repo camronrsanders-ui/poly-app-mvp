@@ -10,6 +10,7 @@ import {
 import {
   doc,
   getDoc,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
@@ -131,6 +132,22 @@ test('profile owner cannot change uid ownership field', async () => {
   ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {uid: 'bob'}));
+});
+
+test('profile owner can save only a reviewed Discover radius value', async () => {
+  await adminSeed([
+    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['profiles', 'alice', baseProfile('alice')],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'profiles', 'alice'), {
+    distanceRadius: 20,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(db, 'profiles', 'alice'), {
+    distanceRadius: 25,
+    updatedAt: serverTimestamp(),
+  }));
 });
 
 test('client cannot store permanent profile photo URLs', async () => {

@@ -25,6 +25,8 @@ test('Discover owns an immersive header while preserving Safety center access', 
   assert.match(discover, /discover-cosmic-world/);
   assert.match(discover, /Explore your orbit/);
   assert.match(discover, /discover-safety-center/);
+  assert.match(discover, /discover-radius-control/);
+  assert.match(discover, /discover-radius-sheet/);
   assert.match(discover, /SafetyCenterScreen/);
 });
 

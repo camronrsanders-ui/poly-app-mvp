@@ -13,8 +13,17 @@ source "$ROOT_DIR/tool/ensure_java21.sh"
 DEVICE_REQUEST="${1:-}"
 FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
 ANDROID_HOST="${POLYCIRCLE_ANDROID_FIREBASE_HOST:-10.0.2.2}"
+DISCOVER_FIXTURE_COUNT="${POLYCIRCLE_DISCOVER_FIXTURE_COUNT:-2}"
 EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data"
 mkdir -p "$EMULATOR_STATE_DIR"
+
+case "$DISCOVER_FIXTURE_COUNT" in
+  2|5|10|15) ;;
+  *)
+    printf "POLYCIRCLE_DISCOVER_FIXTURE_COUNT must be 2, 5, 10, or 15 (received '%s').\n" "$DISCOVER_FIXTURE_COUNT" >&2
+    exit 1
+    ;;
+esac
 
 EMULATOR_STATE_ARGS=("--export-on-exit=$EMULATOR_STATE_DIR")
 if [[ -f "$EMULATOR_STATE_DIR/firebase-export-metadata.json" ]]; then
@@ -84,6 +93,14 @@ printf '\nStarting Polycircle Android local Firebase test run\n'
 printf 'Resolved Android device: %s\n' "$DEVICE_ID"
 printf 'Firebase project ID: %s (ALL USED SERVICES ROUTED TO LOCAL EMULATORS)\n' "$FIREBASE_PROJECT_ID"
 printf 'Android emulator host bridge: %s\n\n' "$ANDROID_HOST"
+printf 'Discover fixture count: %s (emulator only)\n\n' "$DISCOVER_FIXTURE_COUNT"
+
+if command -v adb >/dev/null 2>&1; then
+  # adb geo fix takes longitude before latitude. This fictional coordinate
+  # matches the guarded fixture and never reads a developer's location.
+  adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456 >/dev/null
+  printf '✓ Android emulator Discover location: fictional emulator coordinate\n'
+fi
 
 if command -v lsof >/dev/null 2>&1; then
   for port in 4000 5001 8080 9099 9199; do
@@ -98,7 +115,7 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=$ANDROID_HOST"
+RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=$ANDROID_HOST"
 
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \

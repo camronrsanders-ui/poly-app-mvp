@@ -80,7 +80,7 @@ Email: cam@local.polycircle.test
 Password: LocalOnly123!
 ```
 
-The fixture includes two Discover profiles, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle can be exercised without a paid deployment.
+The fixture includes two Discover profiles with fictional nearby coordinates, an existing connection, seeded chat messages, and a relationship card so Discover, Connections, Messages, and Circle can be exercised without a paid deployment. The runner sets only the simulator's location to the same fictional North Atlantic origin; it never reads the Mac's location.
 
 ### Local Orbit density fixtures
 
@@ -91,6 +91,8 @@ POLYCIRCLE_DISCOVER_FIXTURE_COUNT=5 bash tool/run_ios_local.sh "iPhone 17 Pro"
 ```
 
 Replace `5` with `2`, `10`, or `15` for the other supported densities. The default remains `2`. The runner and seed both reject any other value, and the seed still requires the loopback Auth/Firestore hosts plus the explicit real-project emulator acknowledgement. Reseeding clears prior local Cam-to-fixture Pass, Like, match, block, and conversation state so the requested visual population is reachable; it does not touch Jordan's existing local connection or any live Firebase data.
+
+The selected candidates use deterministic fictional distances in this order: approximately 2, 7, 15, 28, 60, 3, 9, 18, 35, 75, 4, 12, 24, 45, and 90 miles. With a 15-person fixture, changing Cam's radius visibly moves candidates into or out of the Orbit: 5 miles shows the nearest group, 10 and 20 add progressively more, 50 shows most, and 100 shows all eligible fixtures. Exact coordinates remain in the emulator-only `member_locations` collection and are never production/demo profile fields.
 
 ## Manual emulator workflow
 

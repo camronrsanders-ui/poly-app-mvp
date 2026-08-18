@@ -31,6 +31,7 @@ const connectionsScreen = read('lib/screens/connections/connections_screen.dart'
 
 const callableContracts = [
   {name: 'getDiscoverCandidates', client: discoveryService, backend: index},
+  {name: 'updateDiscoverLocation', client: discoveryService, backend: index},
   {name: 'likeProfile', client: connectionService, backend: index},
   {name: 'listMyConnections', client: connectionService, backend: `${index}\n${profileView}`},
   {name: 'createConversation', client: messagingService, backend: index},

@@ -38,7 +38,7 @@ test('profile settings expose the private preferences enforced by discovery', ()
 test('Discover reload keeps setState synchronous after async actions', () => {
   assert.match(
     discover,
-    /void _reload\(\) \{[\s\S]*?if \(!mounted\) return;[\s\S]*?setState\(\(\) \{[\s\S]*?_future = _discovery\.loadCandidates\(\);[\s\S]*?\}\);[\s\S]*?\}/,
+    /void _reload\(\) \{[\s\S]*?if \(!mounted \|\| _locationProblem != null\) return;[\s\S]*?setState\(\(\) \{[\s\S]*?_future = _discovery\.loadCandidates\(\);[\s\S]*?\}\);[\s\S]*?\}/,
   );
   assert.doesNotMatch(
     discover,

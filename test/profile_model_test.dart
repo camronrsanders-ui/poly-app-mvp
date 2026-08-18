@@ -51,7 +51,7 @@ void main() {
       expect(profile.age, 18);
       expect(profile.ageMin, 18);
       expect(profile.ageMax, 99);
-      expect(profile.distanceRadius, 50);
+      expect(profile.distanceRadius, 20);
       expect(profile.openToConnections, isFalse);
       expect(profile.profileVisibility, 'hidden');
       expect(profile.mapVisibility, 'private');

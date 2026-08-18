@@ -60,7 +60,7 @@ const profile = (uid) => ({
   lookingForNote: '',
   ageMin: 24,
   ageMax: 40,
-  distanceRadius: 25,
+  distanceRadius: 20,
   preferredStructures: ['Solo poly'],
   preferredIntentions: ['Friendship'],
   profileVisibility: 'public',
@@ -97,6 +97,31 @@ test('profile owner can still read their own full profile document', async () =>
   ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertSucceeds(getDoc(doc(db, 'profiles', 'alice')));
+});
+
+test('precise member locations are unreadable and unwritable even by their owner', async () => {
+  await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['users', 'bob', activeUser('bob')],
+    ['member_locations', 'alice', {
+      uid: 'alice',
+      latitude: 12.3456,
+      longitude: -45.6789,
+      accuracyMeters: 250,
+      source: 'device_foreground',
+      observedAt: new Date(),
+      updatedAt: new Date(),
+    }],
+  ]);
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  await assertFails(getDoc(doc(alice, 'member_locations', 'alice')));
+  await assertFails(getDoc(doc(bob, 'member_locations', 'alice')));
+  await assertFails(setDoc(doc(alice, 'member_locations', 'alice'), {
+    uid: 'alice',
+    latitude: 0,
+    longitude: 0,
+  }));
 });
 
 test('active match is readable only by its active participants', async () => {

@@ -49,7 +49,7 @@ test('Discover excludes persisted passes before returning sanitized profile view
   assert.match(index, /collection\('profile_passes'\)\.doc\(`\$\{uid\}_\$\{id\}`\)/);
   assert.match(index, /passed\.has\(doc\.id\)/);
   const passedCheck = index.indexOf('passed.has(doc.id)');
-  const profileReturn = index.indexOf('output.push(toProfileView(doc.id, doc.data()))');
+  const profileReturn = index.indexOf('profile: toProfileView(doc.id, doc.data())');
   assert.ok(passedCheck >= 0 && profileReturn >= 0 && passedCheck < profileReturn,
     'Pass filtering must occur before profile data is returned');
 });
@@ -73,7 +73,7 @@ test('clients cannot directly inspect or manipulate Pass documents', () => {
 
 test('Discover exposes working View profile and Pass controls', () => {
   assert.match(discoverScreen, /ProfileDetailScreen\(profile: profile\)/);
-  assert.match(discoverScreen, /_connections\.passUser\(uid\)/);
+  assert.match(discoverScreen, /_passUser\(uid\)/);
   assert.doesNotMatch(discoverScreen, /View profile'\)\),\s*$/m);
   assert.match(detailScreen, /class ProfileDetailScreen/);
 });

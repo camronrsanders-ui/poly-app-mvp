@@ -200,6 +200,23 @@ void main() {
     expect(find.text('Alex, 30'), findsOneWidget);
   });
 
+  testWidgets('reduced motion snaps focus without inertial flourish',
+      (tester) async {
+    await tester.pumpWidget(
+      _testApp(
+        _orbit(profiles: _profiles(3)),
+        reduceMotion: true,
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('discovery-next-profile')),
+    );
+    await tester.pump();
+
+    expect(find.text('Profile 1, 21'), findsOneWidget);
+  });
+
   testWidgets('circular drag changes the focused profile', (tester) async {
     await tester.pumpWidget(
       _testApp(

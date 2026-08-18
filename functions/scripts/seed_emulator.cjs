@@ -67,6 +67,12 @@ function readDiscoverFixtureCount() {
 }
 
 const discoverFixtureCount = readDiscoverFixtureCount();
+// Fictional point in the North Atlantic, used only by guarded local emulators.
+// No real member or founder coordinates belong in fixture data.
+const localDiscoverOrigin = {latitude: 12.3456, longitude: -45.6789};
+const discoverFixtureDistancesMiles = [
+  2, 7, 15, 28, 60, 3, 9, 18, 35, 75, 4, 12, 24, 45, 90,
+];
 
 const people = [
   {
@@ -268,7 +274,7 @@ async function seedPerson(person) {
     customIdentityTags: [],
     ageMin: 18,
     ageMax: 99,
-    distanceRadius: 100,
+    distanceRadius: person.uid === 'local-cam' ? 20 : 100,
     preferredStructures: [],
     preferredIntentions: [],
     profileVisibility: person.profileVisibility ?? 'public',
@@ -276,6 +282,39 @@ async function seedPerson(person) {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
+}
+
+function fictionalCoordinateAtDistance(distanceMiles) {
+  const longitudeMilesPerDegree = 69.172
+    * Math.cos(localDiscoverOrigin.latitude * Math.PI / 180);
+  return {
+    latitude: localDiscoverOrigin.latitude,
+    longitude: localDiscoverOrigin.longitude + distanceMiles / longitudeMilesPerDegree,
+  };
+}
+
+async function seedDiscoverLocations() {
+  const batch = db.batch();
+  const now = Timestamp.now();
+  batch.set(db.collection('member_locations').doc('local-cam'), {
+    uid: 'local-cam',
+    ...localDiscoverOrigin,
+    accuracyMeters: 250,
+    source: 'emulator_fixture',
+    observedAt: now,
+    updatedAt: now,
+  });
+  selectedDiscoverPeople.forEach((person, index) => {
+    batch.set(db.collection('member_locations').doc(person.uid), {
+      uid: person.uid,
+      ...fictionalCoordinateAtDistance(discoverFixtureDistancesMiles[index]),
+      accuracyMeters: 250,
+      source: 'emulator_fixture',
+      observedAt: now,
+      updatedAt: now,
+    });
+  });
+  await batch.commit();
 }
 
 async function seedExistingConnection() {
@@ -361,9 +400,11 @@ async function resetDiscoverFixtureState() {
       batch.delete(db.collection('profiles').doc(candidateUid));
       batch.delete(db.collection('users').doc(candidateUid));
     }
+    batch.delete(db.collection('member_locations').doc(candidateUid));
   }
 
-  for (const action of ['discover', 'like', 'pass']) {
+  batch.delete(db.collection('member_locations').doc(ownerUid));
+  for (const action of ['discover', 'discover_location', 'like', 'pass']) {
     batch.delete(db.collection('_rate_limits').doc(`${action}_${ownerUid}`));
   }
   await batch.commit();
@@ -393,6 +434,7 @@ async function resetDiscoverFixtureState() {
 async function main() {
   await resetDiscoverFixtureState();
   for (const person of seededPeople) await seedPerson(person);
+  await seedDiscoverLocations();
   await seedExistingConnection();
   await seedRelationshipCards();
 
@@ -402,6 +444,9 @@ async function main() {
   console.log(`Local-only password: ${password}`);
   console.log(
     `Discover fixtures (${discoverFixtureCount}): ${selectedDiscoverPeople.map((person) => person.displayName).join(', ')}.`,
+  );
+  console.log(
+    `Discover distances (miles): ${discoverFixtureDistancesMiles.slice(0, discoverFixtureCount).join(', ')}.`,
   );
   console.log('Existing connection: Jordan.');
 }

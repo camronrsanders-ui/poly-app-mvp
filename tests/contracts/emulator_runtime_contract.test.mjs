@@ -43,7 +43,16 @@ test('Orbit stress fixtures are emulator-only and limited to reviewed densities'
   assert.match(seed, /discoverStressPeople\.slice\(0, discoverFixtureCount - 2\)/);
   assert.match(seed, /resetDiscoverFixtureState/);
   assert.match(seed, /local-discover-/);
+  assert.match(seed, /discoverFixtureDistancesMiles/);
+  assert.match(seed, /collection\('member_locations'\)/);
+  assert.match(seed, /source: 'emulator_fixture'/);
   assert.doesNotMatch(read('lib/services/discovery_service.dart'), /local-discover-/);
+});
+
+test('nearby fixtures use fictional coordinates and never a developer location', () => {
+  assert.match(seed, /latitude: 12\.3456/);
+  assert.match(seed, /longitude: -45\.6789/);
+  assert.doesNotMatch(seed, /navigator\.geolocation|CoreLocation|LocationManager/);
 });
 
 test('seeded profile and Circle fixtures stay inside production document schemas', () => {

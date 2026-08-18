@@ -83,6 +83,11 @@ fi
 
 printf '✓ Resolved launch target: %s (%s)\n' "$DEVICE" "$DEVICE_ID"
 
+# Match the guarded emulator fixture's fictional North Atlantic origin. This
+# configures only the selected simulator; it does not read or use Mac location.
+xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+printf '✓ Simulator Discover location: fictional emulator coordinate\n'
+
 if command -v lsof >/dev/null 2>&1; then
   for port in 4000 5001 8080 9099 9199; do
     if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then

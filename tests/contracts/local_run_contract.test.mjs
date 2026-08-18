@@ -65,6 +65,8 @@ test('one-command iOS runner exposes only reviewed local Discover fixture counts
   assert.match(iosRunner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
   assert.match(iosRunner, /2\|5\|10\|15/);
   assert.match(iosRunner, /Discover fixture count/);
+  assert.match(iosRunner, /simctl location/);
+  assert.match(iosRunner, /12\.3456,-45\.6789/);
 });
 
 test('one-command iOS runner detects common local setup collisions before Firebase starts', () => {
@@ -113,6 +115,8 @@ test('one-command Android runner refuses incomplete native configuration and kee
   assert.match(androidRunner, /FIRESTORE_EMULATOR_HOST=127\.0\.0\.1:8080/);
   assert.match(androidRunner, /FIREBASE_AUTH_EMULATOR_HOST=127\.0\.0\.1:9099/);
   assert.match(androidRunner, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true/);
+  assert.match(androidRunner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
+  assert.match(androidRunner, /emu geo fix -45\.6789 12\.3456/);
   assert.doesNotMatch(androidRunner, /firebase deploy/);
 });
 
