@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/ugc_text_policy.dart';
+import '../../widgets/conversation_space_header.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -56,7 +57,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
     try {
       await _messages.sendMessage(
-          conversationId: widget.conversationId, text: text);
+        conversationId: widget.conversationId,
+        text: text,
+      );
     } on UgcPolicyViolation catch (error) {
       // Keep rejected text editable so the member can remove the prohibited
       // content rather than losing their draft. Reports are a separate path and
@@ -81,8 +84,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Message failed to send. Your text was kept so you can retry.')),
+            content: Text(
+              'Message failed to send. Your text was kept so you can retry.',
+            ),
+          ),
         );
       }
     } finally {
@@ -96,14 +101,17 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context) => AlertDialog(
         title: Text('Block ${widget.otherDisplayName}?'),
         content: const Text(
-            'They will no longer be able to interact with you through Polycircle. You can manage blocks later.'),
+          'They will no longer be able to interact with you through Polycircle. You can manage blocks later.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Block')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Block'),
+          ),
         ],
       ),
     );
@@ -140,43 +148,56 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
-          title: Text(reportingMessage
-              ? 'Report this message'
-              : 'Report ${widget.otherDisplayName}'),
+          title: Text(
+            reportingMessage
+                ? 'Report this message'
+                : 'Report ${widget.otherDisplayName}',
+          ),
           content: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (reportingMessage) ...[
-                const Text(
-                  'The report will include a protected reference to this message so moderators can review the correct content. The message text is not copied into your report details automatically.',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (reportingMessage) ...[
+                  const Text(
+                    'The report will include a protected reference to this message so moderators can review the correct content. The message text is not copied into your report details automatically.',
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                DropdownButtonFormField<String>(
+                  initialValue: reason,
+                  items: reasons.entries
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) =>
+                      setLocalState(() => reason = value ?? reason),
+                  decoration: const InputDecoration(labelText: 'Reason'),
                 ),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: details,
+                  maxLines: 4,
+                  maxLength: 2000,
+                  decoration: const InputDecoration(
+                    labelText: 'Details (optional)',
+                  ),
+                ),
               ],
-              DropdownButtonFormField<String>(
-                initialValue: reason,
-                items: reasons.entries
-                    .map((entry) => DropdownMenuItem(
-                        value: entry.key, child: Text(entry.value)))
-                    .toList(growable: false),
-                onChanged: (v) => setLocalState(() => reason = v ?? reason),
-                decoration: const InputDecoration(labelText: 'Reason'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: details,
-                maxLines: 4,
-                maxLength: 2000,
-                decoration:
-                    const InputDecoration(labelText: 'Details (optional)'),
-              ),
-            ]),
+            ),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Submit report')),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Submit report'),
+            ),
           ],
         ),
       ),
@@ -194,15 +215,18 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text(
-                    'Report submitted. Thank you for helping protect the community.')),
+              content: Text(
+                'Report submitted. Thank you for helping protect the community.',
+              ),
+            ),
           );
         }
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Could not submit the report right now.')),
+              content: Text('Could not submit the report right now.'),
+            ),
           );
         }
       }
@@ -236,6 +260,9 @@ class _ChatScreenState extends State<ChatScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            ConversationSpaceHeader(
+              otherDisplayName: widget.otherDisplayName,
+            ),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _messages.watchMessages(widget.conversationId),
@@ -245,16 +272,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   }
                   if (snapshot.hasError) {
                     return const Center(
-                        child: Text('Could not load messages.'));
+                      child: Text('Could not load messages.'),
+                    );
                   }
                   final docs = snapshot.data?.docs ?? [];
                   if (docs.isEmpty) {
                     return const Center(
-                        child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                          'Start with something genuine. Your connection does not have to fit a traditional script.'),
-                    ));
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Start with something genuine. Your connection does not have to fit a traditional script.',
+                        ),
+                      ),
+                    );
                   }
                   return ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -285,7 +315,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             constraints: const BoxConstraints(maxWidth: 320),
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: isMine
                                   ? Theme.of(context)
@@ -307,29 +339,34 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 2000,
-                    textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(
-                        hintText: 'Message…', counterText: ''),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      maxLength: 2000,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        hintText: 'Message…',
+                        counterText: '',
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _sending ? null : _send,
-                  icon: _sending
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.send),
-                  tooltip: 'Send message',
-                ),
-              ]),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _sending ? null : _send,
+                    icon: _sending
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send),
+                    tooltip: 'Send message',
+                  ),
+                ],
+              ),
             ),
           ],
         ),
