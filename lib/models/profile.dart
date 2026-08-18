@@ -1,3 +1,5 @@
+import '../config/discovery_options.dart';
+
 class Profile {
   const Profile({
     required this.uid,
@@ -97,7 +99,7 @@ class Profile {
       lookingForNote: stringValue('lookingForNote'),
       ageMin: intValue('ageMin', 18),
       ageMax: intValue('ageMax', 99),
-      distanceRadius: intValue('distanceRadius', 50),
+      distanceRadius: normalizedDiscoverDistanceMiles(data['distanceRadius']),
       preferredStructures: strings('preferredStructures'),
       preferredIntentions: strings('preferredIntentions'),
       profileVisibility: stringValue('profileVisibility', 'hidden'),

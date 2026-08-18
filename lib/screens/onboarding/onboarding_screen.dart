@@ -105,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'lookingForNote': _lookingFor.text.trim(),
         'ageMin': 18,
         'ageMax': 99,
-        'distanceRadius': 50,
+        'distanceRadius': defaultDiscoverDistanceMiles,
         'preferredStructures': <String>[],
         'preferredIntentions': <String>[],
         'profileVisibility': 'public',

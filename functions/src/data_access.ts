@@ -113,6 +113,23 @@ function ownProfile(doc: Doc): Record<string, unknown> | null {
   };
 }
 
+function ownDiscoverLocation(doc: Doc): Record<string, unknown> | null {
+  if (!doc.exists) return null;
+  const latitude = Number(doc.get('latitude'));
+  const longitude = Number(doc.get('longitude'));
+  const accuracyMeters = Number(doc.get('accuracyMeters'));
+  return {
+    // This callable is a recent-auth snapshot of the requester's own data. It
+    // is deliberately separate from every cross-user profile view.
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    accuracyMeters: Number.isFinite(accuracyMeters) ? accuracyMeters : null,
+    source: text(doc.get('source'), 40),
+    observedAtMs: timestampMillis(doc.get('observedAt')),
+    updatedAtMs: timestampMillis(doc.get('updatedAt')),
+  };
+}
+
 const exportLimits = {
   relationshipCards: 200,
   likes: 500,
@@ -140,6 +157,7 @@ export const getMyDataSnapshot = onCall(
     const [
       account,
       profile,
+      discoverLocation,
       cards,
       likes,
       passes,
@@ -154,6 +172,7 @@ export const getMyDataSnapshot = onCall(
     ] = await Promise.all([
       db.collection('users').doc(uid).get(),
       db.collection('profiles').doc(uid).get(),
+      db.collection('member_locations').doc(uid).get(),
       db.collection('relationship_cards').where('ownerUid', '==', uid).limit(exportLimits.relationshipCards).get(),
       db.collection('likes').where('fromUid', '==', uid).limit(exportLimits.likes).get(),
       db.collection('profile_passes').where('fromUid', '==', uid).limit(exportLimits.passes).get(),
@@ -187,6 +206,7 @@ export const getMyDataSnapshot = onCall(
       truncatedCategories: truncated,
       account: ownAccount(account),
       profile: ownProfile(profile),
+      discoverLocation: ownDiscoverLocation(discoverLocation),
       relationshipCards: cards.docs.map((doc) => ({
         cardId: doc.id,
         label: text(doc.get('label'), 100),

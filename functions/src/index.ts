@@ -1,6 +1,6 @@
 import {initializeApp} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
-import {FieldValue, getFirestore} from 'firebase-admin/firestore';
+import {FieldValue, getFirestore, Timestamp} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {
@@ -9,6 +9,12 @@ import {
 } from './account_compliance';
 import {assertCanReceiveNewConnection} from './connection_eligibility';
 import {candidateMatchesPreferences} from './discovery_preferences';
+import {
+  distanceMiles,
+  normalizeDiscoveryRadius,
+  parseDiscoverLocationUpdate,
+  privateCoordinateFromData,
+} from './discovery_location';
 import {toProfileView} from './profile_view_fields';
 
 initializeApp();
@@ -70,9 +76,25 @@ export const getDiscoverCandidates = onCall(
     const limit = Number.isFinite(requestedLimit)
       ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 40)
       : 20;
-    const profileSnap = await db.collection('profiles').doc(uid).get();
+    const [profileSnap, requesterLocationSnap] = await Promise.all([
+      db.collection('profiles').doc(uid).get(),
+      db.collection('member_locations').doc(uid).get(),
+    ]);
     if (!profileSnap.exists) throw new HttpsError('failed-precondition', 'Complete your profile first.');
     const requesterProfile = profileSnap.data()!;
+    const radiusMiles = normalizeDiscoveryRadius(requesterProfile.distanceRadius);
+    const requesterLocation = privateCoordinateFromData(requesterLocationSnap.data());
+    const requesterLocationUpdatedAt = requesterLocationSnap.get('updatedAt');
+    const requesterLocationAgeMs = requesterLocationUpdatedAt instanceof Timestamp
+      ? Date.now() - requesterLocationUpdatedAt.toMillis()
+      : Number.POSITIVE_INFINITY;
+    if (requesterLocation == null || requesterLocationAgeMs > 30 * 24 * 60 * 60_000) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Location is required for nearby discovery.',
+        {reason: 'discover-location-required'},
+      );
+    }
 
     // Scan a bounded pool because private age/structure/intention preferences
     // are applied in trusted code rather than exposed in client-readable data.
@@ -88,16 +110,25 @@ export const getDiscoverCandidates = onCall(
     const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
     const outgoingLikeRefs = candidateIds.map((id) => db.collection('likes').doc(`${uid}_${id}`));
     const matchRefs = candidateIds.map((id) => db.collection('matches').doc(pairId(uid, id)));
+    const locationRefs = candidateIds.map((id) => db.collection('member_locations').doc(id));
     const blockRefs = candidateIds.flatMap((id) => [
       db.collection('blocks').doc(`${uid}_${id}`),
       db.collection('blocks').doc(`${id}_${uid}`),
     ]);
-    const [userSnaps, passSnaps, outgoingLikeSnaps, matchSnaps, blockSnaps] = await Promise.all([
+    const [
+      userSnaps,
+      passSnaps,
+      outgoingLikeSnaps,
+      matchSnaps,
+      blockSnaps,
+      locationSnaps,
+    ] = await Promise.all([
       userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
       passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
       outgoingLikeRefs.length ? db.getAll(...outgoingLikeRefs) : Promise.resolve([]),
       matchRefs.length ? db.getAll(...matchRefs) : Promise.resolve([]),
       blockRefs.length ? db.getAll(...blockRefs) : Promise.resolve([]),
+      locationRefs.length ? db.getAll(...locationRefs) : Promise.resolve([]),
     ]);
     const active = new Set(userSnaps
       .filter((snap) => isActiveCompliantMember(snap))
@@ -123,7 +154,12 @@ export const getDiscoverCandidates = onCall(
       })
       .filter((id) => id.length > 0));
 
-    const output: FirebaseFirestore.DocumentData[] = [];
+    const locations = new Map(locationSnaps.map((snap) => [snap.id, snap]));
+    const eligible: Array<{
+      id: string;
+      distance: number;
+      profile: FirebaseFirestore.DocumentData;
+    }> = [];
     for (const doc of profiles.docs) {
       if (
         doc.id === uid
@@ -134,10 +170,55 @@ export const getDiscoverCandidates = onCall(
         || blocked.has(doc.id)
       ) continue;
       if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
-      output.push(toProfileView(doc.id, doc.data()));
-      if (output.length >= limit) break;
+      const locationSnap = locations.get(doc.id);
+      const candidateLocation = privateCoordinateFromData(locationSnap?.data());
+      if (candidateLocation == null) continue;
+      const candidateLocationUpdatedAt = locationSnap?.get('updatedAt');
+      const candidateLocationAgeMs = candidateLocationUpdatedAt instanceof Timestamp
+        ? Date.now() - candidateLocationUpdatedAt.toMillis()
+        : Number.POSITIVE_INFINITY;
+      if (candidateLocationAgeMs > 30 * 24 * 60 * 60_000) continue;
+      const distance = distanceMiles(requesterLocation, candidateLocation);
+      if (distance > radiusMiles + 1e-9) continue;
+      eligible.push({
+        id: doc.id,
+        distance,
+        profile: toProfileView(doc.id, doc.data()),
+      });
     }
-    return {profiles: output};
+    eligible.sort((first, second) =>
+      first.distance - second.distance || first.id.localeCompare(second.id));
+    return {
+      profiles: eligible.slice(0, limit).map((candidate) => candidate.profile),
+      radiusMiles,
+    };
+  },
+);
+
+export const updateDiscoverLocation = onCall(
+  {enforceAppCheck: true, maxInstances: 25},
+  async (request) => {
+    const uid = requireUid(request.auth);
+    await assertActive(uid);
+    await consumeRateLimit(uid, 'discover_location', 12, 60 * 60_000);
+
+    const location = parseDiscoverLocationUpdate(request.data);
+    if (location == null) {
+      throw new HttpsError('invalid-argument', 'A valid foreground location is required.');
+    }
+
+    await db.collection('member_locations').doc(uid).set({
+      uid,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracyMeters: location.accuracyMeters,
+      source: 'device_foreground',
+      observedAt: Timestamp.fromMillis(location.observedAtMs),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Precise coordinates are intentionally never echoed to the client.
+    return {updated: true};
   },
 );
 
@@ -432,8 +513,9 @@ export const deleteMyAccount = onCall(
       for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
 
       writer.delete(db.collection('profiles').doc(uid));
+      writer.delete(db.collection('member_locations').doc(uid));
       for (const action of [
-        'discover', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
+        'discover', 'discover_location', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
         'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',
         'moderation_list', 'moderation_review', 'moderation_account',
         'private_media_request', 'private_media_request_response', 'private_media_request_cancel',

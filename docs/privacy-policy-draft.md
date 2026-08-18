@@ -56,7 +56,7 @@ Full profile documents contain private preference fields and are not intended to
 
 Discovery preferences are intended to be private and applied on the trusted backend. Profiles can be hidden from new discovery through profile visibility/open-to-connections controls.
 
-Polycircle currently uses coarse city/region profile location. Exact location is not a default public profile field.
+Polycircle uses coarse city/region in member-visible profiles. Nearby Discover may request a one-time foreground device location when needed, store it in a private server-readable record, and compare it with other private location records to enforce the member's selected 5–100 mile radius. It does not request background location or continuously track location. Precise coordinates, location accuracy, and raw geospatial values are not included in another member's Discover/profile payload. If location is unavailable or permission is denied, nearby Discover fails closed instead of showing arbitrary distant profiles.
 
 ## 6. Relationship Circle privacy
 

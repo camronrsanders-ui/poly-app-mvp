@@ -18,11 +18,12 @@ Current trusted Discover behavior:
 - client asks for a bounded candidate count;
 - backend clamps the requested output to 1–40 and safely defaults malformed limits;
 - backend scans a bounded public/open candidate pool with a maximum of 120 profiles;
-- user state, pass state, outgoing likes, prior matches, and bilateral block documents are fetched in batches;
+- user state, pass state, outgoing likes, prior matches, bilateral block documents, and private candidate-location documents are fetched in batches;
 - reciprocal private preferences are applied in trusted code;
+- the requester's saved 5/10/20/30/50/100-mile radius is applied in trusted code and eligible candidates are ordered nearest-first;
 - output uses a sanitized display-safe profile view.
 
-This removes the previous per-candidate sequential block lookup from the hot loop. Remaining scale concern: bounded scanning can under-fill results when many candidates fail reciprocal filters. Pagination/ranking will need a dedicated design before large-scale production use.
+This removes the previous per-candidate sequential block lookup from the hot loop and does not expose coordinates to reduce read cost. Remaining scale concern: bounded scanning can under-fill results when many candidates fail reciprocal or distance filters. Before production scale, design and stage-test a private geospatial index/bounded-query strategy (for example server-owned geohash ranges plus exact trusted distance verification). Do not move coordinate filtering to the client as a shortcut. Pagination/ranking and measured read/latency behavior remain part of that decision.
 
 ## Connections / Messages list
 

@@ -4,7 +4,7 @@ Privacy is a release requirement.
 
 ## Principles
 - Collect only data needed for the product.
-- Do not store exact location by default; use coarse city/region for MVP.
+- Store precise location only when Discover needs a foreground update, keep it in an Admin-only collection, and never expose it in another member's profile payload. Coarse city/region remains the public-facing location.
 - Do not expose private relationship-card information in analytics/logs.
 - Do not log message bodies, report details, email addresses, or private identity fields in application analytics.
 - Relationship names typed by a user are unverified private user-generated content and must never imply the named person's consent.
@@ -14,7 +14,7 @@ Account deletion is implemented as the App-Check-protected callable `deleteMyAcc
 
 The current workflow:
 1. rate-limits deletion attempts and immediately changes the account to `paused` so it stops behaving as an active account while cleanup runs;
-2. deletes the user's relationship cards, outgoing/incoming likes, outgoing/incoming Pass state, blocks, Private Vault media metadata/grants/requests/preferences, profile-media metadata, and user-scoped rate-limit documents;
+2. deletes the user's private Discover location, relationship cards, outgoing/incoming likes, outgoing/incoming Pass state, blocks, Private Vault media metadata/grants/requests/preferences, profile-media metadata, and user-scoped rate-limit documents;
 3. deactivates currently active matches and conversations that include the account without rewriting the actual `lastMessageAt` chronology or overwriting older end history;
 4. deletes message documents sent by the deleting user;
 5. anonymizes the deleting user's identity in retained report documents rather than exposing the deleted UID as the reporter/reported account;

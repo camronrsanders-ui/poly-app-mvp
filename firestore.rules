@@ -123,7 +123,8 @@ service cloud.firestore {
         && data.lookingForNote is string && data.lookingForNote.size() <= 1200
         && data.ageMin is int && data.ageMin >= 18 && data.ageMin <= 120
         && data.ageMax is int && data.ageMax >= data.ageMin && data.ageMax <= 120
-        && data.distanceRadius is int && data.distanceRadius >= 1 && data.distanceRadius <= 500
+        && data.distanceRadius is int
+        && data.distanceRadius in [5, 10, 20, 30, 50, 100]
         && data.preferredStructures is list && data.preferredStructures.size() <= 12
         && data.preferredIntentions is list && data.preferredIntentions.size() <= 12
         && data.profileVisibility in ['public', 'hidden', 'matches_only']
@@ -340,6 +341,10 @@ service cloud.firestore {
     match /moderation_audit/{auditId} { allow read, write: if false; }
 
     match /profile_media/{photoId} { allow read, write: if false; }
+    // Foreground device coordinates are backend-only. Even the owner uses
+    // App-Check-protected callables so no client can query another member's
+    // precise location or write location documents directly.
+    match /member_locations/{uid} { allow read, write: if false; }
     match /private_media/{mediaId} { allow read, write: if false; }
     match /private_media_grants/{grantId} { allow read, write: if false; }
     match /private_media_requests/{requestId} { allow read, write: if false; }

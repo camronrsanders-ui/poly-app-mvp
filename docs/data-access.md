@@ -22,6 +22,7 @@ Security controls:
 The callable can include:
 - account metadata;
 - the member’s full profile, including private discovery preferences;
+- the member's own private Discover location and accuracy metadata;
 - relationship/Circle cards they created;
 - likes they sent;
 - Pass state they created;
@@ -33,7 +34,7 @@ The callable can include:
 - profile-media metadata they own;
 - Private Vault metadata they own, even though Private Vault itself remains disabled.
 
-The snapshot intentionally does not include other members’ full profiles, email addresses, private relationship-card content, incoming reports, moderator notes, raw protected-media paths, signed media links, or other users’ message bodies merely because they share a conversation.
+The snapshot intentionally does not include other members’ full profiles or precise locations, email addresses, private relationship-card content, incoming reports, moderator notes, raw protected-media paths, signed media links, or other users’ message bodies merely because they share a conversation. A requester's own precise location appears only in this recent-auth, App-Check-protected data-access response—not in cross-user Discover views.
 
 ## Bounds and truncation
 

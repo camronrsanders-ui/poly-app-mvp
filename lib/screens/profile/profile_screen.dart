@@ -49,7 +49,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final Set<String> _preferredStructures = {};
   final Set<String> _preferredIntentions = {};
   RangeValues _ageRange = const RangeValues(18, 99);
-  double _distanceRadius = 50;
+  int _distanceRadius = defaultDiscoverDistanceMiles;
 
   @override
   void initState() {
@@ -168,9 +168,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .clamp(18, 120)
           .toDouble();
       _ageRange = RangeValues(minAge, maxAgeRaw < minAge ? minAge : maxAgeRaw);
-      _distanceRadius = ((data['distanceRadius'] as num?)?.toDouble() ?? 50)
-          .clamp(1, 500)
-          .toDouble();
+      _distanceRadius = normalizedDiscoverDistanceMiles(data['distanceRadius']);
     } catch (error) {
       _loadError = error;
     } finally {
@@ -223,7 +221,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'intentionTags': _intentions,
         'ageMin': _ageRange.start.round(),
         'ageMax': _ageRange.end.round(),
-        'distanceRadius': _distanceRadius.round(),
+        'distanceRadius': _distanceRadius,
         'preferredStructures': _preferredStructures.toList(growable: false),
         'preferredIntentions': _preferredIntentions.toList(growable: false),
       });
@@ -532,17 +530,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .toList(),
         ),
         const SizedBox(height: 18),
-        Text('Distance preference: ${_distanceRadius.round()} miles'),
-        Slider(
-          value: _distanceRadius,
-          min: 1,
-          max: 500,
-          divisions: 499,
-          label: '${_distanceRadius.round()} mi',
-          onChanged: (value) => setState(() => _distanceRadius = value),
+        DropdownButtonFormField<int>(
+          initialValue: _distanceRadius,
+          decoration: const InputDecoration(
+            labelText: 'Discover distance',
+          ),
+          items: discoverDistanceOptionsMiles
+              .map(
+                (distance) => DropdownMenuItem<int>(
+                  value: distance,
+                  child: Text('Within $distance miles'),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) => setState(
+            () => _distanceRadius = value ?? defaultDiscoverDistanceMiles,
+          ),
         ),
         const Text(
-          'Distance filtering will be applied only after location services are configured. Your exact location is not shown in your public profile.',
+          'Nearby filtering is enforced on the trusted backend. Your precise device location is never included in another member’s profile view.',
         ),
         const SizedBox(height: 28),
         FilledButton(

@@ -31,13 +31,24 @@
 - lookingForNote: string
 - ageMin: integer
 - ageMax: integer
-- distanceRadius: integer
+- distanceRadius: integer (5, 10, 20, 30, 50, or 100 miles; default 20)
 - preferredStructures: array<string>
 - preferredIntentions: array<string>
 - profileVisibility: string
 - mapVisibility: string
 - createdAt: timestamp
 - updatedAt: timestamp
+
+## member_locations/{uid}
+- uid: string
+- latitude: number
+- longitude: number
+- accuracyMeters: number
+- source: string (`device_foreground` in the app; `emulator_fixture` locally)
+- observedAt: timestamp
+- updatedAt: timestamp
+
+`member_locations` is an Admin-SDK-only private collection. Firestore rules deny all direct client reads and writes, including by the document owner. Precise coordinates are accepted only through the App-Check-protected `updateDiscoverLocation` callable, used only by trusted nearby filtering, and never copied into cross-user profile views. Public city/region remains separate in `profiles`.
 
 ## relationship_cards/{autoId}
 - ownerUid: string
@@ -99,4 +110,4 @@ relationship-card visibility: public, matches_only, private, unnamed_public
 messageType: text
 report status: open, reviewing, resolved, dismissed
 
-Use Firebase Auth UID as the document ID for users and profiles. Use auto IDs for other collections unless a deterministic ID is needed to prevent duplicate logical records.
+Use Firebase Auth UID as the document ID for users, profiles, and private member locations. Use auto IDs for other collections unless a deterministic ID is needed to prevent duplicate logical records.
