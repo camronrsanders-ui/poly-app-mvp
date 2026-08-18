@@ -5,16 +5,22 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const index = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
+const pagination = fs.readFileSync(
+  path.join(root, 'functions/src/discovery_pagination.ts'),
+  'utf8',
+);
 const profileView = fs.readFileSync(path.join(root, 'functions/src/profile_view.ts'), 'utf8');
 
 test('Discover sanitizes malformed limits and batches block checks', () => {
   const section = index.match(/export const getDiscoverCandidates[\s\S]*?export const likeProfile/)?.[0] ?? '';
-  assert.match(section, /Number\.isFinite\(requestedLimit\)/);
-  assert.match(section, /Math\.trunc\(requestedLimit\)/);
-  assert.match(section, /blockRefs/);
-  assert.match(section, /db\.getAll\(\.\.\.blockRefs\)/);
-  assert.match(section, /blocked\.has\(doc\.id\)/);
-  assert.doesNotMatch(section, /await isBlocked\(uid, doc\.id\)/);
+  const eligibility = index.match(/async function eligibleDiscoverCandidates[\s\S]*?return eligible;\n\}/)?.[0] ?? '';
+  assert.match(pagination, /Number\.isFinite\(requested\)/);
+  assert.match(pagination, /Math\.trunc\(requested\)/);
+  assert.match(eligibility, /blockRefs/);
+  assert.match(eligibility, /db\.getAll\(\.\.\.blockRefs\)/);
+  assert.match(eligibility, /blocked\.has\(doc\.id\)/);
+  assert.doesNotMatch(eligibility, /await isBlocked\(uid, doc\.id\)/);
+  assert.match(section, /eligibleDiscoverCandidates/);
 });
 
 test('connection listing filters active matches before its cap and batches fan-out reads', () => {

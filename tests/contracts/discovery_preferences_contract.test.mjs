@@ -11,9 +11,9 @@ const preferences = read('functions/src/discovery_preferences.ts');
 
 test('discovery applies private preferences before returning profile views', () => {
   assert.match(index, /from '.\/discovery_preferences'/);
-  const section = index.match(/export const getDiscoverCandidates[\s\S]*?export const likeProfile/)?.[0] ?? '';
-  assert.match(section, /candidateMatchesPreferences\(requesterProfile, doc\.data\(\)\)/);
-  assert.match(section, /toProfileView\(doc\.id, doc\.data\(\)\)/);
+  const section = index.match(/async function eligibleDiscoverCandidates[\s\S]*?return eligible;\n\}/)?.[0] ?? '';
+  assert.match(section, /candidateMatchesPreferences\(requesterProfile, data\)/);
+  assert.match(section, /toProfileView\(doc\.id, data\)/);
   assert.ok(
     section.indexOf('candidateMatchesPreferences') < section.lastIndexOf('toProfileView'),
     'Preference filtering must happen before a candidate is returned',
@@ -33,6 +33,6 @@ test('discovery preference helper covers age, structure and intention preference
 });
 
 test('discovery scans a bounded candidate pool instead of an unbounded collection', () => {
-  assert.match(index, /const scanLimit = Math\.min\(Math\.max\(limit \* 4, limit \+ 20\), 120\)/);
-  assert.match(index, /\.limit\(scanLimit\)/);
+  assert.match(index, /maximumDiscoverCandidatePool/);
+  assert.match(index, /\.limit\(maximumDiscoverCandidatePool\)/);
 });

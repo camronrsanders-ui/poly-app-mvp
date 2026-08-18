@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -19,6 +22,7 @@ class DiscoverScreen extends StatefulWidget {
     this.passUser,
     this.onViewProfile,
     this.profileImageBuilder,
+    this.profilePhotosLoader,
   });
 
   final DiscoverRepository? discovery;
@@ -27,6 +31,8 @@ class DiscoverScreen extends StatefulWidget {
   final Future<void> Function(String uid)? passUser;
   final ValueChanged<Map<String, dynamic>>? onViewProfile;
   final Widget Function(String uid)? profileImageBuilder;
+  final Future<List<VisibleProfilePhoto>> Function(String uid)?
+      profilePhotosLoader;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -34,19 +40,35 @@ class DiscoverScreen extends StatefulWidget {
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
   static const _locationRefreshInterval = Duration(minutes: 15);
+  static const _prefetchRemainingProfiles = 3;
+  static const _maximumRetainedProfiles = 60;
+  static const _retainedProfilesBehindFocus = 15;
+  static const _maximumPhotoFutures = 20;
 
   late final DiscoverRepository _discovery;
   late final DiscoverLocationProvider _locationProvider;
   late final Future<bool> Function(String uid) _likeUser;
   late final Future<void> Function(String uid) _passUser;
-  late final ProfileMediaService? _profileMedia;
-  late Future<List<Map<String, dynamic>>> _future;
+  late final Future<List<VisibleProfilePhoto>> Function(String uid)?
+      _profilePhotosLoader;
   final Set<String> _actingOn = {};
+  final Set<String> _sessionUids = {};
+  final Map<String, int> _sessionOrdinals = {};
   final Map<String, Future<List<VisibleProfilePhoto>>> _photoFutures = {};
+  Future<void> _photoLoadTail = Future<void>.value();
+  List<Map<String, dynamic>> _profiles = const [];
+  String? _nextCursor;
   int _distanceMiles = defaultDiscoverDistanceMiles;
+  int _sessionGeneration = 0;
+  int _sessionDeliveredCount = 0;
+  int _focusedIndex = 0;
   bool _initializing = true;
+  bool _loadingInitialPage = false;
+  bool _prefetching = false;
+  bool _hasMore = false;
   bool _savingDistance = false;
   Object? _setupError;
+  Object? _pageError;
   DiscoverLocationStatus? _locationProblem;
   DateTime? _lastLocationRefresh;
 
@@ -64,10 +86,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       _likeUser = widget.likeUser ?? connections.likeUser;
       _passUser = widget.passUser ?? connections.passUser;
     }
-    _profileMedia =
-        widget.profileImageBuilder == null ? ProfileMediaService() : null;
-    _future = Future.value(const <Map<String, dynamic>>[]);
+    _profilePhotosLoader = widget.profileImageBuilder == null
+        ? widget.profilePhotosLoader ?? ProfileMediaService().listVisiblePhotos
+        : null;
     _initializeDiscover();
+  }
+
+  @override
+  void dispose() {
+    _sessionGeneration++;
+    super.dispose();
   }
 
   Future<void> _initializeDiscover() async {
@@ -81,10 +109,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       final hasLocation = await _refreshLocation(force: true);
       if (!mounted) return;
       if (hasLocation) {
-        setState(() {
-          _initializing = false;
-          _future = _discovery.loadCandidates();
-        });
+        setState(() => _initializing = false);
+        await _startFreshSession();
       } else {
         setState(() => _initializing = false);
       }
@@ -138,35 +164,213 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
     return _photoFutures.putIfAbsent(
       uid,
-      () => _profileMedia!.listVisiblePhotos(uid),
+      () {
+        final requestGeneration = _sessionGeneration;
+        final request = _photoLoadTail.then(
+          (_) => requestGeneration == _sessionGeneration
+              ? _profilePhotosLoader!(uid)
+              : Future.value(const <VisibleProfilePhoto>[]),
+        );
+        _photoLoadTail = request.then<void>(
+          (_) {},
+          onError: (Object _, StackTrace __) {},
+        );
+        return request;
+      },
     );
+  }
+
+  void _primeProfilePhoto(Map<String, dynamic>? profile) {
+    if (_profilePhotosLoader == null || profile == null) return;
+    final uid = _profileUid(profile);
+    if (uid == null) return;
+    _photosFor(uid).ignore();
+  }
+
+  String? _profileUid(Map<String, dynamic> profile) {
+    final uid = profile['uid']?.toString().trim() ?? '';
+    return uid.isEmpty ? null : uid;
+  }
+
+  Future<void> _startFreshSession() async {
+    if (!mounted || _locationProblem != null) return;
+    final generation = ++_sessionGeneration;
+    setState(() {
+      _profiles = const [];
+      _sessionUids.clear();
+      _sessionOrdinals.clear();
+      _photoFutures.clear();
+      _nextCursor = null;
+      _sessionDeliveredCount = 0;
+      _focusedIndex = 0;
+      _loadingInitialPage = true;
+      _prefetching = false;
+      _hasMore = false;
+      _pageError = null;
+      _setupError = null;
+    });
+
+    try {
+      final page = await _discovery.loadCandidates(limit: discoverPageSize);
+      if (!mounted || generation != _sessionGeneration) return;
+      _primeProfilePhoto(page.profiles.firstOrNull);
+      setState(() {
+        _appendPage(page);
+        _loadingInitialPage = false;
+      });
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Discover first page failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!mounted || generation != _sessionGeneration) return;
+      setState(() {
+        _loadingInitialPage = false;
+        _pageError = error;
+      });
+    }
+  }
+
+  void _appendPage(DiscoverPage page) {
+    final nextProfiles = List<Map<String, dynamic>>.of(_profiles);
+    for (final profile in page.profiles) {
+      final uid = _profileUid(profile);
+      if (uid == null || !_sessionUids.add(uid)) continue;
+      _sessionDeliveredCount++;
+      _sessionOrdinals[uid] = _sessionDeliveredCount;
+      nextProfiles.add(profile);
+    }
+    _nextCursor = page.nextCursor;
+    _hasMore = page.hasMore && page.nextCursor != null;
+    _profiles = nextProfiles;
+    _trimRetainedFeed();
+  }
+
+  void _trimRetainedFeed() {
+    final overflow = _profiles.length - _maximumRetainedProfiles;
+    if (overflow <= 0) return;
+    final safeToRemove = math.max(
+      0,
+      _focusedIndex - _retainedProfilesBehindFocus,
+    );
+    final removeCount = math.min(overflow, safeToRemove);
+    if (removeCount <= 0) return;
+    final removed = _profiles.take(removeCount).toList(growable: false);
+    _profiles = _profiles.sublist(removeCount);
+    _focusedIndex = math.max(0, _focusedIndex - removeCount);
+    for (final profile in removed) {
+      final uid = _profileUid(profile);
+      if (uid != null) _photoFutures.remove(uid);
+    }
+  }
+
+  Future<void> _prefetchNextPage() async {
+    final cursor = _nextCursor;
+    if (!mounted || _prefetching || !_hasMore || cursor == null) return;
+    final generation = _sessionGeneration;
+    setState(() {
+      _prefetching = true;
+      _pageError = null;
+    });
+    try {
+      final page = await _discovery.loadCandidates(
+        limit: discoverPageSize,
+        cursor: cursor,
+      );
+      if (!mounted || generation != _sessionGeneration) return;
+      setState(() {
+        _appendPage(page);
+        _prefetching = false;
+      });
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Discover prefetch failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!mounted || generation != _sessionGeneration) return;
+      setState(() {
+        _prefetching = false;
+        _pageError = error;
+        if (error is DiscoverSessionExpiredException) {
+          _hasMore = false;
+          _nextCursor = null;
+        }
+      });
+    }
+  }
+
+  void _focusChanged(int index) {
+    if (!mounted || _profiles.isEmpty) return;
+    final nextIndex = index.clamp(0, _profiles.length - 1);
+    _primeProfilePhoto(_profiles[nextIndex]);
+    if (_focusedIndex != nextIndex) {
+      setState(() => _focusedIndex = nextIndex);
+    }
+    _prunePhotoFutures(nextIndex);
+    if (_profiles.length - nextIndex - 1 <= _prefetchRemainingProfiles) {
+      unawaited(_prefetchNextPage());
+    }
+  }
+
+  void _prunePhotoFutures(int focusedIndex) {
+    if (_photoFutures.length <= _maximumPhotoFutures) return;
+    final retainedUids = <String>{};
+    final start = math.max(0, focusedIndex - 7);
+    final end = math.min(_profiles.length, focusedIndex + 11);
+    for (var index = start; index < end; index++) {
+      final uid = _profileUid(_profiles[index]);
+      if (uid != null) retainedUids.add(uid);
+    }
+    _photoFutures.removeWhere((uid, _) => !retainedUids.contains(uid));
+  }
+
+  String _counterLabel(int index) {
+    if (_profiles.isEmpty) return '0';
+    final safeIndex = index.clamp(0, _profiles.length - 1);
+    final uid = _profileUid(_profiles[safeIndex]);
+    final ordinal =
+        uid == null ? safeIndex + 1 : (_sessionOrdinals[uid] ?? safeIndex + 1);
+    return '$ordinal / $_sessionDeliveredCount${_hasMore ? '+' : ''}';
+  }
+
+  String _counterSemantics(int index) {
+    if (_profiles.isEmpty) return 'No profiles';
+    final safeIndex = index.clamp(0, _profiles.length - 1);
+    final uid = _profileUid(_profiles[safeIndex]);
+    final ordinal =
+        uid == null ? safeIndex + 1 : (_sessionOrdinals[uid] ?? safeIndex + 1);
+    return _hasMore
+        ? 'Profile $ordinal in this Discover session, more nearby profiles available'
+        : 'Profile $ordinal in this Discover session';
   }
 
   void _reload() {
     if (!mounted || _locationProblem != null) return;
-
-    setState(() {
-      _photoFutures.clear();
-      _future = _discovery.loadCandidates();
-    });
+    unawaited(_startFreshSession());
   }
 
   Future<void> _refresh() async {
     final hasLocation = await _refreshLocation(force: false);
     if (!mounted || !hasLocation) return;
-    final future = _discovery.loadCandidates();
-
     if (!mounted) return;
+    await _startFreshSession();
+  }
 
+  void _removeProfile(String uid) {
+    final index = _profiles.indexWhere(
+      (profile) => _profileUid(profile) == uid,
+    );
+    if (index < 0) return;
     setState(() {
-      _photoFutures.clear();
-      _future = future;
+      final nextProfiles = List<Map<String, dynamic>>.of(_profiles)
+        ..removeAt(index);
+      _profiles = nextProfiles;
+      _photoFutures.remove(uid);
+      _focusedIndex =
+          _profiles.isEmpty ? 0 : index.clamp(0, _profiles.length - 1);
     });
-
-    try {
-      await future;
-    } catch (_) {
-      // FutureBuilder presents the user-facing error state.
+    if (_profiles.length - _focusedIndex - 1 <= _prefetchRemainingProfiles) {
+      unawaited(_prefetchNextPage());
     }
   }
 
@@ -190,7 +394,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         ),
       );
 
-      _reload();
+      _removeProfile(uid);
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover like failed: $error');
@@ -231,7 +435,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         ),
       );
 
-      _reload();
+      _removeProfile(uid);
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover pass failed: $error');
@@ -267,7 +471,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (!mounted) return;
 
     if (result == 'liked' || result == 'matched' || result == 'blocked') {
-      _reload();
+      final uid = _profileUid(profile);
+      if (uid != null) _removeProfile(uid);
     }
   }
 
@@ -368,8 +573,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       if (!mounted) return;
       setState(() {
         _initializing = false;
-        if (hasLocation) _future = _discovery.loadCandidates();
       });
+      if (hasLocation) await _startFreshSession();
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover location retry failed: $error');
@@ -414,11 +619,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       if (!mounted) return;
       setState(() {
         _distanceMiles = distanceMiles;
-        _photoFutures.clear();
-        if (_locationProblem == null) {
-          _future = _discovery.loadCandidates();
-        }
       });
+      if (_locationProblem == null) await _startFreshSession();
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover distance update failed: $error');
@@ -469,6 +671,121 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
+  Widget _discoverContent() {
+    if (_loadingInitialPage) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFC596FF)),
+      );
+    }
+
+    final pageError = _pageError;
+    if (_profiles.isEmpty && pageError != null) {
+      if (pageError is DiscoverLocationRequiredException) {
+        return _locationUnavailable(DiscoverLocationStatus.unavailable);
+      }
+      return _StateMessage(
+        icon: Icons.error_outline,
+        title: 'Discover is taking a break',
+        text:
+            'We could not load profiles. Check your connection and try again.',
+        debugDetails: kDebugMode ? pageError.toString() : null,
+        action: TextButton(
+          onPressed: _reload,
+          child: const Text('Try again'),
+        ),
+      );
+    }
+
+    if (_profiles.isEmpty) {
+      final nextDistance = nextDiscoverDistanceMiles(_distanceMiles);
+      return _StateMessage(
+        icon: Icons.travel_explore_outlined,
+        title: 'No new worlds within $_distanceMiles miles.',
+        text:
+            'Your selected distance stays in control. Refresh or explicitly increase it to explore farther.',
+        action: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          children: [
+            TextButton(
+              key: const ValueKey('discover-empty-refresh'),
+              onPressed: _reload,
+              child: const Text('Refresh'),
+            ),
+            if (nextDistance != null)
+              TextButton(
+                key: const ValueKey('discover-increase-radius'),
+                onPressed: () => _setDistance(nextDistance),
+                child: Text('Increase to $nextDistance mi'),
+              ),
+          ],
+        ),
+      );
+    }
+
+    final atEnd = !_hasMore && _focusedIndex >= _profiles.length - 1;
+    final nextDistance = nextDiscoverDistanceMiles(_distanceMiles);
+    return RefreshIndicator(
+      color: const Color(0xFFC596FF),
+      backgroundColor: const Color(0xFF21122F),
+      onRefresh: _refresh,
+      child: ListView(
+        key: const ValueKey('discover-world-scroll-view'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
+        children: [
+          DiscoveryOrbit(
+            profiles: _profiles,
+            imageBuilder: _profileImage,
+            onViewProfile: _viewProfile,
+            onLike: _like,
+            onPass: _pass,
+            isActing: (uid) => _actingOn.contains(uid),
+            onFocusChanged: _focusChanged,
+            onRequestMore: () => unawaited(_prefetchNextPage()),
+            hasMoreProfiles: _hasMore,
+            loadingMore: _prefetching,
+            counterLabelBuilder: _counterLabel,
+            counterSemanticsBuilder: _counterSemantics,
+          ),
+          if (_prefetching && _focusedIndex >= _profiles.length - 1)
+            const Padding(
+              key: ValueKey('discover-page-boundary-loading'),
+              padding: EdgeInsets.only(top: 2, bottom: 8),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFC596FF),
+                  ),
+                ),
+              ),
+            ),
+          if (pageError != null && !_prefetching && _hasMore)
+            _DiscoverPagingMessage(
+              key: const ValueKey('discover-page-retry'),
+              text: 'The next nearby worlds could not load yet.',
+              actionLabel: 'Retry',
+              onAction: () => unawaited(_prefetchNextPage()),
+            ),
+          if (atEnd)
+            _DiscoverPagingMessage(
+              key: const ValueKey('discover-end-of-results'),
+              text: 'You’ve explored the nearby worlds available right now.',
+              actionLabel: 'Refresh',
+              onAction: _reload,
+              secondaryLabel: nextDistance == null ? null : 'Increase radius',
+              onSecondary: nextDistance == null
+                  ? null
+                  : () => _setDistance(nextDistance),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return _DiscoverWorld(
@@ -494,106 +811,58 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         child: const Text('Try again'),
                       ),
                     )
-                  : FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _future,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFC596FF),
-                            ),
-                          );
-                        }
+                  : _discoverContent(),
+    );
+  }
+}
 
-                        if (snapshot.hasError) {
-                          if (snapshot.error
-                              is DiscoverLocationRequiredException) {
-                            return _locationUnavailable(
-                              DiscoverLocationStatus.unavailable,
-                            );
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              'Discover load failed: ${snapshot.error}',
-                            );
+class _DiscoverPagingMessage extends StatelessWidget {
+  const _DiscoverPagingMessage({
+    super.key,
+    required this.text,
+    required this.actionLabel,
+    required this.onAction,
+    this.secondaryLabel,
+    this.onSecondary,
+  });
 
-                            if (snapshot.stackTrace != null) {
-                              debugPrintStack(
-                                stackTrace: snapshot.stackTrace!,
-                              );
-                            }
-                          }
+  final String text;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
 
-                          return _StateMessage(
-                            icon: Icons.error_outline,
-                            title: 'Discover is taking a break',
-                            text:
-                                'We could not load profiles. Check your connection and try again.',
-                            debugDetails:
-                                kDebugMode ? snapshot.error?.toString() : null,
-                            action: TextButton(
-                              onPressed: _reload,
-                              child: const Text('Try again'),
-                            ),
-                          );
-                        }
-
-                        final profiles = snapshot.data ?? [];
-
-                        if (profiles.isEmpty) {
-                          final nextDistance =
-                              nextDiscoverDistanceMiles(_distanceMiles);
-                          return _StateMessage(
-                            icon: Icons.travel_explore_outlined,
-                            title:
-                                'No new worlds within $_distanceMiles miles.',
-                            text:
-                                'Your selected distance stays in control. Refresh or explicitly increase it to explore farther.',
-                            action: Wrap(
-                              alignment: WrapAlignment.center,
-                              spacing: 8,
-                              children: [
-                                TextButton(
-                                  key: const ValueKey('discover-empty-refresh'),
-                                  onPressed: _reload,
-                                  child: const Text('Refresh'),
-                                ),
-                                if (nextDistance != null)
-                                  TextButton(
-                                    key: const ValueKey(
-                                        'discover-increase-radius'),
-                                    onPressed: () => _setDistance(nextDistance),
-                                    child: Text('Increase to $nextDistance mi'),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        return RefreshIndicator(
-                          color: const Color(0xFFC596FF),
-                          backgroundColor: const Color(0xFF21122F),
-                          onRefresh: _refresh,
-                          child: ListView(
-                            key: const ValueKey('discover-world-scroll-view'),
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
-                            children: [
-                              DiscoveryOrbit(
-                                profiles: profiles,
-                                imageBuilder: _profileImage,
-                                onViewProfile: (profile) =>
-                                    _viewProfile(profile),
-                                onLike: (profile) => _like(profile),
-                                onPass: (profile) => _pass(profile),
-                                isActing: (uid) => _actingOn.contains(uid),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xA6140C1D),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x884A2B61)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFC8B8D5),
+                      height: 1.25,
                     ),
+              ),
+            ),
+            TextButton(onPressed: onAction, child: Text(actionLabel)),
+            if (secondaryLabel != null && onSecondary != null)
+              TextButton(
+                onPressed: onSecondary,
+                child: Text(secondaryLabel!),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

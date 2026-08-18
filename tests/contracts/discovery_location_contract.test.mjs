@@ -23,27 +23,31 @@ const updateSection = index.match(
 )?.[0] ?? '';
 
 test('server enforces the saved radius in addition to all existing eligibility filters', () => {
-  assert.match(discoverSection, /requesterProfile\.distanceRadius/);
-  assert.match(discoverSection, /member_locations/);
-  assert.match(discoverSection, /candidateMatchesPreferences/);
-  assert.match(discoverSection, /passed\.has/);
-  assert.match(discoverSection, /alreadyLiked\.has/);
-  assert.match(discoverSection, /matchedBefore\.has/);
-  assert.match(discoverSection, /blocked\.has/);
-  assert.match(discoverSection, /distance > radiusMiles/);
-  assert.match(discoverSection, /eligible\.sort/);
+  const requester = index.match(/async function loadDiscoverRequester[\s\S]*?return \{profile, location, radiusMiles\};\n\}/)?.[0] ?? '';
+  const eligibility = index.match(/async function eligibleDiscoverCandidates[\s\S]*?return eligible;\n\}/)?.[0] ?? '';
+  assert.match(requester, /profile\.distanceRadius/);
+  assert.match(requester, /member_locations/);
+  assert.match(eligibility, /candidateMatchesPreferences/);
+  assert.match(eligibility, /passed\.has/);
+  assert.match(eligibility, /alreadyLiked\.has/);
+  assert.match(eligibility, /matchedBefore\.has/);
+  assert.match(eligibility, /blocked\.has/);
+  assert.match(eligibility, /distance > radiusMiles/);
+  assert.match(eligibility, /eligible\.sort/);
   assert.ok(
-    discoverSection.indexOf('distance > radiusMiles')
-      < discoverSection.lastIndexOf('toProfileView'),
+    eligibility.indexOf('distance > radiusMiles')
+      < eligibility.lastIndexOf('toProfileView'),
     'Radius exclusion must happen before the client profile view is returned',
   );
+  assert.ok(discoverSection.split('eligibleDiscoverCandidates(').length >= 3);
 });
 
 test('the client cannot choose a radius in the candidate request payload', () => {
   const loadMethod = client.match(
     /final callable = _functions\.httpsCallable\('getDiscoverCandidates'\)[\s\S]*?\n  @override/,
   )?.[0] ?? '';
-  assert.match(loadMethod, /\{'limit': limit\}/);
+  assert.match(loadMethod, /'limit': limit/);
+  assert.match(loadMethod, /if \(cursor != null\) 'cursor': cursor/);
   assert.doesNotMatch(loadMethod, /distanceMiles|radiusMiles|latitude|longitude/);
   assert.match(screen, /saveDistanceMiles\(distanceMiles\)/);
 });

@@ -62,6 +62,28 @@ class DiscoveryOrbitMath {
       growable: false,
     );
   }
+
+  /// A bounded, non-wrapping visible window for the ongoing Discover feed.
+  /// This keeps old profiles from reappearing at the forward edge while the
+  /// next trusted backend page is being appended.
+  static List<int> visibleFeedIndices(double position, int count) {
+    if (count <= 0) return const <int>[];
+    if (count <= maxVisibleProfiles) {
+      return List<int>.generate(count, (index) => index, growable: false);
+    }
+    final nearest = position.round().clamp(0, count - 1);
+    final start = (nearest - 3).clamp(0, count - maxVisibleProfiles);
+    return List<int>.generate(
+      maxVisibleProfiles,
+      (slot) => start + slot,
+      growable: false,
+    );
+  }
+
+  static int nearestFeedIndex(double position, int count) {
+    if (count <= 0) return 0;
+    return position.round().clamp(0, count - 1);
+  }
 }
 
 /// Deterministic presentation values for keeping the Orbit legible across
@@ -114,6 +136,12 @@ class DiscoveryOrbit extends StatefulWidget {
     required this.onLike,
     required this.onPass,
     required this.isActing,
+    this.onFocusChanged,
+    this.onRequestMore,
+    this.hasMoreProfiles = false,
+    this.loadingMore = false,
+    this.counterLabelBuilder,
+    this.counterSemanticsBuilder,
   });
 
   final List<Map<String, dynamic>> profiles;
@@ -122,6 +150,12 @@ class DiscoveryOrbit extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onLike;
   final ValueChanged<Map<String, dynamic>> onPass;
   final bool Function(String uid) isActing;
+  final ValueChanged<int>? onFocusChanged;
+  final VoidCallback? onRequestMore;
+  final bool hasMoreProfiles;
+  final bool loadingMore;
+  final String Function(int index)? counterLabelBuilder;
+  final String Function(int index)? counterSemanticsBuilder;
 
   @override
   State<DiscoveryOrbit> createState() => _DiscoveryOrbitState();
@@ -143,6 +177,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   int _lastHapticIndex = 0;
   String? _selectedIdentity;
   bool _dragging = false;
+  bool _advanceWhenProfilesAppend = false;
 
   @override
   void initState() {
@@ -167,7 +202,10 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   void didUpdateWidget(covariant DiscoveryOrbit oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (_sameProfileOrder(oldWidget.profiles, widget.profiles)) return;
+    if (_sameProfileOrder(oldWidget.profiles, widget.profiles)) {
+      if (!widget.hasMoreProfiles) _advanceWhenProfilesAppend = false;
+      return;
+    }
 
     _motion.stop();
 
@@ -183,15 +221,25 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     final preservedIndex = _selectedIdentity == null
         ? -1
         : _indexOfIdentity(widget.profiles, _selectedIdentity!);
-    final nextIndex = preservedIndex >= 0
-        ? preservedIndex
-        : oldIndex.clamp(0, widget.profiles.length - 1);
+    final appendedIndex = _advanceWhenProfilesAppend &&
+            widget.profiles.length > oldWidget.profiles.length
+        ? oldWidget.profiles.length
+        : -1;
+    final nextIndex = appendedIndex >= 0
+        ? appendedIndex
+        : preservedIndex >= 0
+            ? preservedIndex
+            : oldIndex.clamp(0, widget.profiles.length - 1);
+    _advanceWhenProfilesAppend = false;
 
     _selectedIndex = nextIndex;
     _lastHapticIndex = nextIndex;
     _selectedIdentity = _identity(widget.profiles[nextIndex], nextIndex);
     _position = nextIndex.toDouble();
     _setMotionValueSilently(_position);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onFocusChanged?.call(nextIndex);
+    });
   }
 
   bool get _reduceMotion {
@@ -245,7 +293,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     if (!mounted || widget.profiles.isEmpty) return;
 
     final nextPosition = _motion.value;
-    final nextIndex = DiscoveryOrbitMath.nearestIndex(
+    final nextIndex = DiscoveryOrbitMath.nearestFeedIndex(
       nextPosition,
       widget.profiles.length,
     );
@@ -260,6 +308,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     if (changed && nextIndex != _lastHapticIndex) {
       _lastHapticIndex = nextIndex;
       HapticFeedback.selectionClick();
+      widget.onFocusChanged?.call(nextIndex);
     }
   }
 
@@ -359,7 +408,10 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     _lastPointerAngle = currentAngle;
     _lastPointerPosition = position;
     _lastPointerTime = time;
-    _motion.value = _position + positionDelta;
+    _motion.value = (_position + positionDelta).clamp(
+      0.0,
+      (widget.profiles.length - 1).toDouble(),
+    );
   }
 
   void _endDrag() {
@@ -374,7 +426,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
         ? 0.0
         : (_positionVelocity * 0.11).clamp(-1.5, 1.5).toDouble();
     final projectedPosition = _position + inertialTravel;
-    final targetIndex = DiscoveryOrbitMath.nearestIndex(
+    final targetIndex = DiscoveryOrbitMath.nearestFeedIndex(
       projectedPosition,
       widget.profiles.length,
     );
@@ -402,12 +454,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     }
 
     _motion.stop();
-    final target = _position +
-        DiscoveryOrbitMath.distanceToIndex(
-          _position,
-          index,
-          widget.profiles.length,
-        );
+    final target = index.toDouble();
 
     if (_reduceMotion) {
       _motion.value = target;
@@ -424,11 +471,17 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   }
 
   void _moveFocus(int delta) {
-    if (widget.profiles.length < 2) return;
-    final index = DiscoveryOrbitMath.wrapIndex(
-      _selectedIndex + delta,
-      widget.profiles.length,
-    );
+    if (widget.profiles.isEmpty) return;
+    final requestedIndex = _selectedIndex + delta;
+    if (requestedIndex >= widget.profiles.length) {
+      if (widget.hasMoreProfiles) {
+        _advanceWhenProfilesAppend = true;
+        widget.onRequestMore?.call();
+      }
+      return;
+    }
+    if (requestedIndex < 0) return;
+    final index = requestedIndex;
     _animateToIndex(index);
   }
 
@@ -460,7 +513,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
               focalLength: radius * 2.5,
               tilt: 0.56,
             );
-            final visible = DiscoveryOrbitMath.visibleIndices(
+            final visible = DiscoveryOrbitMath.visibleFeedIndices(
               _position,
               widget.profiles.length,
             );
@@ -469,13 +522,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
               for (final index in visible)
                 projector.project(
                   index: index,
-                  angle: _focusAngle +
-                      DiscoveryOrbitMath.positionOffset(
-                            _position,
-                            index,
-                            widget.profiles.length,
-                          ) *
-                          angleStep,
+                  angle: _focusAngle + (_position - index) * angleStep,
                 ),
             ];
             final backNodes = projected.where((node) => node.depth < 0).toList()
@@ -696,7 +743,14 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   }
 
   Widget _orbitControls() {
-    final enabled = widget.profiles.length > 1;
+    final previousEnabled = _selectedIndex > 0;
+    final nextEnabled =
+        _selectedIndex < widget.profiles.length - 1 || widget.hasMoreProfiles;
+    final counterLabel = widget.counterLabelBuilder?.call(_selectedIndex) ??
+        '${_selectedIndex + 1} / ${widget.profiles.length}';
+    final counterSemantics =
+        widget.counterSemanticsBuilder?.call(_selectedIndex) ??
+            'Profile ${_selectedIndex + 1} of ${widget.profiles.length}';
 
     return Center(
       child: Container(
@@ -725,7 +779,7 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
               child: IconButton(
                 key: const ValueKey('discovery-previous-profile'),
                 tooltip: 'Previous profile',
-                onPressed: enabled ? () => _moveFocus(-1) : null,
+                onPressed: previousEnabled ? () => _moveFocus(-1) : null,
                 icon: const Icon(Icons.arrow_back_rounded),
                 iconSize: 21,
                 color: const Color(0xFFD9C7E8),
@@ -742,10 +796,9 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
             Semantics(
               liveRegion: true,
               excludeSemantics: true,
-              label:
-                  'Profile ${_selectedIndex + 1} of ${widget.profiles.length}',
+              label: counterSemantics,
               child: Text(
-                '${_selectedIndex + 1} / ${widget.profiles.length}',
+                counterLabel,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: const Color(0xFFC8B8D5),
                   fontWeight: FontWeight.w700,
@@ -761,8 +814,18 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
               child: IconButton(
                 key: const ValueKey('discovery-next-profile'),
                 tooltip: 'Next profile',
-                onPressed: enabled ? () => _moveFocus(1) : null,
-                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: nextEnabled ? () => _moveFocus(1) : null,
+                icon: widget.loadingMore &&
+                        _selectedIndex >= widget.profiles.length - 1
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFD9C7E8),
+                        ),
+                      )
+                    : const Icon(Icons.arrow_forward_rounded),
                 iconSize: 21,
                 color: const Color(0xFFD9C7E8),
                 disabledColor: Colors.white30,

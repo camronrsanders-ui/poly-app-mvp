@@ -15,15 +15,17 @@ This document records current MVP bounds and the checks required before scale te
 
 Current trusted Discover behavior:
 
-- client asks for a bounded candidate count;
-- backend clamps the requested output to 1–40 and safely defaults malformed limits;
+- client requests fixed first-release pages of at most 15 candidates;
+- backend creates one short-lived, authenticated paging session and returns only an opaque random token;
 - backend scans a bounded public/open candidate pool with a maximum of 120 profiles;
 - user state, pass state, outgoing likes, prior matches, bilateral block documents, and private candidate-location documents are fetched in batches;
 - reciprocal private preferences are applied in trusted code;
 - the requester's saved 5/10/20/30/50/100-mile radius is applied in trusted code and eligible candidates are ordered nearest-first;
+- every later page rechecks account, visibility, preference, block/pass/like/match, location-freshness, and radius eligibility before returning a profile;
+- the client prefetches three candidates before a loaded edge, renders at most eight Orbit nodes, retains at most 60 feed records, and bounds its protected-photo future cache;
 - output uses a sanitized display-safe profile view.
 
-This removes the previous per-candidate sequential block lookup from the hot loop and does not expose coordinates to reduce read cost. Remaining scale concern: bounded scanning can under-fill results when many candidates fail reciprocal or distance filters. Before production scale, design and stage-test a private geospatial index/bounded-query strategy (for example server-owned geohash ranges plus exact trusted distance verification). Do not move coordinate filtering to the client as a shortcut. Pagination/ranking and measured read/latency behavior remain part of that decision.
+This removes the previous per-candidate sequential block lookup from the hot loop and does not expose coordinates to reduce read cost. Remaining scale concern: the session's bounded initial scan can under-fill results when many candidates fail reciprocal or distance filters and caps one session at 120 ordered candidates. Before production scale, design and stage-test a private geospatial index/bounded-query strategy (for example server-owned geohash ranges plus exact trusted distance verification). Do not move coordinate filtering to the client as a shortcut. The current opaque cursor contract can remain while the server-side pool builder evolves; measured read/latency behavior remains part of that decision.
 
 ## Connections / Messages list
 
@@ -111,4 +113,4 @@ Once a paid project exists:
 
 ## Current conclusion
 
-The MVP now has explicit bounds on its primary list/read paths and removes known sequential N+1 behavior in Discover/Connections. Large-scale ranking/pagination and real Firebase cost/latency measurements remain staging/production-readiness work.
+The MVP now has explicit bounds on its primary list/read paths, trusted bounded Discover pagination, and no known sequential N+1 behavior in Discover/Connections. Large-scale geospatial pool construction and real Firebase cost/latency measurements remain staging/production-readiness work.

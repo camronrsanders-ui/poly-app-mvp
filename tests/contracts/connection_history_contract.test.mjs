@@ -16,7 +16,7 @@ const profileDetail = fs.readFileSync(
 );
 
 test('Discover excludes outgoing likes and any current or former match', () => {
-  const section = index.match(/export const getDiscoverCandidates[\s\S]*?export const likeProfile/)?.[0] ?? '';
+  const section = index.match(/async function eligibleDiscoverCandidates[\s\S]*?return eligible;\n\}/)?.[0] ?? '';
   assert.match(section, /outgoingLikeRefs/);
   assert.match(section, /alreadyLiked\.has\(doc\.id\)/);
   assert.match(section, /matchRefs/);

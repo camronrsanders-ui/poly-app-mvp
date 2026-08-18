@@ -41,6 +41,10 @@ DiscoveryOrbit _orbit({
   ValueChanged<Map<String, dynamic>>? onLike,
   ValueChanged<Map<String, dynamic>>? onPass,
   bool Function(String uid)? isActing,
+  ValueChanged<int>? onFocusChanged,
+  VoidCallback? onRequestMore,
+  bool hasMoreProfiles = false,
+  bool loadingMore = false,
 }) {
   return DiscoveryOrbit(
     profiles: profiles,
@@ -52,6 +56,10 @@ DiscoveryOrbit _orbit({
     onLike: onLike ?? (_) {},
     onPass: onPass ?? (_) {},
     isActing: isActing ?? (_) => false,
+    onFocusChanged: onFocusChanged,
+    onRequestMore: onRequestMore,
+    hasMoreProfiles: hasMoreProfiles,
+    loadingMore: loadingMore,
   );
 }
 
@@ -109,6 +117,20 @@ void main() {
       }
 
       expect(reached, containsAll(List<int>.generate(25, (index) => index)));
+    });
+
+    test('continuous feed windows do not wrap old profiles onto the new edge',
+        () {
+      expect(
+        DiscoveryOrbitMath.visibleFeedIndices(0, 45),
+        List<int>.generate(8, (index) => index),
+      );
+      expect(
+        DiscoveryOrbitMath.visibleFeedIndices(44, 45),
+        List<int>.generate(8, (index) => index + 37),
+      );
+      expect(DiscoveryOrbitMath.nearestFeedIndex(-1, 45), 0);
+      expect(DiscoveryOrbitMath.nearestFeedIndex(46, 45), 44);
     });
 
     test('wrap and nearest-index math remains valid across either boundary',
@@ -376,7 +398,7 @@ void main() {
     );
 
     expect(
-      find.byKey(const ValueKey('discovery-avatar-profile-6')),
+      find.byKey(const ValueKey('discovery-avatar-profile-10')),
       findsNothing,
     );
 
@@ -386,9 +408,67 @@ void main() {
     }
 
     expect(
-      find.byKey(const ValueKey('discovery-avatar-profile-6')),
+      find.byKey(const ValueKey('discovery-avatar-profile-10')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('forward navigation stops instead of looping at a true feed end',
+      (tester) async {
+    await tester.pumpWidget(
+      _testApp(_orbit(profiles: _profiles(3))),
+    );
+
+    await _next(tester);
+    await _next(tester);
+    expect(find.text('Profile 2, 22'), findsOneWidget);
+    final next = tester.widget<IconButton>(
+      find.byKey(const ValueKey('discovery-next-profile')),
+    );
+    expect(next.onPressed, isNull);
+    expect(find.text('Profile 0, 20'), findsNothing);
+  });
+
+  testWidgets('a requested next page continues from profile 15 to profile 16',
+      (tester) async {
+    var profiles = _profiles(15);
+    var hasMore = true;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return SingleChildScrollView(
+                child: _orbit(
+                  profiles: profiles,
+                  hasMoreProfiles: hasMore,
+                  onRequestMore: () {
+                    update(() {
+                      profiles = _profiles(30);
+                      hasMore = false;
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    for (var index = 1; index < 15; index++) {
+      await _next(tester);
+    }
+    expect(find.text('Profile 14, 34'), findsOneWidget);
+    await _next(tester);
+    expect(find.text('Profile 15, 35'), findsOneWidget);
   });
 
   testWidgets('protected photos own the node surface with antialiased clipping',
@@ -657,7 +737,7 @@ void main() {
     });
   }
 
-  for (final count in <int>[1, 2, 3, 5, 7, 10, 15, 25]) {
+  for (final count in <int>[1, 2, 3, 5, 7, 10, 15, 25, 45]) {
     testWidgets('$count-profile synthetic orbit keeps every profile reachable',
         (tester) async {
       await tester.pumpWidget(

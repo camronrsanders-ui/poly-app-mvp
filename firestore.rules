@@ -363,6 +363,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Opaque Discover paging state is trusted-backend-only. It can contain
+    // ordered member UIDs but never private coordinates.
+    match /_discover_sessions/{uid} { allow read, write: if false; }
     match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }

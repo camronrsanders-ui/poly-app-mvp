@@ -15,6 +15,13 @@ import {
   parseDiscoverLocationUpdate,
   privateCoordinateFromData,
 } from './discovery_location';
+import {
+  discoverSessionLifetimeMs,
+  isValidDiscoverCursorToken,
+  maximumDiscoverCandidatePool,
+  normalizeDiscoverPageLimit,
+  uniqueDiscoverCandidateUids,
+} from './discovery_pagination';
 import {toProfileView} from './profile_view_fields';
 
 initializeApp();
@@ -49,6 +56,144 @@ function blockedPeersFromSnapshots(
   return blocked;
 }
 
+type PrivateCoordinate = NonNullable<ReturnType<typeof privateCoordinateFromData>>;
+
+type DiscoverCandidate = {
+  id: string;
+  distance: number;
+  profile: FirebaseFirestore.DocumentData;
+};
+
+async function loadDiscoverRequester(uid: string): Promise<{
+  profile: FirebaseFirestore.DocumentData;
+  location: PrivateCoordinate;
+  radiusMiles: number;
+}> {
+  const [profileSnap, requesterLocationSnap] = await Promise.all([
+    db.collection('profiles').doc(uid).get(),
+    db.collection('member_locations').doc(uid).get(),
+  ]);
+  if (!profileSnap.exists) {
+    throw new HttpsError('failed-precondition', 'Complete your profile first.');
+  }
+
+  const profile = profileSnap.data()!;
+  const radiusMiles = normalizeDiscoveryRadius(profile.distanceRadius);
+  const location = privateCoordinateFromData(requesterLocationSnap.data());
+  const requesterLocationUpdatedAt = requesterLocationSnap.get('updatedAt');
+  const requesterLocationAgeMs = requesterLocationUpdatedAt instanceof Timestamp
+    ? Date.now() - requesterLocationUpdatedAt.toMillis()
+    : Number.POSITIVE_INFINITY;
+  if (location == null || requesterLocationAgeMs > 30 * 24 * 60 * 60_000) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Location is required for nearby discovery.',
+      {reason: 'discover-location-required'},
+    );
+  }
+
+  return {profile, location, radiusMiles};
+}
+
+async function eligibleDiscoverCandidates(
+  uid: string,
+  requesterProfile: FirebaseFirestore.DocumentData,
+  requesterLocation: PrivateCoordinate,
+  radiusMiles: number,
+  profileDocs: FirebaseFirestore.DocumentSnapshot[],
+  sessionOrder?: readonly string[],
+): Promise<DiscoverCandidate[]> {
+  const candidateDocs = profileDocs.filter((doc) => doc.exists && doc.id !== uid);
+  const candidateIds = candidateDocs.map((doc) => doc.id);
+  const userRefs = candidateIds.map((id) => db.collection('users').doc(id));
+  const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
+  const outgoingLikeRefs = candidateIds.map((id) => db.collection('likes').doc(`${uid}_${id}`));
+  const matchRefs = candidateIds.map((id) => db.collection('matches').doc(pairId(uid, id)));
+  const locationRefs = candidateIds.map((id) => db.collection('member_locations').doc(id));
+  const blockRefs = candidateIds.flatMap((id) => [
+    db.collection('blocks').doc(`${uid}_${id}`),
+    db.collection('blocks').doc(`${id}_${uid}`),
+  ]);
+  const [
+    userSnaps,
+    passSnaps,
+    outgoingLikeSnaps,
+    matchSnaps,
+    blockSnaps,
+    locationSnaps,
+  ] = await Promise.all([
+    userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
+    passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
+    outgoingLikeRefs.length ? db.getAll(...outgoingLikeRefs) : Promise.resolve([]),
+    matchRefs.length ? db.getAll(...matchRefs) : Promise.resolve([]),
+    blockRefs.length ? db.getAll(...blockRefs) : Promise.resolve([]),
+    locationRefs.length ? db.getAll(...locationRefs) : Promise.resolve([]),
+  ]);
+  const active = new Set(userSnaps
+    .filter((snap) => isActiveCompliantMember(snap))
+    .map((snap) => snap.id));
+  const passed = new Set(passSnaps
+    .filter((snap) => snap.exists)
+    .map((snap) => String(snap.get('toUid') ?? ''))
+    .filter((id) => id.length > 0));
+  const alreadyLiked = new Set(outgoingLikeSnaps
+    .filter((snap) => snap.exists)
+    .map((snap) => String(snap.get('toUid') ?? ''))
+    .filter((id) => id.length > 0));
+  const blocked = blockedPeersFromSnapshots(uid, blockSnaps);
+  // A prior match, including an ended match, keeps the pair out of Discover.
+  const matchedBefore = new Set(matchSnaps
+    .filter((snap) => snap.exists)
+    .map((snap) => {
+      const userAUid = String(snap.get('userAUid') ?? '');
+      const userBUid = String(snap.get('userBUid') ?? '');
+      return userAUid === uid ? userBUid : userAUid;
+    })
+    .filter((id) => id.length > 0));
+
+  const locations = new Map(locationSnaps.map((snap) => [snap.id, snap]));
+  const eligible: DiscoverCandidate[] = [];
+  for (const doc of candidateDocs) {
+    const data = doc.data()!;
+    if (
+      data.profileVisibility !== 'public'
+      || data.openToConnections !== true
+      || !active.has(doc.id)
+      || passed.has(doc.id)
+      || alreadyLiked.has(doc.id)
+      || matchedBefore.has(doc.id)
+      || blocked.has(doc.id)
+    ) continue;
+    if (!candidateMatchesPreferences(requesterProfile, data)) continue;
+    const locationSnap = locations.get(doc.id);
+    const candidateLocation = privateCoordinateFromData(locationSnap?.data());
+    if (candidateLocation == null) continue;
+    const candidateLocationUpdatedAt = locationSnap?.get('updatedAt');
+    const candidateLocationAgeMs = candidateLocationUpdatedAt instanceof Timestamp
+      ? Date.now() - candidateLocationUpdatedAt.toMillis()
+      : Number.POSITIVE_INFINITY;
+    if (candidateLocationAgeMs > 30 * 24 * 60 * 60_000) continue;
+    const distance = distanceMiles(requesterLocation, candidateLocation);
+    if (distance > radiusMiles + 1e-9) continue;
+    eligible.push({
+      id: doc.id,
+      distance,
+      profile: toProfileView(doc.id, data),
+    });
+  }
+
+  if (sessionOrder == null) {
+    eligible.sort((first, second) =>
+      first.distance - second.distance || first.id.localeCompare(second.id));
+  } else {
+    const rank = new Map(sessionOrder.map((id, index) => [id, index]));
+    eligible.sort((first, second) =>
+      (rank.get(first.id) ?? Number.MAX_SAFE_INTEGER)
+      - (rank.get(second.id) ?? Number.MAX_SAFE_INTEGER));
+  }
+  return eligible;
+}
+
 async function consumeRateLimit(uid: string, action: string, max: number, windowMs: number) {
   const ref = db.collection('_rate_limits').doc(`${action}_${uid}`);
   const now = Date.now();
@@ -72,125 +217,137 @@ export const getDiscoverCandidates = onCall(
     await assertActive(uid);
     await consumeRateLimit(uid, 'discover', 60, 60_000);
 
-    const requestedLimit = Number(request.data?.limit ?? 20);
-    const limit = Number.isFinite(requestedLimit)
-      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 40)
-      : 20;
-    const [profileSnap, requesterLocationSnap] = await Promise.all([
-      db.collection('profiles').doc(uid).get(),
-      db.collection('member_locations').doc(uid).get(),
-    ]);
-    if (!profileSnap.exists) throw new HttpsError('failed-precondition', 'Complete your profile first.');
-    const requesterProfile = profileSnap.data()!;
-    const radiusMiles = normalizeDiscoveryRadius(requesterProfile.distanceRadius);
-    const requesterLocation = privateCoordinateFromData(requesterLocationSnap.data());
-    const requesterLocationUpdatedAt = requesterLocationSnap.get('updatedAt');
-    const requesterLocationAgeMs = requesterLocationUpdatedAt instanceof Timestamp
-      ? Date.now() - requesterLocationUpdatedAt.toMillis()
-      : Number.POSITIVE_INFINITY;
-    if (requesterLocation == null || requesterLocationAgeMs > 30 * 24 * 60 * 60_000) {
+    const limit = normalizeDiscoverPageLimit(request.data?.limit);
+    const rawCursor = request.data?.cursor;
+    if (rawCursor != null && !isValidDiscoverCursorToken(rawCursor)) {
+      throw new HttpsError('invalid-argument', 'Invalid Discover cursor.');
+    }
+    const cursor = rawCursor == null ? null : rawCursor;
+    const requester = await loadDiscoverRequester(uid);
+    const sessionRef = db.collection('_discover_sessions').doc(uid);
+
+    if (cursor == null) {
+      // This bounded first-release pool keeps every page deterministic without
+      // returning coordinates or trusting client-side distance filtering. A
+      // geospatial index can replace the scan later without changing the
+      // opaque session cursor contract.
+      const profiles = await db.collection('profiles')
+        .where('profileVisibility', '==', 'public')
+        .where('openToConnections', '==', true)
+        .limit(maximumDiscoverCandidatePool)
+        .get();
+      const eligible = await eligibleDiscoverCandidates(
+        uid,
+        requester.profile,
+        requester.location,
+        requester.radiusMiles,
+        profiles.docs,
+      );
+      const page = eligible.slice(0, limit);
+      const hasMore = page.length < eligible.length;
+      let nextCursor: string | null = null;
+
+      if (hasMore) {
+        nextCursor = db.collection('_discover_sessions').doc().id;
+        const now = Date.now();
+        await sessionRef.set({
+          ownerUid: uid,
+          token: nextCursor,
+          radiusMiles: requester.radiusMiles,
+          candidateUids: eligible.map((candidate) => candidate.id),
+          nextIndex: page.length,
+          createdAt: Timestamp.fromMillis(now),
+          expiresAt: Timestamp.fromMillis(now + discoverSessionLifetimeMs),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        // A fresh request always invalidates any older paging session.
+        await sessionRef.delete();
+      }
+
+      return {
+        profiles: page.map((candidate) => candidate.profile),
+        radiusMiles: requester.radiusMiles,
+        nextCursor,
+        hasMore,
+      };
+    }
+
+    const sessionSnap = await sessionRef.get();
+    const sessionToken = sessionSnap.get('token');
+    const sessionOwnerUid = sessionSnap.get('ownerUid');
+    const sessionRadiusMiles = sessionSnap.get('radiusMiles');
+    const sessionExpiresAt = sessionSnap.get('expiresAt');
+    const sessionCandidateUids = uniqueDiscoverCandidateUids(
+      sessionSnap.get('candidateUids'),
+    );
+    const sessionNextIndex = Number(sessionSnap.get('nextIndex'));
+    if (
+      !sessionSnap.exists
+      || sessionOwnerUid !== uid
+      || sessionToken !== cursor
+      || sessionRadiusMiles !== requester.radiusMiles
+      || !(sessionExpiresAt instanceof Timestamp)
+      || sessionExpiresAt.toMillis() <= Date.now()
+      || sessionCandidateUids == null
+      || !Number.isInteger(sessionNextIndex)
+      || sessionNextIndex < 0
+      || sessionNextIndex > sessionCandidateUids.length
+    ) {
       throw new HttpsError(
         'failed-precondition',
-        'Location is required for nearby discovery.',
-        {reason: 'discover-location-required'},
+        'This Discover session has expired. Refresh to explore again.',
+        {reason: 'discover-session-expired'},
       );
     }
 
-    // Scan a bounded pool because private age/structure/intention preferences
-    // are applied in trusted code rather than exposed in client-readable data.
-    const scanLimit = Math.min(Math.max(limit * 4, limit + 20), 120);
-    const profiles = await db.collection('profiles')
-      .where('profileVisibility', '==', 'public')
-      .where('openToConnections', '==', true)
-      .limit(scanLimit)
-      .get();
+    const remainingUids = sessionCandidateUids.slice(sessionNextIndex);
+    const profileRefs = remainingUids.map((id) => db.collection('profiles').doc(id));
+    const profileDocs = profileRefs.length
+      ? await db.getAll(...profileRefs)
+      : [];
+    // Every subsequent page rechecks profile visibility, compliance,
+    // preferences, block/pass/like/match state, fresh private location, and
+    // the requester's still-authoritative saved radius.
+    const stillEligible = await eligibleDiscoverCandidates(
+      uid,
+      requester.profile,
+      requester.location,
+      requester.radiusMiles,
+      profileDocs,
+      remainingUids,
+    );
+    const page = stillEligible.slice(0, limit);
+    const lastReturnedUid = page.length === 0 ? null : page[page.length - 1].id;
+    const nextIndex = lastReturnedUid == null
+      ? sessionCandidateUids.length
+      : sessionCandidateUids.indexOf(lastReturnedUid, sessionNextIndex) + 1;
+    const hasMore = nextIndex < sessionCandidateUids.length;
 
-    const candidateIds = profiles.docs.map((doc) => doc.id).filter((id) => id !== uid);
-    const userRefs = candidateIds.map((id) => db.collection('users').doc(id));
-    const passRefs = candidateIds.map((id) => db.collection('profile_passes').doc(`${uid}_${id}`));
-    const outgoingLikeRefs = candidateIds.map((id) => db.collection('likes').doc(`${uid}_${id}`));
-    const matchRefs = candidateIds.map((id) => db.collection('matches').doc(pairId(uid, id)));
-    const locationRefs = candidateIds.map((id) => db.collection('member_locations').doc(id));
-    const blockRefs = candidateIds.flatMap((id) => [
-      db.collection('blocks').doc(`${uid}_${id}`),
-      db.collection('blocks').doc(`${id}_${uid}`),
-    ]);
-    const [
-      userSnaps,
-      passSnaps,
-      outgoingLikeSnaps,
-      matchSnaps,
-      blockSnaps,
-      locationSnaps,
-    ] = await Promise.all([
-      userRefs.length ? db.getAll(...userRefs) : Promise.resolve([]),
-      passRefs.length ? db.getAll(...passRefs) : Promise.resolve([]),
-      outgoingLikeRefs.length ? db.getAll(...outgoingLikeRefs) : Promise.resolve([]),
-      matchRefs.length ? db.getAll(...matchRefs) : Promise.resolve([]),
-      blockRefs.length ? db.getAll(...blockRefs) : Promise.resolve([]),
-      locationRefs.length ? db.getAll(...locationRefs) : Promise.resolve([]),
-    ]);
-    const active = new Set(userSnaps
-      .filter((snap) => isActiveCompliantMember(snap))
-      .map((snap) => snap.id));
-    const passed = new Set(passSnaps
-      .filter((snap) => snap.exists)
-      .map((snap) => String(snap.get('toUid') ?? ''))
-      .filter((id) => id.length > 0));
-    const alreadyLiked = new Set(outgoingLikeSnaps
-      .filter((snap) => snap.exists)
-      .map((snap) => String(snap.get('toUid') ?? ''))
-      .filter((id) => id.length > 0));
-    const blocked = blockedPeersFromSnapshots(uid, blockSnaps);
-    // A prior match, including an ended match, keeps the pair out of Discover.
-    // Reconnecting after an explicit unmatch needs a future consentful flow
-    // rather than silently resurfacing the same person.
-    const matchedBefore = new Set(matchSnaps
-      .filter((snap) => snap.exists)
-      .map((snap) => {
-        const userAUid = String(snap.get('userAUid') ?? '');
-        const userBUid = String(snap.get('userBUid') ?? '');
-        return userAUid === uid ? userBUid : userAUid;
-      })
-      .filter((id) => id.length > 0));
-
-    const locations = new Map(locationSnaps.map((snap) => [snap.id, snap]));
-    const eligible: Array<{
-      id: string;
-      distance: number;
-      profile: FirebaseFirestore.DocumentData;
-    }> = [];
-    for (const doc of profiles.docs) {
+    await db.runTransaction(async (transaction) => {
+      const latest = await transaction.get(sessionRef);
       if (
-        doc.id === uid
-        || !active.has(doc.id)
-        || passed.has(doc.id)
-        || alreadyLiked.has(doc.id)
-        || matchedBefore.has(doc.id)
-        || blocked.has(doc.id)
-      ) continue;
-      if (!candidateMatchesPreferences(requesterProfile, doc.data())) continue;
-      const locationSnap = locations.get(doc.id);
-      const candidateLocation = privateCoordinateFromData(locationSnap?.data());
-      if (candidateLocation == null) continue;
-      const candidateLocationUpdatedAt = locationSnap?.get('updatedAt');
-      const candidateLocationAgeMs = candidateLocationUpdatedAt instanceof Timestamp
-        ? Date.now() - candidateLocationUpdatedAt.toMillis()
-        : Number.POSITIVE_INFINITY;
-      if (candidateLocationAgeMs > 30 * 24 * 60 * 60_000) continue;
-      const distance = distanceMiles(requesterLocation, candidateLocation);
-      if (distance > radiusMiles + 1e-9) continue;
-      eligible.push({
-        id: doc.id,
-        distance,
-        profile: toProfileView(doc.id, doc.data()),
+        !latest.exists
+        || latest.get('ownerUid') !== uid
+        || latest.get('token') !== cursor
+        || latest.get('nextIndex') !== sessionNextIndex
+      ) {
+        throw new HttpsError(
+          'aborted',
+          'Discover changed while loading. Please continue again.',
+        );
+      }
+      transaction.update(sessionRef, {
+        nextIndex,
+        updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-    eligible.sort((first, second) =>
-      first.distance - second.distance || first.id.localeCompare(second.id));
+    });
+
     return {
-      profiles: eligible.slice(0, limit).map((candidate) => candidate.profile),
-      radiusMiles,
+      profiles: page.map((candidate) => candidate.profile),
+      radiusMiles: requester.radiusMiles,
+      nextCursor: hasMore ? cursor : null,
+      hasMore,
     };
   },
 );
@@ -440,6 +597,7 @@ export const deleteMyAccount = onCall(
         incomingBlocks, privateMedia, grantsOwned, grantsReceived, requestsFrom,
         requestsTo, preferencesAsRecipient, preferencesAsRequester, reportsFrom,
         reportsAgainst, profileMedia,
+        discoverSessionsContainingMember,
       ] = await Promise.all([
         db.collection('relationship_cards').where('ownerUid', '==', uid).get(),
         db.collection('likes').where('fromUid', '==', uid).get(),
@@ -462,6 +620,7 @@ export const deleteMyAccount = onCall(
         db.collection('reports').where('reporterUid', '==', uid).get(),
         db.collection('reports').where('reportedUid', '==', uid).get(),
         db.collection('profile_media').where('ownerUid', '==', uid).get(),
+        db.collection('_discover_sessions').where('candidateUids', 'array-contains', uid).get(),
       ]);
 
       const writer = db.bulkWriter();
@@ -511,9 +670,25 @@ export const deleteMyAccount = onCall(
       }
       for (const doc of reportsFrom.docs) writer.set(doc.ref, {reporterUid: '[deleted]'}, {merge: true});
       for (const doc of reportsAgainst.docs) writer.set(doc.ref, {reportedUid: '[deleted]'}, {merge: true});
+      for (const doc of discoverSessionsContainingMember.docs) {
+        const candidateUids = uniqueDiscoverCandidateUids(doc.get('candidateUids')) ?? [];
+        const rawNextIndex = Number(doc.get('nextIndex'));
+        const nextIndex = Number.isInteger(rawNextIndex)
+          ? Math.min(Math.max(rawNextIndex, 0), candidateUids.length)
+          : 0;
+        const removedIndex = candidateUids.indexOf(uid);
+        writer.update(doc.ref, {
+          candidateUids: candidateUids.filter((candidateUid) => candidateUid !== uid),
+          nextIndex: removedIndex >= 0 && removedIndex < nextIndex
+            ? nextIndex - 1
+            : nextIndex,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       writer.delete(db.collection('profiles').doc(uid));
       writer.delete(db.collection('member_locations').doc(uid));
+      writer.delete(db.collection('_discover_sessions').doc(uid));
       for (const action of [
         'discover', 'discover_location', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
         'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',

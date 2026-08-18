@@ -1,11 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/discovery_options.dart';
 
+const int discoverPageSize = 15;
+
+@immutable
+class DiscoverPage {
+  const DiscoverPage({
+    required this.profiles,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<Map<String, dynamic>> profiles;
+  final String? nextCursor;
+  final bool hasMore;
+}
+
 abstract interface class DiscoverRepository {
-  Future<List<Map<String, dynamic>>> loadCandidates({int limit = 30});
+  Future<DiscoverPage> loadCandidates({
+    int limit = discoverPageSize,
+    String? cursor,
+  });
 
   Future<int> loadDistanceMiles();
 
@@ -26,6 +45,13 @@ class DiscoverLocationRequiredException implements Exception {
   String toString() => 'Nearby discovery needs a current location.';
 }
 
+class DiscoverSessionExpiredException implements Exception {
+  const DiscoverSessionExpiredException();
+
+  @override
+  String toString() => 'This Discover session has expired.';
+}
+
 class DiscoveryService implements DiscoverRepository {
   DiscoveryService({
     FirebaseAuth? auth,
@@ -42,25 +68,50 @@ class DiscoveryService implements DiscoverRepository {
   String? get _uid => _auth.currentUser?.uid;
 
   @override
-  Future<List<Map<String, dynamic>>> loadCandidates({int limit = 30}) async {
-    if (_uid == null) return [];
+  Future<DiscoverPage> loadCandidates({
+    int limit = discoverPageSize,
+    String? cursor,
+  }) async {
+    if (_uid == null) {
+      return const DiscoverPage(
+        profiles: <Map<String, dynamic>>[],
+        nextCursor: null,
+        hasMore: false,
+      );
+    }
 
     try {
       final callable = _functions.httpsCallable('getDiscoverCandidates');
-      final result =
-          await callable.call<Map<String, dynamic>>({'limit': limit});
+      final result = await callable.call<Map<String, dynamic>>({
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      });
       final raw = result.data['profiles'];
-      if (raw is! List) return [];
-      return raw
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList(growable: false);
+      final profiles = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(growable: false)
+          : const <Map<String, dynamic>>[];
+      final rawCursor = result.data['nextCursor'];
+      final nextCursor =
+          rawCursor is String && rawCursor.isNotEmpty ? rawCursor : null;
+      final hasMore = result.data['hasMore'] == true && nextCursor != null;
+      return DiscoverPage(
+        profiles: profiles,
+        nextCursor: nextCursor,
+        hasMore: hasMore,
+      );
     } on FirebaseFunctionsException catch (error) {
       final details = error.details;
       final reason = details is Map ? details['reason'] : null;
       if (error.code == 'failed-precondition' &&
           reason == 'discover-location-required') {
         throw const DiscoverLocationRequiredException();
+      }
+      if (error.code == 'failed-precondition' &&
+          reason == 'discover-session-expired') {
+        throw const DiscoverSessionExpiredException();
       }
       rethrow;
     }

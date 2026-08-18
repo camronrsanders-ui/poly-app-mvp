@@ -50,6 +50,18 @@
 
 `member_locations` is an Admin-SDK-only private collection. Firestore rules deny all direct client reads and writes, including by the document owner. Precise coordinates are accepted only through the App-Check-protected `updateDiscoverLocation` callable, used only by trusted nearby filtering, and never copied into cross-user profile views. Public city/region remains separate in `profiles`.
 
+## _discover_sessions/{uid}
+- ownerUid: string
+- token: opaque random string
+- radiusMiles: integer
+- candidateUids: bounded array<string>
+- nextIndex: integer
+- createdAt: timestamp
+- expiresAt: timestamp
+- updatedAt: timestamp
+
+`_discover_sessions` is an Admin-SDK-only, short-lived paging collection. Rules deny all client access. The opaque token is bound to the authenticated owner, saved radius, and server-held ordered UID pool; neither the stored document nor the client token contains precise coordinates. Starting a fresh session replaces the member's prior document, and account deletion removes the owner session and the deleted UID from other active sessions.
+
 ## relationship_cards/{autoId}
 - ownerUid: string
 - label: string

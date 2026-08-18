@@ -38,11 +38,11 @@ test('profile settings expose the private preferences enforced by discovery', ()
 test('Discover reload keeps setState synchronous after async actions', () => {
   assert.match(
     discover,
-    /void _reload\(\) \{[\s\S]*?if \(!mounted \|\| _locationProblem != null\) return;[\s\S]*?setState\(\(\) \{[\s\S]*?_future = _discovery\.loadCandidates\(\);[\s\S]*?\}\);[\s\S]*?\}/,
+    /void _reload\(\) \{[\s\S]*?if \(!mounted \|\| _locationProblem != null\) return;[\s\S]*?unawaited\(_startFreshSession\(\)\);[\s\S]*?\}/,
   );
   assert.doesNotMatch(
     discover,
-    /void _reload\(\)\s*=>\s*setState\(\(\)\s*=>\s*_future\s*=\s*_discovery\.loadCandidates\(\)\)/,
+    /setState\(\(\)\s*=>\s*_discovery\.loadCandidates/,
     'A Future-returning expression callback makes Flutter throw after a successful Like/Pass.',
   );
 });

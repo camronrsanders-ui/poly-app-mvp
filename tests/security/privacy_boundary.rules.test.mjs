@@ -124,6 +124,28 @@ test('precise member locations are unreadable and unwritable even by their owner
   }));
 });
 
+test('Discover paging sessions are unreadable and unwritable by clients', async () => {
+  await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['_discover_sessions', 'alice', {
+      ownerUid: 'alice',
+      token: 'A1b2C3d4E5f6G7h8I9j0',
+      candidateUids: ['bob'],
+      nextIndex: 0,
+      radiusMiles: 20,
+    }],
+  ]);
+  const alice = env.authenticatedContext('alice').firestore();
+  await assertFails(getDoc(doc(alice, '_discover_sessions', 'alice')));
+  await assertFails(setDoc(doc(alice, '_discover_sessions', 'alice'), {
+    ownerUid: 'alice',
+    token: 'manipulated-cursor',
+    candidateUids: ['blocked-user'],
+    nextIndex: 0,
+    radiusMiles: 100,
+  }));
+});
+
 test('active match is readable only by its active participants', async () => {
   await seed([
     ['users', 'alice', activeUser('alice')],
