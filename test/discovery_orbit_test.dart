@@ -172,6 +172,26 @@ void main() {
     );
 
     expect(find.text('Alex, 30'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('discovery-world-preview')), findsOneWidget);
+    expect(find.text('WORLD PREVIEW'), findsOneWidget);
+
+    final scene = tester.getRect(
+      find.byKey(const ValueKey('discovery-orbit-scene')),
+    );
+    final alexAvatar = find.byKey(const ValueKey('discovery-avatar-alex'));
+    final blairAvatar = find.byKey(const ValueKey('discovery-avatar-blair'));
+    final alexCenter = tester.getCenter(alexAvatar);
+    final blairCenter = tester.getCenter(blairAvatar);
+
+    // A two-person orbit is deliberately balanced across the center instead
+    // of collapsing into a sparse carousel row.
+    expect(alexCenter.dy, greaterThan(scene.center.dy));
+    expect(blairCenter.dy, lessThan(scene.center.dy));
+    expect((alexCenter.dx - scene.center.dx).abs(), lessThan(2));
+    expect((blairCenter.dx - scene.center.dx).abs(), lessThan(2));
+    expect(tester.getSize(alexAvatar).width,
+        greaterThan(tester.getSize(blairAvatar).width));
 
     await _next(tester);
     expect(find.text('Blair, 31'), findsOneWidget);

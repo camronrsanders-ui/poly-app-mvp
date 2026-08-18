@@ -72,8 +72,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final discoverSelected = _index == 0;
+
     return Scaffold(
-      appBar: _index == 2
+      backgroundColor: discoverSelected ? const Color(0xFF05030B) : null,
+      appBar: discoverSelected || _index == 2
           ? null
           : AppBar(
               title: Text(_titles[_index]),
@@ -97,31 +100,107 @@ class _MainShellState extends State<MainShell> {
           growable: false,
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _MainNavigation(
         selectedIndex: _index,
+        immersive: discoverSelected,
         onDestinationSelected: _selectTab,
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Discover'),
-          NavigationDestination(
-              icon: Icon(Icons.people_alt_outlined),
-              selectedIcon: Icon(Icons.people_alt),
-              label: 'Connections'),
-          NavigationDestination(
-              icon: Icon(Icons.hub_outlined),
-              selectedIcon: Icon(Icons.hub),
-              label: 'Circle'),
-          NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline),
-              selectedIcon: Icon(Icons.chat_bubble),
-              label: 'Messages'),
-          NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile'),
-        ],
+      ),
+    );
+  }
+}
+
+class _MainNavigation extends StatelessWidget {
+  const _MainNavigation({
+    required this.selectedIndex,
+    required this.immersive,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final bool immersive;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    const destinations = [
+      NavigationDestination(
+        icon: Icon(Icons.explore_outlined),
+        selectedIcon: Icon(Icons.explore),
+        label: 'Discover',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.people_alt_outlined),
+        selectedIcon: Icon(Icons.people_alt),
+        label: 'Connections',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.hub_outlined),
+        selectedIcon: Icon(Icons.hub),
+        label: 'Circle',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.chat_bubble_outline),
+        selectedIcon: Icon(Icons.chat_bubble),
+        label: 'Messages',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.person_outline),
+        selectedIcon: Icon(Icons.person),
+        label: 'Profile',
+      ),
+    ];
+
+    if (!immersive) {
+      return NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: onDestinationSelected,
+        destinations: destinations,
+      );
+    }
+
+    final baseTheme = Theme.of(context);
+
+    return DecoratedBox(
+      key: const ValueKey('discover-dark-navigation'),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0712),
+        border: Border(
+          top: BorderSide(color: Color(0xFF2B183E)),
+        ),
+      ),
+      child: Theme(
+        data: baseTheme.copyWith(
+          navigationBarTheme: NavigationBarThemeData(
+            height: 72,
+            elevation: 0,
+            backgroundColor: const Color(0xFF0A0712),
+            surfaceTintColor: Colors.transparent,
+            indicatorColor: const Color(0xFF54247E),
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return IconThemeData(
+                color: selected
+                    ? const Color(0xFFF0DFFF)
+                    : const Color(0xFF93889F),
+                size: selected ? 25 : 23,
+              );
+            }),
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return baseTheme.textTheme.labelSmall?.copyWith(
+                color: selected
+                    ? const Color(0xFFF0DFFF)
+                    : const Color(0xFF93889F),
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              );
+            }),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          destinations: destinations,
+        ),
       ),
     );
   }

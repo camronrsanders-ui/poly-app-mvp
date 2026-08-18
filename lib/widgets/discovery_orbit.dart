@@ -392,22 +392,30 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   }
 
   Widget _orbitScene() {
-    final colors = Theme.of(context).colorScheme;
+    final viewport = MediaQuery.sizeOf(context);
+    final sceneHeight = viewport.width <= 340
+        ? 300.0
+        : viewport.height < 760
+            ? 320.0
+            : 356.0;
 
     return RepaintBoundary(
       child: SizedBox(
         key: const ValueKey('discovery-orbit-scene'),
-        height: 310,
+        height: sceneHeight,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final height = constraints.maxHeight;
-            final center = Offset(width / 2, height * 0.43);
-            final radius = math.min(width * 0.42, 150.0);
+            final center = Offset(width / 2, height * 0.44);
+            final radius = math.min(
+              math.min(width * 0.46, height * 0.47),
+              172.0,
+            );
             final projector = _DiscoveryOrbitProjector(
               center: center,
               radius: radius,
-              cameraDistance: radius * 3.2,
+              cameraDistance: radius * 3.05,
               focalLength: radius * 2.82,
               tilt: 0.52,
             );
@@ -470,8 +478,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                         painter: _DiscoveryAtmospherePainter(
                           center: center,
                           radius: radius,
-                          primary: colors.primary,
-                          secondary: colors.secondary,
+                          primary: const Color(0xFF8D43E4),
+                          secondary: const Color(0xFFC98BFF),
                         ),
                       ),
                     ),
@@ -482,16 +490,16 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                         painter: _DiscoveryRailPainter(
                           projector: projector,
                           front: false,
-                          primary: colors.primary,
-                          secondary: colors.secondary,
+                          primary: const Color(0xFF8D43E4),
+                          secondary: const Color(0xFFC98BFF),
                         ),
                       ),
                     ),
                   ),
                   for (final node in backNodes) _candidateNode(node),
                   Positioned(
-                    left: center.dx - 43,
-                    top: center.dy - 43,
+                    left: center.dx - 39,
+                    top: center.dy - 39,
                     child: const _DiscoveryCenter(),
                   ),
                   Positioned.fill(
@@ -500,8 +508,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                         painter: _DiscoveryRailPainter(
                           projector: projector,
                           front: true,
-                          primary: colors.primary,
-                          secondary: colors.secondary,
+                          primary: const Color(0xFF8D43E4),
+                          secondary: const Color(0xFFC98BFF),
                         ),
                       ),
                     ),
@@ -521,16 +529,16 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     final uid = profile['uid']?.toString().trim() ?? '';
     final selected = node.index == _selectedIndex;
     final name = _displayName(profile);
-    final colors = Theme.of(context).colorScheme;
-    final depthScale = (node.perspective * (0.54 + node.depth01 * 0.34))
-        .clamp(0.53, 1.24)
+    final minimumScale = widget.profiles.length <= 2 ? 0.76 : 0.64;
+    final depthScale = (node.perspective * (0.7 + node.depth01 * 0.3))
+        .clamp(minimumScale, 1.22)
         .toDouble();
-    final finalScale = selected ? depthScale * 1.1 : depthScale;
-    const baseSize = 66.0;
+    final finalScale = selected ? depthScale * 1.14 : depthScale;
+    final baseSize = widget.profiles.length <= 2 ? 84.0 : 80.0;
     final size = baseSize * finalScale;
     final opacity = selected
         ? 1.0
-        : (0.34 + node.depth01 * 0.66).clamp(0.0, 1.0).toDouble();
+        : (0.68 + node.depth01 * 0.32).clamp(0.0, 1.0).toDouble();
     final identity = _identity(profile, node.index);
     final avatarKey = uid.isEmpty ? identity : uid;
 
@@ -569,27 +577,33 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                     end: Alignment.bottomRight,
                     colors: [
                       Colors.white.withValues(
-                        alpha: node.depth >= 0 ? 0.95 : 0.58,
+                        alpha: node.depth >= 0 ? 0.96 : 0.74,
                       ),
-                      const Color(0xFF9D70F6),
-                      const Color(0xFF5A1AA5),
+                      const Color(0xFFBE89FF),
+                      const Color(0xFF6F24B9),
                     ],
                   ),
                   border: Border.all(
                     color: selected
-                        ? const Color(0xFFD3B9FF)
-                        : colors.primary.withValues(alpha: 0.42),
-                    width: selected ? 2.8 : 1,
+                        ? const Color(0xFFF0DDFF)
+                        : const Color(0xFFA66ADE).withValues(alpha: 0.72),
+                    width: selected ? 3.2 : 1.2,
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF9C5CFF).withValues(
-                        alpha: selected ? 0.56 : 0.08 + node.depth01 * 0.18,
+                        alpha: selected ? 0.72 : 0.18 + node.depth01 * 0.2,
                       ),
-                      blurRadius: selected ? 30 : 8 + node.depth01 * 14,
-                      spreadRadius: selected ? 4 : 0,
+                      blurRadius: selected ? 34 : 10 + node.depth01 * 16,
+                      spreadRadius: selected ? 5 : 0.5,
                       offset: Offset(0, 3 + node.depth01 * 7),
                     ),
+                    if (selected)
+                      BoxShadow(
+                        color: const Color(0xFFD8B1FF).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
                   ],
                 ),
                 child: ClipOval(
@@ -614,46 +628,69 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
   Widget _orbitControls() {
     final enabled = widget.profiles.length > 1;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Semantics(
-          button: true,
-          label: 'Previous profile',
-          child: IconButton.outlined(
-            key: const ValueKey('discovery-previous-profile'),
-            onPressed: enabled ? () => _moveFocus(-1) : null,
-            icon: const Icon(Icons.arrow_back_rounded),
-            color: Colors.white,
-            disabledColor: Colors.white30,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Semantics(
-          liveRegion: true,
-          excludeSemantics: true,
-          label: 'Profile ${_selectedIndex + 1} of ${widget.profiles.length}',
-          child: Text(
-            '${_selectedIndex + 1}  /  ${widget.profiles.length}',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-              fontFeatures: const [FontFeature.tabularFigures()],
+    return Center(
+      child: Container(
+        key: const ValueKey('discovery-orbit-controls'),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0x99150C20),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFF48285F)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF7135A7).withValues(alpha: 0.14),
+              blurRadius: 18,
             ),
-          ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Semantics(
-          button: true,
-          label: 'Next profile',
-          child: IconButton.outlined(
-            key: const ValueKey('discovery-next-profile'),
-            onPressed: enabled ? () => _moveFocus(1) : null,
-            icon: const Icon(Icons.arrow_forward_rounded),
-            color: Colors.white,
-            disabledColor: Colors.white30,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Semantics(
+              button: true,
+              label: 'Previous profile',
+              child: IconButton(
+                key: const ValueKey('discovery-previous-profile'),
+                tooltip: 'Previous profile',
+                onPressed: enabled ? () => _moveFocus(-1) : null,
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: const Color(0xFFF2E7FF),
+                disabledColor: Colors.white30,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Semantics(
+              liveRegion: true,
+              excludeSemantics: true,
+              label:
+                  'Profile ${_selectedIndex + 1} of ${widget.profiles.length}',
+              child: Text(
+                '${_selectedIndex + 1}  /  ${widget.profiles.length}',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFFD4C5E2),
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Semantics(
+              button: true,
+              label: 'Next profile',
+              child: IconButton(
+                key: const ValueKey('discovery-next-profile'),
+                tooltip: 'Next profile',
+                onPressed: enabled ? () => _moveFocus(1) : null,
+                icon: const Icon(Icons.arrow_forward_rounded),
+                color: const Color(0xFFF2E7FF),
+                disabledColor: Colors.white30,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -683,156 +720,211 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
       container: true,
       label: 'Focused profile details for $name',
       child: Container(
-        key: ValueKey('selected-profile-$uid'),
-        padding: const EdgeInsets.all(18),
+        key: const ValueKey('discovery-world-preview'),
+        padding: const EdgeInsets.all(17),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1025),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFF7245A5)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xE8261735),
+              Color(0xED150D20),
+              Color(0xEB0D0914),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFF70429A)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF5F2199).withValues(alpha: 0.18),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
+              color: const Color(0xFF7C38B8).withValues(alpha: 0.24),
+              blurRadius: 34,
+              spreadRadius: -4,
+              offset: const Offset(0, 14),
+            ),
+            const BoxShadow(
+              color: Color(0x1FDDBBFF),
+              blurRadius: 8,
+              offset: Offset(0, -1),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              age == null ? name : '$name, $age',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: primaryText,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            if (location.isNotEmpty) ...[
-              const SizedBox(height: 4),
+        child: KeyedSubtree(
+          key: ValueKey('selected-profile-$uid'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 16,
-                    color: secondaryText,
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFC891FF),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xAA9C5CFF),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      location,
-                      style: const TextStyle(color: secondaryText),
+                  const SizedBox(width: 8),
+                  Text(
+                    'WORLD PREVIEW',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFFB99CCF),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.45,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              Text(
+                age == null ? name : '$name, $age',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: primaryText,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              if (location.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 16,
+                      color: secondaryText,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        location,
+                        style: const TextStyle(color: secondaryText),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (headline.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  headline,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: primaryText,
+                        height: 1.3,
+                      ),
+                ),
+              ],
+              if (intentions.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: intentions
+                      .map(
+                        (value) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF342047),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(0xFF8658BA),
+                            ),
+                          ),
+                          child: Text(
+                            value,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: const Color(0xFFE8D7FF),
+                                ),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('discovery-enter-profile-world'),
+                  onPressed:
+                      acting ? null : () => widget.onViewProfile(profile),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFF5EAFF),
+                    disabledForegroundColor: Colors.white38,
+                    backgroundColor: const Color(0x662F1843),
+                    side: BorderSide(
+                      color: acting
+                          ? const Color(0xFF44364D)
+                          : const Color(0xFF8050A9),
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: const Icon(Icons.public_outlined),
+                  label: const Text('Enter their profile world'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('discovery-pass'),
+                      onPressed: acting ? null : () => widget.onPass(profile),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFF1E8F8),
+                        disabledForegroundColor: Colors.white38,
+                        side: BorderSide(
+                          color:
+                              acting ? Colors.white24 : const Color(0xFF836B90),
+                        ),
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Pass'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      key: const ValueKey('discovery-connect'),
+                      onPressed: acting ? null : () => widget.onLike(profile),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B3DDA),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF4A3855),
+                        disabledForegroundColor: Colors.white70,
+                        minimumSize: const Size.fromHeight(48),
+                        elevation: acting ? 0 : 3,
+                        shadowColor: const Color(0xFF9B52E5),
+                      ),
+                      icon: acting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white70,
+                              ),
+                            )
+                          : const Icon(Icons.favorite_border_rounded),
+                      label: Text(acting ? 'Working…' : 'Connect'),
                     ),
                   ),
                 ],
               ),
             ],
-            if (headline.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                headline,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: primaryText,
-                      height: 1.3,
-                    ),
-              ),
-            ],
-            if (intentions.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: intentions
-                    .map(
-                      (value) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF342047),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: const Color(0xFF8658BA),
-                          ),
-                        ),
-                        child: Text(
-                          value,
-                          style:
-                              Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: const Color(0xFFE8D7FF),
-                                  ),
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-            ],
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('discovery-enter-profile-world'),
-                onPressed: acting ? null : () => widget.onViewProfile(profile),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B2350),
-                  foregroundColor: const Color(0xFFF5EAFF),
-                  disabledBackgroundColor: const Color(0xFF2B2231),
-                  disabledForegroundColor: Colors.white38,
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                icon: const Icon(Icons.public_outlined),
-                label: const Text('Enter their profile world'),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('discovery-pass'),
-                    onPressed: acting ? null : () => widget.onPass(profile),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFF1E8F8),
-                      disabledForegroundColor: Colors.white38,
-                      side: BorderSide(
-                        color:
-                            acting ? Colors.white24 : const Color(0xFF836B90),
-                      ),
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    icon: const Icon(Icons.close_rounded),
-                    label: const Text('Pass'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton.icon(
-                    key: const ValueKey('discovery-connect'),
-                    onPressed: acting ? null : () => widget.onLike(profile),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF7A35C4),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFF4A3855),
-                      disabledForegroundColor: Colors.white70,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    icon: acting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white70,
-                            ),
-                          )
-                        : const Icon(Icons.favorite_border_rounded),
-                    label: Text(acting ? 'Working…' : 'Connect'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -843,62 +935,43 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
     if (widget.profiles.isEmpty) return const SizedBox.shrink();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Explore your orbit',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+        _orbitScene(),
+        Transform.translate(
+          offset: const Offset(0, -5),
+          child: _orbitControls(),
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Move around the orbit to discover whose world draws you in.',
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 2, 18, 0),
+          child: Text(
+            widget.profiles.length > 1
+                ? 'Drag the orbit or tap a person to change focus.'
+                : 'Tap the focused person to enter their world.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF9E90AA),
+                ),
+          ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 7),
         Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+          width: 1,
+          height: 13,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF0F0718),
-                Color(0xFF190C26),
-                Color(0xFF0B0712),
+                Color(0xFF8A4EBA),
+                Color(0x337C45A6),
               ],
             ),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: const Color(0xFF3B2550)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF542080).withValues(alpha: 0.2),
-                blurRadius: 32,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              _orbitScene(),
-              _orbitControls(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-                child: Text(
-                  widget.profiles.length > 1
-                      ? 'Drag around the path, tap a person, or use the arrows.'
-                      : 'Tap the focused person to enter their world.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white60,
-                      ),
-                ),
-              ),
-            ],
           ),
         ),
-        const SizedBox(height: 16),
-        _selectedCard(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _selectedCard(),
+        ),
       ],
     );
   }
@@ -913,14 +986,14 @@ class _DiscoveryCenter extends StatelessWidget {
       label: 'You are at the center of your discovery orbit',
       child: ExcludeSemantics(
         child: SizedBox(
-          width: 86,
-          height: 86,
+          width: 78,
+          height: 78,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Container(
-                width: 86,
-                height: 86,
+                width: 78,
+                height: 78,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
@@ -933,8 +1006,8 @@ class _DiscoveryCenter extends StatelessWidget {
                 ),
               ),
               Container(
-                width: 68,
-                height: 68,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const RadialGradient(
@@ -961,7 +1034,7 @@ class _DiscoveryCenter extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.auto_awesome,
-                        color: Color(0xFFEBD7FF), size: 19),
+                        color: Color(0xFFEBD7FF), size: 17),
                     SizedBox(height: 2),
                     Text(
                       'YOU',
