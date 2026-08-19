@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#eab308" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Bunt Cakes Game Day Manager</title>
+  <style>
+    :root{--bg:#fffaf0;--card:#ffffff;--text:#1f2937;--muted:#6b7280;--line:#d1d5db;--accent:#eab308;--accent2:#fef3c7;--danger:#dc2626}
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    button,input,select,textarea{font:inherit} button{min-height:46px;border:1px solid var(--line);border-radius:14px;background:#fff;padding:10px 14px}
+    button.primary{background:var(--accent);border-color:var(--accent);font-weight:700} button.danger{color:var(--danger)}
+    .app{max-width:900px;margin:auto;padding:12px 12px 90px}.grid{display:grid;gap:10px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}.muted{color:var(--muted);font-size:.9rem}.big{font-size:2rem;font-weight:800}
+    .tabs{display:flex;gap:8px;overflow:auto;padding-bottom:4px;position:sticky;top:0;background:var(--bg);z-index:5}.tabs button{white-space:nowrap}.tabs .active{background:var(--accent);font-weight:700}
+    .hidden{display:none!important}.field{position:relative;aspect-ratio:1/1;max-width:720px;margin:auto;border:1px solid var(--line);border-radius:24px;background:#eef7e9;overflow:hidden}
+    .diamond{position:absolute;left:50%;top:62%;width:44%;height:44%;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #c8a26a;background:#f7e7c6}
+    .spot{position:absolute;transform:translate(-50%,-50%);width:29%;min-width:90px;text-align:center}.spot>div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px}.spot small{display:block;color:var(--muted)} .spot strong{font-size:.9rem}
+    .row{display:flex;gap:8px;align-items:center;justify-content:space-between}.pill{border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:.85rem;background:white}
+    label{display:block;font-weight:600} select,input,textarea{width:100%;margin-top:5px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px}
+    .score-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.scorebox{text-align:center}.count-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .current{border-color:var(--accent);background:var(--accent2)} .footerbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:8px;display:flex;gap:8px;justify-content:center;z-index:10}
+    .footerbar button{flex:1;max-width:220px}.tiny{font-size:.8rem}.stack{display:grid;gap:8px}
+    @media(max-width:640px){.g3{grid-template-columns:1fr}.score-grid{grid-template-columns:1fr 1fr}.spot{width:32%;min-width:80px}.spot strong{font-size:.8rem}.app{padding-left:8px;padding-right:8px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="row" style="align-items:flex-start">
+    <div><h1 style="margin:.2rem 0">Bunt Cakes Game Day Manager</h1><div class="muted">Built for fast use under game-day stress. No position abbreviations.</div></div>
+    <button id="installButton" class="hidden">Install</button>
+  </div>
+
+  <div class="grid g3" style="margin:12px 0">
+    <div class="card"><div class="muted">Bunt Cakes</div><div class="big" id="topTeamScore">0</div></div>
+    <div class="card"><div class="muted">Opponent</div><div class="big" id="topOpponentScore">0</div></div>
+    <div class="card"><div class="muted">Inning</div><div class="big" id="topInning">1</div></div>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="score" class="active">Scorekeeper</button>
+    <button data-tab="field">Field</button>
+    <button data-tab="kicking">Kicking Order</button>
+    <button data-tab="roster">Roster & Pods</button>
+    <button data-tab="share">Share / Backup</button>
+  </div>
+
+  <section id="tab-score" class="stack" style="margin-top:12px">
+    <div class="score-grid">
+      <div class="card scorebox"><div class="muted">Bunt Cakes score</div><div class="big" id="teamScore">0</div><div class="g2 grid"><button data-score="team" data-delta="-1">Remove run</button><button class="primary" data-score="team" data-delta="1">Add run</button></div></div>
+      <div class="card scorebox"><div class="muted">Opponent score</div><div class="big" id="opponentScore">0</div><div class="g2 grid"><button data-score="opponent" data-delta="-1">Remove run</button><button class="primary" data-score="opponent" data-delta="1">Add run</button></div></div>
+    </div>
+    <div class="card current"><div class="muted">Currently kicking</div><div class="big" id="currentKicker">Cam</div><div>Next kicker: <strong id="nextKicker">CJ</strong></div></div>
+    <div class="count-grid">
+      <div class="card scorebox"><div class="muted">Balls</div><div class="big" id="balls">0</div><button data-count="balls" data-delta="1" class="primary">Add ball</button><button data-count="balls" data-delta="-1">Undo</button></div>
+      <div class="card scorebox"><div class="muted">Fouls</div><div class="big" id="fouls">0</div><button data-count="fouls" data-delta="1" class="primary">Add foul</button><button data-count="fouls" data-delta="-1">Undo</button></div>
+      <div class="card scorebox"><div class="muted">Outs</div><div class="big" id="outs">0</div><button data-count="outs" data-delta="1" class="primary">Add out</button><button data-count="outs" data-delta="-1">Undo</button></div>
+    </div>
+    <div class="g2 grid"><button id="advanceKicker" class="primary">Next kicker + clear balls and fouls</button><button id="clearCount">Clear balls and fouls</button></div>
+    <div class="card grid g2">
+      <label>Current inning<select id="gameInning"></select></label>
+      <label>Half of inning<select id="halfInning"><option>Bunt Cakes kicking</option><option>Bunt Cakes fielding</option></select></label>
+    </div>
+  </section>
+
+  <section id="tab-field" class="stack hidden" style="margin-top:12px">
+    <div class="card grid g2"><label>View inning<select id="fieldInning"></select></label><button id="copyPrevious">Copy previous inning</button></div>
+    <div class="field" id="field"><div class="diamond"></div></div>
+    <div class="card"><strong>Pitcher rotation</strong><div id="pitcherRotation" class="muted" style="margin-top:6px"></div></div>
+    <div class="card"><strong>Players resting this inning</strong><div id="benchList" style="margin-top:6px"></div></div>
+    <div class="card"><strong>Edit positions for this inning</strong><div id="positionEditors" class="grid g2" style="margin-top:10px"></div></div>
+  </section>
+
+  <section id="tab-kicking" class="stack hidden" style="margin-top:12px">
+    <div class="card current"><div class="muted">Currently kicking</div><div class="big" id="kickerCurrent2"></div><div>Next kicker: <strong id="kickerNext2"></strong></div></div>
+    <div class="g3 grid"><button id="previousKicker">Previous kicker</button><button id="nextKickerButton" class="primary">Next kicker</button><button id="resetKicker">Return to first kicker</button></div>
+    <div id="kickingList" class="stack"></div>
+  </section>
+
+  <section id="tab-roster" class="stack hidden" style="margin-top:12px">
+    <div class="card"><div class="row"><strong>Roster</strong><button id="addPlayer" class="primary">Add player</button></div><div id="rosterList" class="stack" style="margin-top:10px"></div></div>
+    <div class="card"><strong>Pods</strong><div class="muted">Edit pod names and membership any time. Pods are planning groups, not permanent locks.</div><div id="podsList" class="stack" style="margin-top:10px"></div><button id="addPod" style="margin-top:10px">Add pod</button></div>
+  </section>
+
+  <section id="tab-share" class="stack hidden" style="margin-top:12px">
+    <div class="card"><strong>Share this game setup</strong><p class="muted">Creates a link containing the current roster, pods, positions, score, kicking order, and attendance. Anyone opening it gets a copy of the current state on their device.</p><button id="shareState" class="primary">Create / share team link</button><textarea id="shareOutput" rows="5" readonly placeholder="Share link appears here"></textarea></div>
+    <div class="card"><strong>Backup / move to another phone</strong><div class="g2 grid" style="margin-top:10px"><button id="exportData">Export backup file</button><label style="font-weight:400">Import backup file<input id="importData" type="file" accept=".json,application/json"></label></div></div>
+    <div class="card"><strong>Important</strong><div class="muted">This first version works offline and can be installed on a phone. Shared links create a copy of the game state; they do not live-sync edits between phones yet. Live captain-to-team synchronization can be added later with a small cloud database.</div></div>
+  </section>
+</div>
+
+<div class="footerbar"><button id="quickField">Field</button><button id="quickScore" class="primary">Scorekeeper</button><button id="quickKicking">Kicking</button></div>
+
+<script>
+const POSITION_NAMES=['Pitcher','Catcher','First Base','Second Base','Third Base','Shortstop','Left Field','Left Center Field','Center Field','Right Center Field','Right Field'];
+const initialPlayers=[
+ {id:crypto.randomUUID(),name:'Cam',present:true,preferences:['Pitcher','Third Base'],role:'Captain'},
+ {id:crypto.randomUUID(),name:'CJ',present:true,preferences:['Catcher'],role:'Co-Captain'},
+ {id:crypto.randomUUID(),name:'Steve',present:true,preferences:['Shortstop','First Base','Second Base','Third Base','Pitcher'],role:''},
+ {id:crypto.randomUUID(),name:'Rafael',present:true,preferences:['Shortstop'],role:''},
+ {id:crypto.randomUUID(),name:'Ben',present:true,preferences:['Second Base'],role:''},
+ {id:crypto.randomUUID(),name:'Rizzi',present:true,preferences:['First Base'],role:''},
+ {id:crypto.randomUUID(),name:'David',present:true,preferences:['Third Base','First Base','Left Field'],role:''},
+ {id:crypto.randomUUID(),name:'Ashton',present:true,preferences:[],role:''},
+ {id:crypto.randomUUID(),name:'PJ',present:true,preferences:['Left Field','Left Center Field'],role:''},
+ {id:crypto.randomUUID(),name:'Matt',present:true,preferences:['Left Field','Left Center Field','Center Field','Right Center Field','Right Field'],role:''},
+ {id:crypto.randomUUID(),name:'JT',present:true,preferences:['Left Field','Left Center Field','Center Field','Right Center Field','Right Field'],role:''},
+ {id:crypto.randomUUID(),name:'Chris',present:true,preferences:['Catcher','Left Field','Right Field'],role:''},
+ {id:crypto.randomUUID(),name:'Mike',present:true,preferences:[],role:''}
+];
+const defaultPods=[
+ {id:crypto.randomUUID(),name:'Pitcher Pool',members:['Cam','Steve']},
+ {id:crypto.randomUUID(),name:'Middle Infield Pod',members:['Steve','Rafael','Ben']},
+ {id:crypto.randomUUID(),name:'Corner Infield Pod',members:['Rizzi','David','Ashton']},
+ {id:crypto.randomUUID(),name:'Left Outfield Pod',members:['PJ','Matt','JT']}
+];
+const defaultLineup={'Pitcher':'Cam','Catcher':'CJ','First Base':'Rizzi','Second Base':'Ben','Third Base':'David','Shortstop':'Steve','Left Field':'PJ','Left Center Field':'Matt','Center Field':'JT','Right Center Field':'Ashton','Right Field':'Chris'};
+function defaultState(){const innings={};for(let i=1;i<=7;i++)innings[i]={...defaultLineup};innings[2]={...defaultLineup,'Pitcher':'Steve','Third Base':'Cam','Shortstop':'Rafael','Left Field':'JT','Left Center Field':'PJ','Center Field':'Matt','Right Center Field':'Mike'};innings[3]={...defaultLineup,'Pitcher':'Cam','First Base':'David','Third Base':'Ashton','Second Base':'Rafael','Left Field':'Matt','Left Center Field':'JT','Center Field':'PJ'};return {players:initialPlayers,pods:defaultPods,innings,score:{team:0,opponent:0},counts:{balls:0,fouls:0,outs:0},gameInning:1,fieldInning:1,half:'Bunt Cakes kicking',kickingOrder:initialPlayers.map(p=>p.name),kickerIndex:0}}
+let state=loadState();
+function loadState(){try{if(location.hash.startsWith('#state=')){const obj=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(7)))));localStorage.setItem('buntcakes-state',JSON.stringify(obj));history.replaceState(null,'',location.pathname+location.search);return obj}const saved=localStorage.getItem('buntcakes-state');return saved?JSON.parse(saved):defaultState()}catch(e){return defaultState()}}
+function save(){localStorage.setItem('buntcakes-state',JSON.stringify(state));renderTop()}
+const $=id=>document.getElementById(id);const presentNames=()=>state.players.filter(p=>p.present).map(p=>p.name);
+function setupInningSelects(){['gameInning','fieldInning'].forEach(id=>{const s=$(id);s.innerHTML='';for(let i=1;i<=7;i++){const o=document.createElement('option');o.value=i;o.textContent='Inning '+i;s.appendChild(o)}})}
+function renderTop(){$('topTeamScore').textContent=state.score.team;$('topOpponentScore').textContent=state.score.opponent;$('topInning').textContent=state.gameInning}
+function renderScore(){$('teamScore').textContent=state.score.team;$('opponentScore').textContent=state.score.opponent;$('balls').textContent=state.counts.balls;$('fouls').textContent=state.counts.fouls;$('outs').textContent=state.counts.outs;$('gameInning').value=state.gameInning;$('halfInning').value=state.half;renderKickerSummary();renderTop()}
+function activeKicking(){const p=new Set(presentNames());return state.kickingOrder.filter(n=>p.has(n))}
+function renderKickerSummary(){const a=activeKicking();if(!a.length)return;state.kickerIndex=((state.kickerIndex%a.length)+a.length)%a.length;const c=a[state.kickerIndex],n=a[(state.kickerIndex+1)%a.length];$('currentKicker').textContent=c;$('nextKicker').textContent=n;$('kickerCurrent2').textContent=c;$('kickerNext2').textContent=n}
+function advanceKicker(clear=true){const a=activeKicking();if(a.length)state.kickerIndex=(state.kickerIndex+1)%a.length;if(clear){state.counts.balls=0;state.counts.fouls=0}save();renderAll()}
+function renderField(){$('fieldInning').value=state.fieldInning;const field=$('field');field.querySelectorAll('.spot').forEach(x=>x.remove());const coords={'Catcher':[50,91],'Pitcher':[50,70],'First Base':[76,62],'Second Base':[62,51],'Third Base':[24,62],'Shortstop':[38,51],'Left Field':[14,30],'Left Center Field':[32,21],'Center Field':[50,15],'Right Center Field':[68,21],'Right Field':[86,30]};POSITION_NAMES.forEach(pos=>{const [x,y]=coords[pos],name=state.innings[state.fieldInning][pos]||'Unassigned';const d=document.createElement('div');d.className='spot';d.style.left=x+'%';d.style.top=y+'%';d.innerHTML='<div><small>'+pos+'</small><strong>'+name+'</strong></div>';field.appendChild(d)});$('pitcherRotation').textContent=Array.from({length:7},(_,i)=>'Inning '+(i+1)+': '+(state.innings[i+1]?.Pitcher||'Unassigned')).join(' • ');const active=Object.values(state.innings[state.fieldInning]||{}),bench=presentNames().filter(n=>!active.includes(n));$('benchList').textContent=bench.length?bench.join(' • '):'No one is resting.';const ed=$('positionEditors');ed.innerHTML='';POSITION_NAMES.forEach(pos=>{const label=document.createElement('label');label.textContent=pos;const s=document.createElement('select');state.players.forEach(p=>{const o=document.createElement('option');o.value=p.name;o.textContent=p.name+(p.present?'':' — absent');o.selected=state.innings[state.fieldInning][pos]===p.name;if(pos==='Shortstop'&&p.name==='CJ')o.disabled=true;s.appendChild(o)});s.addEventListener('change',()=>{state.innings[state.fieldInning][pos]=s.value;save();renderField()});label.appendChild(s);ed.appendChild(label)})}
+function renderKicking(){renderKickerSummary();const list=$('kickingList');list.innerHTML='';const active=activeKicking();state.kickingOrder.forEach((name,i)=>{const current=active.indexOf(name)===state.kickerIndex&&presentNames().includes(name);const d=document.createElement('div');d.className='card row'+(current?' current':'');const left=document.createElement('div');left.innerHTML='<strong>'+(i+1)+'. '+name+'</strong><div class="muted">'+(presentNames().includes(name)?(current?'Currently kicking':'Ready'):'Absent — skipped automatically')+'</div>';const ctr=document.createElement('div');const up=document.createElement('button');up.textContent='Move up';up.disabled=i===0;const dn=document.createElement('button');dn.textContent='Move down';dn.disabled=i===state.kickingOrder.length-1;up.onclick=()=>moveKicker(i,-1);dn.onclick=()=>moveKicker(i,1);ctr.append(up,dn);d.append(left,ctr);list.appendChild(d)})}
+function moveKicker(i,d){const j=i+d;if(j<0||j>=state.kickingOrder.length)return;[state.kickingOrder[i],state.kickingOrder[j]]=[state.kickingOrder[j],state.kickingOrder[i]];state.kickerIndex=0;save();renderKicking()}
+function renderRoster(){const list=$('rosterList');list.innerHTML='';state.players.forEach((p,idx)=>{const d=document.createElement('div');d.className='card';d.innerHTML='<div class="row"><strong>'+p.name+'</strong><span class="pill">'+(p.role||'Player')+'</span></div>';const grid=document.createElement('div');grid.className='grid g2';grid.style.marginTop='8px';const name=document.createElement('input');name.value=p.name;name.placeholder='Player name';const role=document.createElement('input');role.value=p.role||'';role.placeholder='Role, for example Captain';const pref=document.createElement('input');pref.value=(p.preferences||[]).join(', ');pref.placeholder='Preferred positions, comma separated';const attendance=document.createElement('button');attendance.textContent=p.present?'Present today':'Absent today';attendance.className=p.present?'primary':'';attendance.onclick=()=>{p.present=!p.present;save();renderAll()};const remove=document.createElement('button');remove.textContent='Remove player';remove.className='danger';remove.onclick=()=>{if(confirm('Remove '+p.name+' from the roster?')){const old=p.name;state.players.splice(idx,1);state.kickingOrder=state.kickingOrder.filter(n=>n!==old);Object.values(state.innings).forEach(inn=>Object.keys(inn).forEach(k=>{if(inn[k]===old)inn[k]='Unassigned'}));state.pods.forEach(pd=>pd.members=pd.members.filter(n=>n!==old));save();renderAll()}};name.onchange=()=>renamePlayer(idx,name.value.trim());role.onchange=()=>{p.role=role.value.trim();save()};pref.onchange=()=>{p.preferences=pref.value.split(',').map(x=>x.trim()).filter(Boolean);save()};grid.append(name,role,pref,attendance,remove);d.appendChild(grid);list.appendChild(d)})}
+function renamePlayer(idx,newName){if(!newName||state.players.some((p,i)=>i!==idx&&p.name===newName))return;const old=state.players[idx].name;state.players[idx].name=newName;state.kickingOrder=state.kickingOrder.map(n=>n===old?newName:n);Object.values(state.innings).forEach(inn=>Object.keys(inn).forEach(k=>{if(inn[k]===old)inn[k]=newName}));state.pods.forEach(pd=>pd.members=pd.members.map(n=>n===old?newName:n));save();renderAll()}
+function renderPods(){const list=$('podsList');list.innerHTML='';state.pods.forEach((pod,idx)=>{const d=document.createElement('div');d.className='card';const name=document.createElement('input');name.value=pod.name;name.onchange=()=>{pod.name=name.value.trim()||'Unnamed Pod';save()};const member=document.createElement('select');const available=state.players.map(p=>p.name).filter(n=>!pod.members.includes(n));member.innerHTML='<option value="">Add player to pod</option>'+available.map(n=>'<option>'+n+'</option>').join('');member.onchange=()=>{if(member.value){pod.members.push(member.value);save();renderPods()}};const chips=document.createElement('div');chips.className='row';chips.style.flexWrap='wrap';pod.members.forEach(n=>{const b=document.createElement('button');b.textContent=n+' ×';b.onclick=()=>{pod.members=pod.members.filter(x=>x!==n);save();renderPods()};chips.appendChild(b)});const remove=document.createElement('button');remove.textContent='Delete pod';remove.className='danger';remove.onclick=()=>{state.pods.splice(idx,1);save();renderPods()};d.append(name,chips,member,remove);list.appendChild(d)})}
+function renderAll(){renderScore();renderField();renderKicking();renderRoster();renderPods()}
+function switchTab(name){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('section[id^="tab-"]').forEach(s=>s.classList.add('hidden'));$('tab-'+name).classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));document.querySelectorAll('[data-score]').forEach(b=>b.onclick=()=>{const k=b.dataset.score;state.score[k]=Math.max(0,state.score[k]+Number(b.dataset.delta));save();renderScore()});document.querySelectorAll('[data-count]').forEach(b=>b.onclick=()=>{const k=b.dataset.count;state.counts[k]=Math.max(0,state.counts[k]+Number(b.dataset.delta));save();renderScore()});$('advanceKicker').onclick=()=>advanceKicker(true);$('clearCount').onclick=()=>{state.counts.balls=0;state.counts.fouls=0;save();renderScore()};$('gameInning').onchange=e=>{state.gameInning=Number(e.target.value);save();renderScore()};$('halfInning').onchange=e=>{state.half=e.target.value;save()};$('fieldInning').onchange=e=>{state.fieldInning=Number(e.target.value);save();renderField()};$('copyPrevious').onclick=()=>{if(state.fieldInning>1){state.innings[state.fieldInning]={...state.innings[state.fieldInning-1]};save();renderField()}};$('previousKicker').onclick=()=>{const a=activeKicking();if(a.length)state.kickerIndex=(state.kickerIndex-1+a.length)%a.length;save();renderAll()};$('nextKickerButton').onclick=()=>advanceKicker(false);$('resetKicker').onclick=()=>{state.kickerIndex=0;save();renderAll()};$('addPlayer').onclick=()=>{let name=prompt('Player name');name=(name||'').trim();if(!name||state.players.some(p=>p.name===name))return;state.players.push({id:crypto.randomUUID(),name,present:true,preferences:[],role:''});state.kickingOrder.push(name);save();renderAll()};$('addPod').onclick=()=>{state.pods.push({id:crypto.randomUUID(),name:'New Pod',members:[]});save();renderPods()};$('quickField').onclick=()=>switchTab('field');$('quickScore').onclick=()=>switchTab('score');$('quickKicking').onclick=()=>switchTab('kicking');$('shareState').onclick=async()=>{const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(state))));const url=location.origin+location.pathname+'#state='+encoded;$('shareOutput').value=url;try{if(navigator.share)await navigator.share({title:'Bunt Cakes Game Day',url});else await navigator.clipboard.writeText(url)}catch(e){}};$('exportData').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='bunt-cakes-game-day-backup.json';a.click();URL.revokeObjectURL(a.href)};$('importData').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{state=JSON.parse(await f.text());save();renderAll();alert('Backup imported.')}catch(err){alert('That backup file could not be read.')}};let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('installButton').classList.remove('hidden')});$('installButton').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('installButton').classList.add('hidden')}};if('serviceWorker' in navigator)navigator.serviceWorker.register('service-worker.js');setupInningSelects();renderAll();
+</script>
+</body>
+</html>
