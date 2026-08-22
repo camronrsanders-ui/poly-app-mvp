@@ -24,6 +24,8 @@ jobs:
           flutter pub get
           dart format lib/screens/messages/chat_screen.dart
           dart format --output=none --set-exit-if-changed lib test
+          git restore -- pubspec.lock
+          git diff --name-only
           changed="$(git diff --name-only)"
           test "$changed" = "lib/screens/messages/chat_screen.dart"
           git rm .github/workflows/temp-dart-format-repair.yml
