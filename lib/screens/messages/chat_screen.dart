@@ -318,8 +318,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               : Alignment.centerLeft,
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth:
-                                  MediaQuery.sizeOf(context).width * 0.78,
+                              maxWidth: MediaQuery.sizeOf(context).width * 0.78,
                             ),
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
