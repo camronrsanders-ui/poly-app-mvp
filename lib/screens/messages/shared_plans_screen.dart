@@ -412,9 +412,12 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                                   PopupMenuButton<String>(
                                     tooltip: 'Plan options',
                                     onSelected: (value) {
-                                      if (value == 'edit')
+                                      if (value == 'edit') {
                                         _editPlan(plan: plan);
-                                      if (value == 'cancel') _cancel(plan);
+                                      }
+                                      if (value == 'cancel') {
+                                        _cancel(plan);
+                                      }
                                     },
                                     itemBuilder: (_) => const [
                                       PopupMenuItem(
