@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../config/feature_flags.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
+import '../../services/shared_moments_service.dart';
 import '../../services/ugc_text_policy.dart';
 import '../../widgets/conversation_space_header.dart';
 import 'shared_moments_screen.dart';
@@ -30,7 +31,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _messages = MessagingService();
   final _safety = SafetyService();
+  final _sharedMoments = SharedMomentsService();
   final Set<String> _readUpdatesInFlight = {};
+  final Set<String> _momentSavesInFlight = {};
   bool _sending = false;
 
   @override
@@ -73,6 +76,121 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveMessageAsMoment(String messageId) async {
+    final note = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save to Shared Moments?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This saves a reference to the message, not a copy of its text. If the original message becomes unavailable, its text is not preserved here.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: note,
+                minLines: 2,
+                maxLines: 4,
+                maxLength: 1200,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Add a note (optional)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save message'),
+          ),
+        ],
+      ),
+    );
+    final noteText = note.text.trim();
+    note.dispose();
+    if (submitted != true || !_momentSavesInFlight.add(messageId)) return;
+
+    try {
+      await _sharedMoments.saveMessage(
+        conversationId: widget.conversationId,
+        sourceMessageId: messageId,
+        note: noteText,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saved to Shared Moments.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Shared Moments are not available to save yet.'),
+          ),
+        );
+      }
+    } finally {
+      _momentSavesInFlight.remove(messageId);
+    }
+  }
+
+  Future<void> _showMessageActions({
+    required String messageId,
+    required bool isMine,
+  }) async {
+    if (!FeatureFlags.sharedMomentsEnabled) {
+      if (!isMine) {
+        await _report(messageId: messageId);
+      }
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('message-action-save-moment'),
+                leading: const Icon(Icons.bookmark_add_outlined),
+                title: const Text('Save to Shared Moments'),
+                subtitle: const Text('Keep a reference to this message.'),
+                onTap: () => Navigator.pop(context, 'save'),
+              ),
+              if (!isMine)
+                ListTile(
+                  key: const Key('message-action-report'),
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Report message'),
+                  onTap: () => Navigator.pop(context, 'report'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'save') {
+      await _saveMessageAsMoment(messageId);
+    }
+    if (action == 'report') {
+      await _report(messageId: messageId);
+    }
   }
 
   Future<void> _send() async {
@@ -347,9 +465,15 @@ class _ChatScreenState extends State<ChatScreen> {
                             List<String>.from(data['readBy'] ?? const []);
                         _queueMarkRead(doc.id, readBy, uid);
                       }
+                      final canLongPress =
+                          !isDeleted &&
+                          (FeatureFlags.sharedMomentsEnabled || !isMine);
                       return GestureDetector(
-                        onLongPress: !isMine && !isDeleted
-                            ? () => _report(messageId: doc.id)
+                        onLongPress: canLongPress
+                            ? () => _showMessageActions(
+                                messageId: doc.id,
+                                isMine: isMine,
+                              )
                             : null,
                         child: Align(
                           alignment: isMine
