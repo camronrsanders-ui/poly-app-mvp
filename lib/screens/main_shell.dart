@@ -36,7 +36,7 @@ class _MainShellState extends State<MainShell> {
   Widget _buildPage(int index) {
     return switch (index) {
       0 => const DiscoverScreen(),
-      1 => const ConnectionsScreen(),
+      1 => ConnectionsScreen(onFindPeople: () => _selectTab(0)),
       2 => const MyCircleScreen(),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
@@ -73,10 +73,11 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final discoverSelected = _index == 0;
+    final ownsItsHeader = discoverSelected || _index == 1 || _index == 2;
 
     return Scaffold(
       backgroundColor: discoverSelected ? const Color(0xFF05030B) : null,
-      appBar: discoverSelected || _index == 2
+      appBar: ownsItsHeader
           ? null
           : AppBar(
               title: Text(_titles[_index]),
