@@ -86,3 +86,12 @@ test('plan date and time display follows the member locale', () => {
   );
   assert.doesNotMatch(plansScreen, /const months = \[/);
 });
+
+test('plan cards identify the creator without adding identity fields', () => {
+  assert.match(service, /final String creatorUid/);
+  assert.match(plansScreen, /plan\.creatorUid\.isEmpty/);
+  assert.match(plansScreen, /Planned in this conversation/);
+  assert.match(plansScreen, /Planned by you/);
+  assert.match(plansScreen, /Planned by \$\{widget\.otherDisplayName\}/);
+  assert.doesNotMatch(service, /creatorDisplayName/);
+});

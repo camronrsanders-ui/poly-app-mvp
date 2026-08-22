@@ -65,6 +65,15 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
     return '$date • $time';
   }
 
+  String _plannedByLabel(SharedPlan plan, String? uid) {
+    if (uid == null || plan.creatorUid.isEmpty) {
+      return 'Planned in this conversation';
+    }
+    return plan.creatorUid == uid
+        ? 'Planned by you'
+        : 'Planned by ${widget.otherDisplayName}';
+  }
+
   Future<DateTime?> _pickDateTime(DateTime initial) async {
     final now = DateTime.now();
     final firstDate = DateTime(now.year, now.month, now.day);
@@ -392,6 +401,13 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                                         const SizedBox(height: 4),
                                         Text(_formatDateTime(context, date)),
                                       ],
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _plannedByLabel(plan, uid),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall,
+                                      ),
                                     ],
                                   ),
                                 ),
