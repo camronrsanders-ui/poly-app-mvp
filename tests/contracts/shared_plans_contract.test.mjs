@@ -103,7 +103,7 @@ test('cancelled plan history uses the trusted server cancellation timestamp', ()
   assert.match(plansScreen, /final millis = plan\.cancelledAtMs/);
   assert.match(
     plansScreen,
-    /MaterialLocalizations\.of\(context\)\.formatMediumDate\(cancelledAt\)/,
+    /MaterialLocalizations\.of\(\s*context,?\s*\)\.formatMediumDate\(cancelledAt\)/,
   );
   assert.match(plansScreen, /return 'Cancelled • \$date'/);
   assert.match(plansScreen, /if \(cancelledAt == null\) return 'Cancelled'/);
