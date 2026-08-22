@@ -30,6 +30,17 @@ Preserve accessibility, privacy, consent boundaries, and a runnable app througho
 - Do not merge or cherry-pick `safety/local-circle-work-2026-08-18` without explicit instruction.
 - Prefer small, reviewable commits.
 
+## Android / iOS parity
+- Polycircle is one Flutter product; do not treat Android and iOS as separate feature implementations.
+- `restart-foundation` is the source of truth for both platforms.
+- Shared behavior belongs in Flutter unless a native OS API genuinely requires platform-specific host code.
+- Whenever Android- or iOS-specific behavior changes, inspect the corresponding implementation on the other platform before calling the work complete.
+- Keep Flutter-facing native channel names, payload shapes, security boundaries, app identity, Firebase expectations, permissions, and user-visible behavior compatible across both platforms unless a deliberate documented OS difference requires otherwise.
+- After native-facing or shared product changes, require both the Android debug APK build and iOS simulator build to pass in CI.
+- Keep `tests/contracts/native_platform_parity_contract.test.mjs` passing and extend it when new cross-platform native behavior is added; never weaken it just to land a one-platform change.
+- Real-device validation on both Android and iOS remains a separate external-beta release gate.
+- See `docs/platform-parity.md` for the maintained parity checklist and consolidation history.
+
 ## Private Vault
 - Flutter `privateVaultEnabled` must remain `false`.
 - Backend `privateVaultServerEnabled` must remain `false`.
