@@ -4,6 +4,8 @@ import 'package:polycircle/config/feature_flags.dart';
 void main() {
   test('sensitive and future features remain disabled by default', () {
     expect(FeatureFlags.privateVaultEnabled, isFalse);
+    expect(FeatureFlags.sharedMomentsEnabled, isFalse);
+    expect(FeatureFlags.sharedPlansEnabled, isFalse);
     expect(FeatureFlags.visualPolyculeGraphEnabled, isFalse);
     expect(FeatureFlags.aiCompatibilityEnabled, isFalse);
   });
