@@ -56,7 +56,7 @@ test('saved date comes from the moment timestamp instead of the current clock', 
   );
   assert.match(
     screen,
-    /MaterialLocalizations\.of\(context\)\.formatMediumDate\(savedAt\)/,
+    /MaterialLocalizations\.of\(\s*context,\s*\)\.formatMediumDate\(savedAt\)/,
   );
   assert.doesNotMatch(screen, /DateTime\.now\(\)/);
 });

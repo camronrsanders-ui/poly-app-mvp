@@ -267,7 +267,9 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
     if (createdAtMs == null) return savedBy;
 
     final savedAt = DateTime.fromMillisecondsSinceEpoch(createdAtMs).toLocal();
-    final savedDate = MaterialLocalizations.of(context).formatMediumDate(savedAt);
+    final savedDate = MaterialLocalizations.of(
+      context,
+    ).formatMediumDate(savedAt);
     return '$savedBy · $savedDate';
   }
 
