@@ -1,0 +1,32 @@
+name: Temporary Dart Format Repair
+
+on:
+  push:
+    branches:
+      - restart-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.head_commit.message == 'chore(messages): stage formatter repair'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: restart-foundation
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply canonical Dart formatting
+        run: dart format lib/screens/messages/shared_moments_screen.dart lib/screens/messages/shared_plans_screen.dart
+      - name: Remove temporary workflow and commit formatter output
+        run: |
+          git rm .github/workflows/temp-dart-format-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/messages/shared_moments_screen.dart lib/screens/messages/shared_plans_screen.dart
+          git commit -m "style(messages): apply Dart formatting"
+          git push origin HEAD:restart-foundation

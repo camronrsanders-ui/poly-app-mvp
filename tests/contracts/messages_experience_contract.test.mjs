@@ -8,6 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 const chat = read('lib/screens/messages/chat_screen.dart');
 const header = read('lib/widgets/conversation_space_header.dart');
+const flags = read('lib/config/feature_flags.dart');
 
 test('Conversation Space keeps relationship identity compact and inside the app bar', () => {
   assert.match(chat, /title:\s*ConversationSpaceHeader\(/);
@@ -28,10 +29,16 @@ test('Conversation Space preserves authoritative messaging and safety controls',
   assert.match(chat, /conversation-message-composer/);
 });
 
-test('Moments and Plans stay absent until trusted lifecycle support exists', () => {
-  const visibleUi = `${chat}\n${header}`;
-  assert.doesNotMatch(visibleUi, /Shared Moments/i);
-  assert.doesNotMatch(visibleUi, /Save (?:a )?moment/i);
-  assert.doesNotMatch(visibleUi, /Make (?:a )?plan/i);
-  assert.doesNotMatch(visibleUi, /Plans?\s*(?:button|tab|sheet)/i);
+test('Moments and Plans remain hidden until their explicit client gates are enabled', () => {
+  assert.match(flags, /sharedMomentsEnabled = false/);
+  assert.match(flags, /sharedPlansEnabled = false/);
+  assert.match(
+    chat,
+    /if \(FeatureFlags\.sharedMomentsEnabled\)[\s\S]{0,220}conversation-shared-moments/,
+  );
+  assert.match(
+    chat,
+    /if \(FeatureFlags\.sharedPlansEnabled\)[\s\S]{0,220}conversation-shared-plans/,
+  );
+  assert.doesNotMatch(header, /Shared Moments|Save (?:a )?moment|Make (?:a )?plan/i);
 });
