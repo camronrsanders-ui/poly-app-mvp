@@ -42,7 +42,9 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
       _error = null;
     });
     try {
-      final moments = await _service.list(conversationId: widget.conversationId);
+      final moments = await _service.list(
+        conversationId: widget.conversationId,
+      );
       if (!mounted) return;
       setState(() => _moments = moments);
     } catch (_) {
@@ -235,7 +237,9 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not remove this moment right now.')),
+          const SnackBar(
+            content: Text('Could not remove this moment right now.'),
+          ),
         );
       }
     }
@@ -351,40 +355,44 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final moment = _moments[index];
-                      final supporting = _supportingText(moment);
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == _moments.length - 1 ? 0 : 10,
-                        ),
-                        child: Card(
-                          child: ListTile(
-                            contentPadding:
-                                const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                            leading:
-                                CircleAvatar(child: Icon(_iconFor(moment.kind))),
-                            title: Text(moment.title),
-                            subtitle: supporting.isEmpty
-                                ? null
-                                : Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(supporting),
-                                  ),
-                            trailing: uid != null && moment.creatorUid == uid
-                                ? IconButton(
-                                    onPressed: () => _delete(moment),
-                                    tooltip: 'Remove shared moment',
-                                    icon: const Icon(Icons.delete_outline_rounded),
-                                  )
-                                : null,
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final moment = _moments[index];
+                    final supporting = _supportingText(moment);
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == _moments.length - 1 ? 0 : 10,
+                      ),
+                      child: Card(
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            10,
+                            8,
+                            10,
                           ),
+                          leading: CircleAvatar(
+                            child: Icon(_iconFor(moment.kind)),
+                          ),
+                          title: Text(moment.title),
+                          subtitle: supporting.isEmpty
+                              ? null
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(supporting),
+                                ),
+                          trailing: uid != null && moment.creatorUid == uid
+                              ? IconButton(
+                                  onPressed: () => _delete(moment),
+                                  tooltip: 'Remove shared moment',
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                  ),
+                                )
+                              : null,
                         ),
-                      );
-                    },
-                    childCount: _moments.length,
-                  ),
+                      ),
+                    );
+                  }, childCount: _moments.length),
                 ),
               ),
           ],

@@ -158,7 +158,9 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                   maxLines: 5,
                   maxLength: 1200,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Note (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                  ),
                 ),
               ],
             ),
@@ -264,7 +266,9 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not cancel this plan right now.')),
+          const SnackBar(
+            content: Text('Could not cancel this plan right now.'),
+          ),
         );
       }
     }
@@ -383,7 +387,8 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         plan.title,
@@ -407,7 +412,8 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                                   PopupMenuButton<String>(
                                     tooltip: 'Plan options',
                                     onSelected: (value) {
-                                      if (value == 'edit') _editPlan(plan: plan);
+                                      if (value == 'edit')
+                                        _editPlan(plan: plan);
                                       if (value == 'cancel') _cancel(plan);
                                     },
                                     itemBuilder: (_) => const [
