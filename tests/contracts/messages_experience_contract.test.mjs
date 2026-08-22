@@ -23,7 +23,11 @@ test('Conversation Space preserves authoritative messaging and safety controls',
   assert.match(chat, /watchMessages\(widget\.conversationId\)/);
   assert.match(chat, /sendMessage\(/);
   assert.match(chat, /markRead\(messageId\)/);
-  assert.match(chat, /_report\(messageId:\s*doc\.id\)/);
+  assert.match(
+    chat,
+    /_showMessageActions\([\s\S]{0,100}messageId:\s*doc\.id/,
+  );
+  assert.match(chat, /_report\(messageId:\s*messageId\)/);
   assert.match(chat, /blockUser\(widget\.otherUid\)/);
   assert.match(chat, /UgcPolicyViolation/);
   assert.match(chat, /conversation-message-composer/);
