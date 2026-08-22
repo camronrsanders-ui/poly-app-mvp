@@ -5,3 +5,9 @@ export {recordAdultPolicyAcceptance} from './compliance';
 export {getMyEntitlements} from './monetization';
 export {cleanupCircleDataForDeletingAccount} from './circle_account_cleanup';
 export {createSharedMoment, listSharedMoments, deleteSharedMoment} from './shared_moments';
+export {
+  createSharedPlan,
+  listSharedPlans,
+  updateSharedPlan,
+  cancelSharedPlan,
+} from './shared_plans';

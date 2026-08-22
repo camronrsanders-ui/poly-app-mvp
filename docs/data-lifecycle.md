@@ -43,9 +43,17 @@ This is an engineering behavior, not yet the final public retention promise. Bef
 
 Shared Moments intentionally reuse `messages` records with `messageType: shared_moment` instead of creating a parallel shared datastore. This makes the existing conversation boundary authoritative: only active, compliant participants may list/create through App-Check-protected callables; block/unmatch makes the conversation inaccessible; and the existing account-deletion query that removes sender-authored messages also removes moments created by the deleting member.
 
-The create path is server-gated OFF while the user experience is still being finalized. The backend model supports note and place moments, but place moments accept only a human-readable place label and explicitly reject precise coordinates. Photo is a reserved moment kind and remains disabled until it can use protected moderation, processing, delivery, removal, and evidence-retention behavior rather than a raw URL or Storage path.
+The create path is server-gated OFF while the user experience is still being finalized. The backend model supports note, place, and saved-message-reference moments. Place moments accept only a human-readable place label and explicitly reject precise coordinates. A saved-message moment stores only a validated reference to an existing non-deleted text message in the same conversation; it does not duplicate that message body, so removing the source message also removes the underlying content. Photo is a reserved moment kind and remains disabled until it can use protected moderation, processing, delivery, removal, and evidence-retention behavior rather than a raw URL or Storage path.
 
 A moment created by the other participant follows the same unresolved retention question as that participant's ordinary messages after the counterpart deletes their account: it becomes inaccessible when the conversation closes, while final retention/anonymization/deletion timing remains a pre-beta policy decision.
+
+## Shared Plans lifecycle foundation
+
+Plans intentionally reuse `messages` records with `messageType: shared_plan` so they remain inside the same connection authorization and account-deletion boundary. The first model is manual only: title, date/time, optional human-readable place label, and optional note. Plan payloads reject precise coordinates, calendar IDs/providers, venue IDs, and recommendation fields.
+
+The creator is the only participant allowed to edit or cancel a plan. Cancellation is recorded as plan history rather than silently deleting the record, and a cancelled plan cannot be edited. Block/unmatch closes the conversation and removes member access to its plans. Account deletion removes plans authored by the deleting member through the existing sender-authored message cleanup. Counterpart-authored plans become inaccessible when the conversation closes and remain subject to the same pre-beta retention decision as counterpart messages and moments.
+
+The plan create path is server-gated OFF until the structured-card UI is approved and staging validation is complete. There is no calendar sync, automatic venue suggestion, reminder system, RSVP model, or location-service dependency in the first plan foundation.
 
 ## Account states
 
@@ -77,6 +85,7 @@ The callable implementation is not a substitute for a production deletion job/qu
 Document explicit retention periods for:
 - messages after account deletion;
 - Shared Moments after connection closure/account deletion;
+- Shared Plans after cancellation/connection closure/account deletion;
 - reports and moderation evidence;
 - Private Vault evidence when content is reported;
 - security/audit logs;

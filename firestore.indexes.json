@@ -51,6 +51,15 @@
       ]
     },
     {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "conversationId", "order": "ASCENDING"},
+        {"fieldPath": "messageType", "order": "ASCENDING"},
+        {"fieldPath": "plannedFor", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "relationship_cards",
       "queryScope": "COLLECTION",
       "fields": [

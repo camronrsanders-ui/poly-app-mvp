@@ -104,6 +104,7 @@ Common fields:
 
 Ordinary chat uses `messageType: text` and is the only message shape clients may create directly under Firestore rules. The chat query explicitly filters to `messageType == text` so structured conversation artifacts do not masquerade as ordinary message bubbles.
 
+### Shared Moments
 Shared Moments intentionally reuse the conversation/message lifecycle rather than introducing a second shared datastore. Trusted App-Check-protected callables may create `messageType: shared_moment` records with:
 - momentKind: `note`, `place`, or `message` in the first protected model; `photo` is reserved but blocked until protected shared-media handling is complete
 - momentTitle: string
@@ -111,7 +112,21 @@ Shared Moments intentionally reuse the conversation/message lifecycle rather tha
 - placeLabel: string when `momentKind == place`
 - sourceMessageId: string when `momentKind == message`
 
-Saved-message moments keep only a validated reference to an existing, non-deleted text message in the same conversation; they do not duplicate the source message body into the moment document. Shared Moments never store precise coordinates. The server-side create gate remains OFF until the final UI and protected photo lifecycle are approved. Because these records retain `conversationId` and `senderUid`, existing conversation closure, reporting, and sender-account-deletion behavior remains authoritative.
+Saved-message moments keep only a validated reference to an existing, non-deleted text message in the same conversation; they do not duplicate the source message body into the moment document. Shared Moments never store precise coordinates. The server-side create gate remains OFF until the final UI and protected photo lifecycle are approved.
+
+### Shared Plans
+Plans also reuse the conversation/message lifecycle as `messageType: shared_plan`. The first model is intentionally manual and small:
+- planTitle: string
+- planNote: string
+- placeLabel: optional human-readable string
+- plannedFor: timestamp
+- planStatus: `active` or `cancelled`
+- updatedAt: timestamp
+- cancelledAt: timestamp when cancelled
+
+Plan payload validation rejects precise coordinates, calendar provider/event IDs, venue IDs, and recommendation fields. The creator owns editing and cancellation; the other participant may view the structured plan but may not modify it. Cancelled plans cannot be edited. The server-side create gate remains OFF until the structured-card UI is approved and staging validation is complete.
+
+Because Shared Moments and Plans retain `conversationId` and `senderUid`, existing conversation closure and sender-account-deletion behavior remains authoritative. Block/unmatch makes the conversation inaccessible; account deletion removes structured artifacts authored by the deleting member through the existing sender-authored message cleanup.
 
 ## reports/{autoId}
 - reporterUid: string
@@ -131,8 +146,9 @@ accountStatus: active, paused, suspended, banned
 profileVisibility: public, hidden, matches_only
 mapVisibility: public, matches_only, private
 relationship-card visibility: public, matches_only, private, unnamed_public
-messageType: text, shared_moment (trusted callable only; create gate currently OFF)
+messageType: text, shared_moment, shared_plan (structured types are trusted-callable only; create gates currently OFF)
 shared-moment kind: note, place, message, photo (photo reserved/disabled)
+shared-plan status: active, cancelled
 report status: open, reviewing, resolved, dismissed
 
 Use Firebase Auth UID as the document ID for users, profiles, and private member locations. Use auto IDs for other collections unless a deterministic ID is needed to prevent duplicate logical records.
