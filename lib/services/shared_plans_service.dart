@@ -9,6 +9,7 @@ class SharedPlan {
     required this.note,
     required this.placeLabel,
     required this.plannedForMs,
+    required this.cancelledAtMs,
     required this.status,
   });
 
@@ -18,6 +19,7 @@ class SharedPlan {
   final String note;
   final String placeLabel;
   final int? plannedForMs;
+  final int? cancelledAtMs;
   final String status;
 
   factory SharedPlan.fromMap(Map<String, dynamic> data) {
@@ -28,6 +30,10 @@ class SharedPlan {
       note: data['note']?.toString() ?? '',
       placeLabel: data['placeLabel']?.toString() ?? '',
       plannedForMs: switch (data['plannedForMs']) {
+        final num value => value.toInt(),
+        _ => null,
+      },
+      cancelledAtMs: switch (data['cancelledAtMs']) {
         final num value => value.toInt(),
         _ => null,
       },

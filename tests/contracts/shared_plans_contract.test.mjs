@@ -95,3 +95,16 @@ test('plan cards identify the creator without adding identity fields', () => {
   assert.match(plansScreen, /Planned by \$\{widget\.otherDisplayName\}/);
   assert.doesNotMatch(service, /creatorDisplayName/);
 });
+
+test('cancelled plan history uses the trusted server cancellation timestamp', () => {
+  assert.match(backend, /cancelledAtMs:\s*timestampMillis\(doc\.get\('cancelledAt'\)\)/);
+  assert.match(service, /final int\? cancelledAtMs/);
+  assert.match(service, /cancelledAtMs:\s*switch \(data\['cancelledAtMs'\]\)/);
+  assert.match(plansScreen, /final millis = plan\.cancelledAtMs/);
+  assert.match(
+    plansScreen,
+    /MaterialLocalizations\.of\(context\)\.formatMediumDate\(cancelledAt\)/,
+  );
+  assert.match(plansScreen, /return 'Cancelled • \$date'/);
+  assert.match(plansScreen, /if \(cancelledAt == null\) return 'Cancelled'/);
+});

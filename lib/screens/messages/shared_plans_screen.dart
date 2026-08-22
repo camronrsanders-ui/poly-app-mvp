@@ -58,11 +58,23 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
     return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
   }
 
+  DateTime? _cancelledAtFor(SharedPlan plan) {
+    final millis = plan.cancelledAtMs;
+    return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
   String _formatDateTime(BuildContext context, DateTime value) {
     final localizations = MaterialLocalizations.of(context);
     final date = localizations.formatMediumDate(value);
     final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value));
     return '$date • $time';
+  }
+
+  String _cancelledStatusLabel(BuildContext context, SharedPlan plan) {
+    final cancelledAt = _cancelledAtFor(plan);
+    if (cancelledAt == null) return 'Cancelled';
+    final date = MaterialLocalizations.of(context).formatMediumDate(cancelledAt);
+    return 'Cancelled • $date';
   }
 
   String _plannedByLabel(SharedPlan plan, String? uid) {
@@ -451,9 +463,14 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                             ],
                             if (cancelled) ...[
                               const SizedBox(height: 12),
-                              const Chip(
-                                avatar: Icon(Icons.block_outlined, size: 18),
-                                label: Text('Cancelled'),
+                              Chip(
+                                avatar: const Icon(
+                                  Icons.block_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _cancelledStatusLabel(context, plan),
+                                ),
                               ),
                             ],
                           ],
