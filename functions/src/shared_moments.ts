@@ -218,7 +218,10 @@ export const listSharedMoments = onCall(
       if (sourceMessageId) sourceMessageIds.add(sourceMessageId);
     }
 
-    const sourceMessagePreviews = new Map<string, string>();
+    const sourceMessagePreviews = new Map<
+      string,
+      ReturnType<typeof safeSharedMomentMessagePreview>
+    >();
     if (sourceMessageIds.size > 0) {
       const sources = await db.getAll(
         ...Array.from(sourceMessageIds, (sourceMessageId) =>
@@ -229,13 +232,14 @@ export const listSharedMoments = onCall(
           source.data(),
           conversationId,
         );
-        if (preview) sourceMessagePreviews.set(source.id, preview);
+        if (preview.text) sourceMessagePreviews.set(source.id, preview);
       }
     }
 
     return {
       moments: momentDocs.map((doc) => {
         const sourceMessageId = storedReference(doc.get('sourceMessageId'));
+        const sourcePreview = sourceMessagePreviews.get(sourceMessageId);
         return {
           momentId: doc.id,
           creatorUid: String(doc.get('senderUid') ?? ''),
@@ -244,7 +248,8 @@ export const listSharedMoments = onCall(
           note: String(doc.get('momentNote') ?? ''),
           placeLabel: String(doc.get('placeLabel') ?? ''),
           sourceMessageId,
-          sourceMessagePreview: sourceMessagePreviews.get(sourceMessageId) ?? '',
+          sourceMessagePreview: sourcePreview?.text ?? '',
+          sourceMessageFromCaller: sourcePreview?.senderUid === uid,
           createdAtMs: timestampMillis(doc.get('createdAt')),
         };
       }),

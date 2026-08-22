@@ -254,18 +254,64 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
     };
   }
 
-  String _supportingText(SharedMoment moment) {
-    final parts = <String>[];
+  String _savedByLabel(SharedMoment moment, String? uid) {
+    if (uid == null) return 'Saved in this conversation';
+    return moment.creatorUid == uid
+        ? 'Saved by you'
+        : 'Saved by ${widget.otherDisplayName}';
+  }
+
+  Widget _subtitleFor(SharedMoment moment, String? uid) {
+    final theme = Theme.of(context);
+    final children = <Widget>[];
     if (moment.kind == 'message') {
       if (moment.sourceMessagePreview.isNotEmpty) {
-        parts.add('“${moment.sourceMessagePreview}”');
+        children.add(
+          Text(
+            '“${moment.sourceMessagePreview}”',
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+        children.add(const SizedBox(height: 2));
+        children.add(
+          Text(
+            '— ${moment.sourceMessageFromCaller ? 'You' : widget.otherDisplayName}',
+            style: theme.textTheme.bodySmall,
+          ),
+        );
       } else {
-        parts.add('Original message unavailable');
+        children.add(const Text('Original message unavailable'));
       }
     }
-    if (moment.placeLabel.isNotEmpty) parts.add(moment.placeLabel);
-    if (moment.note.isNotEmpty) parts.add(moment.note);
-    return parts.join('\n');
+    if (moment.placeLabel.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 4));
+      children.add(Text(moment.placeLabel));
+    }
+    if (moment.note.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 4));
+      children.add(
+        Text(
+          moment.note,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    if (children.isNotEmpty) children.add(const SizedBox(height: 4));
+    children.add(
+      Text(
+        _savedByLabel(moment, uid),
+        style: theme.textTheme.labelSmall,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
   }
 
   @override
@@ -361,7 +407,6 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final moment = _moments[index];
-                    final supporting = _supportingText(moment);
                     return Padding(
                       padding: EdgeInsets.only(
                         bottom: index == _moments.length - 1 ? 0 : 10,
@@ -378,16 +423,7 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
                             child: Icon(_iconFor(moment.kind)),
                           ),
                           title: Text(moment.title),
-                          subtitle: supporting.isEmpty
-                              ? null
-                              : Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    supporting,
-                                    maxLines: 6,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
+                          subtitle: _subtitleFor(moment, uid),
                           trailing: uid != null && moment.creatorUid == uid
                               ? IconButton(
                                   onPressed: () => _delete(moment),
