@@ -39,6 +39,14 @@ The current implementation deletes messages **sent by the deleting user**. Messa
 
 This is an engineering behavior, not yet the final public retention promise. Before beta, product/privacy review must decide whether former counterpart messages should be retained, anonymized, or deleted after a defined period. The final behavior must be reflected consistently in backend cleanup, backup handling, user-facing disclosures, and support/moderation procedures.
 
+## Shared Moments lifecycle foundation
+
+Shared Moments intentionally reuse `messages` records with `messageType: shared_moment` instead of creating a parallel shared datastore. This makes the existing conversation boundary authoritative: only active, compliant participants may list/create through App-Check-protected callables; block/unmatch makes the conversation inaccessible; and the existing account-deletion query that removes sender-authored messages also removes moments created by the deleting member.
+
+The create path is server-gated OFF while the user experience is still being finalized. The backend model supports note and place moments, but place moments accept only a human-readable place label and explicitly reject precise coordinates. Photo is a reserved moment kind and remains disabled until it can use protected moderation, processing, delivery, removal, and evidence-retention behavior rather than a raw URL or Storage path.
+
+A moment created by the other participant follows the same unresolved retention question as that participant's ordinary messages after the counterpart deletes their account: it becomes inaccessible when the conversation closes, while final retention/anonymization/deletion timing remains a pre-beta policy decision.
+
 ## Account states
 
 `active` is the ordinary usable account state.
@@ -68,6 +76,7 @@ The callable implementation is not a substitute for a production deletion job/qu
 ## Retention decisions required before beta
 Document explicit retention periods for:
 - messages after account deletion;
+- Shared Moments after connection closure/account deletion;
 - reports and moderation evidence;
 - Private Vault evidence when content is reported;
 - security/audit logs;
