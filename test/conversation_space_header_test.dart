@@ -13,12 +13,15 @@ void main() {
       ),
     );
 
-    expect(find.text('Your conversation space'), findsOneWidget);
-    expect(
-      find.textContaining('A private space for you and Alex'),
-      findsOneWidget,
-    );
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.textContaining('Create a world together'), findsOneWidget);
+    expect(find.text('Your conversation space'), findsNothing);
     expect(find.text('A'), findsOneWidget);
+
+    final size = tester.getSize(
+      find.byKey(const Key('conversation-space-identity')),
+    );
+    expect(size.height, lessThanOrEqualTo(56));
     expect(tester.takeException(), isNull);
   });
 }

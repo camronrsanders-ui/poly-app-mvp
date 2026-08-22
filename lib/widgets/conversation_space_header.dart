@@ -16,88 +16,95 @@ class ConversationSpaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final name = otherDisplayName.trim().isEmpty
-        ? 'your connection'
+        ? 'Your connection'
         : otherDisplayName.trim();
 
     return Semantics(
       container: true,
-      label: 'Private conversation space with $name.',
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: colors.outlineVariant),
-        ),
+      label: 'Conversation space with $name. Create a world together.',
+      child: SizedBox(
+        key: const Key('conversation-space-identity'),
+        height: 52,
         child: Row(
           children: [
-            SizedBox(
-              width: 92,
-              height: 48,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    left: 2,
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: colors.primaryContainer,
-                      foregroundColor: colors.onPrimaryContainer,
-                      child: const Icon(Icons.person_outline_rounded),
-                    ),
-                  ),
-                  Positioned(
-                    right: 2,
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: colors.secondaryContainer,
-                      foregroundColor: colors.onSecondaryContainer,
-                      child: Text(
-                        _initial,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+            ExcludeSemantics(
+              child: SizedBox(
+                width: 62,
+                height: 36,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      left: 0,
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: colors.primaryContainer,
+                        foregroundColor: colors.onPrimaryContainer,
+                        child: const Icon(
+                          Icons.person_outline_rounded,
+                          size: 17,
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: colors.surface,
-                      border: Border.all(color: colors.outlineVariant),
+                    Positioned(
+                      right: 0,
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: colors.secondaryContainer,
+                        foregroundColor: colors.onSecondaryContainer,
+                        child: Text(
+                          _initial,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      Icons.favorite_border_rounded,
-                      size: 16,
-                      color: colors.primary,
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colors.surface,
+                        border: Border.all(color: colors.outlineVariant),
+                      ),
+                      child: Icon(
+                        Icons.public_rounded,
+                        size: 12,
+                        color: colors.primary,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Your conversation space',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'A private space for you and $name to build the connection at your own pace.',
-                    maxLines: 2,
+                    name,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          height: 1.3,
-                        ),
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1.05,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Conversation space · Create a world together',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      height: 1.05,
+                    ),
                   ),
                 ],
               ),

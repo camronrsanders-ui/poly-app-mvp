@@ -243,9 +243,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.otherDisplayName),
+        titleSpacing: 0,
+        title: ConversationSpaceHeader(
+          otherDisplayName: widget.otherDisplayName,
+        ),
         actions: [
           PopupMenuButton<String>(
+            tooltip: 'Conversation safety options',
             onSelected: (value) {
               if (value == 'report') _report();
               if (value == 'block') _block();
@@ -258,11 +262,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
-            ConversationSpaceHeader(
-              otherDisplayName: widget.otherDisplayName,
-            ),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _messages.watchMessages(widget.conversationId),
@@ -282,12 +284,15 @@ class _ChatScreenState extends State<ChatScreen> {
                         padding: EdgeInsets.all(24),
                         child: Text(
                           'Start with something genuine. Your connection does not have to fit a traditional script.',
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     );
                   }
                   return ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
                       final doc = docs[index];
@@ -312,7 +317,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               ? Alignment.centerRight
                               : Alignment.centerLeft,
                           child: Container(
-                            constraints: const BoxConstraints(maxWidth: 320),
+                            constraints: BoxConstraints(
+                              maxWidth:
+                                  MediaQuery.sizeOf(context).width * 0.78,
+                            ),
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -337,12 +345,21 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
             ),
-            Padding(
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+              ),
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
+                      key: const Key('conversation-message-composer'),
                       controller: _controller,
                       minLines: 1,
                       maxLines: 5,
@@ -362,7 +379,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.send),
+                        : const Icon(Icons.send_rounded),
                     tooltip: 'Send message',
                   ),
                 ],
