@@ -59,22 +59,9 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
   }
 
   String _formatDateTime(BuildContext context, DateTime value) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final date = '${months[value.month - 1]} ${value.day}, ${value.year}';
-    final time = TimeOfDay.fromDateTime(value).format(context);
+    final localizations = MaterialLocalizations.of(context);
+    final date = localizations.formatMediumDate(value);
+    final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value));
     return '$date • $time';
   }
 

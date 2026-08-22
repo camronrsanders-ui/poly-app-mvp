@@ -76,3 +76,13 @@ test('plan UI rejects past selections and stays inside the backend two-year boun
   assert.match(plansScreen, /if \(!plannedFor\.isAfter\(DateTime\.now\(\)\)\)/);
   assert.match(plansScreen, /Choose a future date and time/);
 });
+
+test('plan date and time display follows the member locale', () => {
+  assert.match(plansScreen, /final localizations = MaterialLocalizations\.of\(context\)/);
+  assert.match(plansScreen, /localizations\.formatMediumDate\(value\)/);
+  assert.match(
+    plansScreen,
+    /localizations\.formatTimeOfDay\(TimeOfDay\.fromDateTime\(value\)\)/,
+  );
+  assert.doesNotMatch(plansScreen, /const months = \[/);
+});
