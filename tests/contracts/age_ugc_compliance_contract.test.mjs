@@ -141,7 +141,14 @@ test('profile reports identify the profile being reported', () => {
 });
 
 test('message reports carry validated content context without copying message text', () => {
-  assert.match(chatScreen, /onLongPress: !isMine && !isDeleted/);
+  assert.match(
+    chatScreen,
+    /final canLongPress =\s*!isDeleted &&\s*\(FeatureFlags\.sharedMomentsEnabled \|\| !isMine\)/,
+  );
+  assert.match(
+    chatScreen,
+    /if \(!FeatureFlags\.sharedMomentsEnabled\) \{[\s\S]{0,180}await _report\(messageId: messageId\)/,
+  );
   assert.match(chatScreen, /contentType: reportingMessage \? 'message' : 'account'/);
   assert.match(safetyService, /Message reports require message context/);
   assert.match(safetyBackend, /String\(message\.get\('senderUid'\) \?\? ''\) !== reportedUid/);
