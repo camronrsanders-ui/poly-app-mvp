@@ -36,10 +36,17 @@ test('Connections avoids invented message content and uses trusted recency data'
   assert.doesNotMatch(connections, /deep talked about purpose/);
 });
 
-test('Connections and Circle own their headers in the main shell', () => {
-  assert.match(shell, /final ownsItsHeader = _index == 1 \|\| _index == 2;/);
+test('Connections and Circle own their headers without regressing Discover shell styling', () => {
+  assert.match(shell, /final discoverSelected = _index == 0;/);
+  assert.match(
+    shell,
+    /final ownsItsHeader = discoverSelected \|\| _index == 1 \|\| _index == 2;/,
+  );
   assert.match(
     shell,
     /ConnectionsScreen\(onFindPeople: \(\) => _selectTab\(0\)\)/,
   );
+  assert.match(shell, /_MainNavigation\(/);
+  assert.match(shell, /immersive: discoverSelected/);
+  assert.match(shell, /discover-dark-navigation/);
 });
