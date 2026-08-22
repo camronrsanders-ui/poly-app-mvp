@@ -102,15 +102,16 @@ Common fields:
 - messageType: string
 - readBy: array<string>
 
-Ordinary chat uses `messageType: text` and is the only message shape clients may create directly under Firestore rules.
+Ordinary chat uses `messageType: text` and is the only message shape clients may create directly under Firestore rules. The chat query explicitly filters to `messageType == text` so structured conversation artifacts do not masquerade as ordinary message bubbles.
 
 Shared Moments intentionally reuse the conversation/message lifecycle rather than introducing a second shared datastore. Trusted App-Check-protected callables may create `messageType: shared_moment` records with:
-- momentKind: `note` or `place` today; `photo` is reserved but blocked until protected shared-media handling is complete
+- momentKind: `note`, `place`, or `message` in the first protected model; `photo` is reserved but blocked until protected shared-media handling is complete
 - momentTitle: string
 - momentNote: string
 - placeLabel: string when `momentKind == place`
+- sourceMessageId: string when `momentKind == message`
 
-Shared Moments never store precise coordinates. The server-side create gate remains OFF until the final UI and protected photo lifecycle are approved. Because these records retain `conversationId` and `senderUid`, existing conversation closure, reporting, and sender-account-deletion behavior remains authoritative.
+Saved-message moments keep only a validated reference to an existing, non-deleted text message in the same conversation; they do not duplicate the source message body into the moment document. Shared Moments never store precise coordinates. The server-side create gate remains OFF until the final UI and protected photo lifecycle are approved. Because these records retain `conversationId` and `senderUid`, existing conversation closure, reporting, and sender-account-deletion behavior remains authoritative.
 
 ## reports/{autoId}
 - reporterUid: string
@@ -131,7 +132,7 @@ profileVisibility: public, hidden, matches_only
 mapVisibility: public, matches_only, private
 relationship-card visibility: public, matches_only, private, unnamed_public
 messageType: text, shared_moment (trusted callable only; create gate currently OFF)
-shared-moment kind: note, place, photo (photo reserved/disabled)
+shared-moment kind: note, place, message, photo (photo reserved/disabled)
 report status: open, reviewing, resolved, dismissed
 
 Use Firebase Auth UID as the document ID for users, profiles, and private member locations. Use auto IDs for other collections unless a deterministic ID is needed to prevent duplicate logical records.

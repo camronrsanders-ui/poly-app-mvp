@@ -1,4 +1,4 @@
-export type SharedMomentKind = 'note' | 'place' | 'photo';
+export type SharedMomentKind = 'note' | 'place' | 'photo' | 'message';
 
 export interface SharedMomentInput {
   kind: SharedMomentKind;
@@ -6,6 +6,7 @@ export interface SharedMomentInput {
   note: string;
   placeLabel: string;
   mediaId: string;
+  sourceMessageId: string;
 }
 
 const severePatterns = [
@@ -27,6 +28,16 @@ function text(value: unknown, label: string, maxLength: number, required = false
   return normalized;
 }
 
+function reference(value: unknown, label: string, required = false): string {
+  const normalized = String(value ?? '').trim();
+  if ((required && !normalized)
+      || normalized.length > 128
+      || (normalized && !/^[A-Za-z0-9:_-]+$/.test(normalized))) {
+    throw new Error(`Invalid ${label}.`);
+  }
+  return normalized;
+}
+
 export function normalizeSharedMomentInput(raw: unknown): SharedMomentInput {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Invalid shared moment.');
@@ -37,18 +48,20 @@ export function normalizeSharedMomentInput(raw: unknown): SharedMomentInput {
   }
 
   const kind = String(data.kind ?? '').trim() as SharedMomentKind;
-  if (!['note', 'place', 'photo'].includes(kind)) {
+  if (!['note', 'place', 'photo', 'message'].includes(kind)) {
     throw new Error('Invalid shared moment kind.');
   }
 
-  const title = text(data.title, 'title', 120, true);
+  const rawTitle = text(data.title, 'title', 120, kind !== 'message');
+  const title = kind === 'message' && !rawTitle ? 'Saved message' : rawTitle;
   const note = text(data.note, 'note', 1200);
   const placeLabel = text(data.placeLabel, 'place label', 160, kind === 'place');
-  const mediaId = text(data.mediaId, 'media reference', 128, kind === 'photo');
+  const mediaId = reference(data.mediaId, 'media reference', kind === 'photo');
+  const sourceMessageId = reference(
+    data.sourceMessageId,
+    'source message reference',
+    kind === 'message',
+  );
 
-  if (mediaId && !/^[A-Za-z0-9:_-]+$/.test(mediaId)) {
-    throw new Error('Invalid media reference.');
-  }
-
-  return {kind, title, note, placeLabel, mediaId};
+  return {kind, title, note, placeLabel, mediaId, sourceMessageId};
 }

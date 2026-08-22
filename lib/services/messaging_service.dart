@@ -44,6 +44,7 @@ class MessagingService {
     return _firestore
         .collection('messages')
         .where('conversationId', isEqualTo: conversationId)
+        .where('messageType', isEqualTo: 'text')
         .orderBy('createdAt')
         .limitToLast(100)
         .snapshots();

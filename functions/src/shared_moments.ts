@@ -98,6 +98,20 @@ async function conversationForMember(
   return conversation;
 }
 
+async function assertSavableSourceMessage(
+  db: FirebaseFirestore.Firestore,
+  conversationId: string,
+  sourceMessageId: string,
+): Promise<void> {
+  const source = await db.collection('messages').doc(sourceMessageId).get();
+  if (!source.exists
+      || source.get('conversationId') !== conversationId
+      || source.get('messageType') !== 'text'
+      || source.get('isDeleted') === true) {
+    throw new HttpsError('not-found', 'The message to save is unavailable.');
+  }
+}
+
 export const createSharedMoment = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
@@ -139,6 +153,9 @@ export const createSharedMoment = onCall(
         'Photo moments are not available until protected shared-media handling is ready.',
       );
     }
+    if (input.kind === 'message') {
+      await assertSavableSourceMessage(db, conversationId, input.sourceMessageId);
+    }
 
     const ref = db.collection('messages').doc();
     await ref.set({
@@ -153,6 +170,9 @@ export const createSharedMoment = onCall(
       momentTitle: input.title,
       momentNote: input.note,
       ...(input.kind === 'place' ? {placeLabel: input.placeLabel} : {}),
+      ...(input.kind === 'message'
+        ? {sourceMessageId: input.sourceMessageId}
+        : {}),
     });
 
     return {momentId: ref.id};
@@ -189,6 +209,7 @@ export const listSharedMoments = onCall(
         title: String(doc.get('momentTitle') ?? ''),
         note: String(doc.get('momentNote') ?? ''),
         placeLabel: String(doc.get('placeLabel') ?? ''),
+        sourceMessageId: String(doc.get('sourceMessageId') ?? ''),
         createdAtMs: timestampMillis(doc.get('createdAt')),
       })),
     };

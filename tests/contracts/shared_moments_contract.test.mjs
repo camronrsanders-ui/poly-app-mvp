@@ -11,6 +11,7 @@ const fields = read('functions/src/shared_moment_fields.ts');
 const entry = read('functions/src/entry.ts');
 const accountDeletion = read('functions/src/index.ts');
 const service = read('lib/services/shared_moments_service.dart');
+const messaging = read('lib/services/messaging_service.dart');
 const chat = read('lib/screens/messages/chat_screen.dart');
 const rules = read('firestore.rules');
 
@@ -39,6 +40,17 @@ test('Shared Moments inherit message lifecycle instead of a parallel datastore',
   assert.doesNotMatch(backend, /collection\('shared_moments'\)/);
 });
 
+test('saved-message moments keep only a source reference and ordinary chat filters them out', () => {
+  assert.match(fields, /'message'/);
+  assert.match(fields, /sourceMessageId/);
+  assert.match(backend, /assertSavableSourceMessage/);
+  assert.match(backend, /source\.get\('messageType'\) !== 'text'/);
+  assert.match(backend, /sourceMessageId:\s*input\.sourceMessageId/);
+  assert.doesNotMatch(backend, /sourceMessageText/);
+  assert.match(service, /saveMessage\(/);
+  assert.match(messaging, /where\('messageType', isEqualTo: 'text'\)/);
+});
+
 test('direct clients still cannot manufacture Shared Moments', () => {
   assert.match(rules, /request\.resource\.data\.messageType == 'text'/);
   assert.match(rules, /request\.resource\.data\.keys\(\)\.hasOnly\(\[[\s\S]*?'messageType', 'readBy'/);
@@ -48,7 +60,9 @@ test('direct clients still cannot manufacture Shared Moments', () => {
 });
 
 test('moment foundation supports notes and places without precise location or raw photo paths', () => {
-  assert.match(fields, /'note' \| 'place' \| 'photo'/);
+  assert.match(fields, /'note'/);
+  assert.match(fields, /'place'/);
+  assert.match(fields, /'photo'/);
   assert.match(fields, /latitude/);
   assert.match(fields, /longitude/);
   assert.match(fields, /geopoint/);

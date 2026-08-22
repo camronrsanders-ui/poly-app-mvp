@@ -9,6 +9,7 @@ class SharedMoment {
     required this.title,
     required this.note,
     required this.placeLabel,
+    required this.sourceMessageId,
     required this.createdAtMs,
   });
 
@@ -18,6 +19,7 @@ class SharedMoment {
   final String title;
   final String note;
   final String placeLabel;
+  final String sourceMessageId;
   final int? createdAtMs;
 
   factory SharedMoment.fromMap(Map<String, dynamic> data) {
@@ -28,6 +30,7 @@ class SharedMoment {
       title: data['title']?.toString() ?? '',
       note: data['note']?.toString() ?? '',
       placeLabel: data['placeLabel']?.toString() ?? '',
+      sourceMessageId: data['sourceMessageId']?.toString() ?? '',
       createdAtMs: switch (data['createdAtMs']) {
         final num value => value.toInt(),
         _ => null,
@@ -93,6 +96,22 @@ class SharedMomentsService {
       'kind': 'place',
       'title': _requiredText(title, 'title', 120),
       'placeLabel': _requiredText(placeLabel, 'place label', 160),
+      'note': _optionalText(note, 'note', 1200),
+    });
+    return result.data['momentId']?.toString() ?? '';
+  }
+
+  Future<String> saveMessage({
+    required String conversationId,
+    required String sourceMessageId,
+    String note = '',
+  }) async {
+    _requireSignedIn();
+    final callable = _functions.httpsCallable('createSharedMoment');
+    final result = await callable.call<Map<String, dynamic>>({
+      'conversationId': _requiredText(conversationId, 'conversation', 128),
+      'kind': 'message',
+      'sourceMessageId': _requiredText(sourceMessageId, 'message', 128),
       'note': _optionalText(note, 'note', 1200),
     });
     return result.data['momentId']?.toString() ?? '';

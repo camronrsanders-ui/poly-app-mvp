@@ -13,6 +13,7 @@ test('normalizes note moments without adding location data', () => {
     note: 'We stayed until sunset.',
     placeLabel: '',
     mediaId: '',
+    sourceMessageId: '',
   });
 });
 
@@ -51,6 +52,23 @@ test('validates reserved photo references even while photo publishing stays gate
     title: 'Sunset hike',
     mediaId: '../raw-storage-path',
   }), /media reference/i);
+});
+
+test('saved-message moments retain only a validated source reference', () => {
+  assert.deepEqual(normalizeSharedMomentInput({
+    kind: 'message',
+    sourceMessageId: 'message_123',
+    note: 'This mattered to me.',
+  }), {
+    kind: 'message',
+    title: 'Saved message',
+    note: 'This mattered to me.',
+    placeLabel: '',
+    mediaId: '',
+    sourceMessageId: 'message_123',
+  });
+
+  assert.throws(() => normalizeSharedMomentInput({kind: 'message'}), /source message/i);
 });
 
 test('rejects severe prohibited UGC in moment text', () => {
