@@ -20,7 +20,11 @@ test('Discover uses one shared Flutter presentation on iOS and Android', () => {
 });
 
 test('Discover owns an immersive header while preserving Safety center access', () => {
-  assert.match(shell, /discoverSelected \|\| _index == 2/);
+  assert.match(
+    shell,
+    /final ownsItsHeader = discoverSelected \|\| _index == 1 \|\| _index == 2;/,
+  );
+  assert.match(shell, /appBar: ownsItsHeader/);
   assert.match(shell, /discover-dark-navigation/);
   assert.match(discover, /discover-cosmic-world/);
   assert.match(discover, /Explore your orbit/);
