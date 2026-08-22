@@ -47,7 +47,9 @@ test('Shared Plans UI stays deliberately small and manual', () => {
 
 test('creator controls are explicit and cancellation remains visible history', () => {
   assert.match(plans, /plan\.creatorUid == uid/);
-  assert.match(plans, /if \(mine && !cancelled\)/);
+  assert.match(plans, /final active = plan\.status == 'active'/);
+  assert.match(plans, /if \(mine && active\)/);
+  assert.doesNotMatch(plans, /if \(mine && !cancelled\)/);
   assert.match(plans, /The plan will stay in your shared history marked as cancelled/);
   assert.match(plans, /_cancelledStatusLabel\(context, plan\)/);
   assert.match(plans, /if \(cancelledAt == null\) return 'Cancelled'/);
