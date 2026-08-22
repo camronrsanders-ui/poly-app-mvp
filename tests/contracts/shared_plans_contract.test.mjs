@@ -52,12 +52,19 @@ test('Plans use a deliberately small manual model with no calendar/location auto
 
 test('only the creator can edit or cancel an existing plan', () => {
   assert.match(backend, /plan\.get\('senderUid'\) !== uid/);
-  assert.match(backend, /Cancelled plans cannot be edited/);
+  assert.match(backend, /plan\.get\('planStatus'\) !== 'active'/);
+  assert.match(backend, /Only active plans can be edited/);
+  assert.match(backend, /const status = plan\.get\('planStatus'\)/);
+  assert.match(backend, /if \(status === 'cancelled'\) return/);
+  assert.match(backend, /if \(status !== 'active'\)/);
+  assert.match(backend, /Only active plans can be cancelled/);
   assert.match(backend, /planStatus:\s*'cancelled'/);
   assert.match(service, /httpsCallable\('updateSharedPlan'\)/);
   assert.match(service, /httpsCallable\('cancelSharedPlan'\)/);
   assert.match(plansScreen, /plan\.creatorUid == uid/);
-  assert.match(plansScreen, /if \(mine && !cancelled\)/);
+  assert.match(plansScreen, /final active = plan\.status == 'active'/);
+  assert.match(plansScreen, /if \(mine && active\)/);
+  assert.doesNotMatch(plansScreen, /if \(mine && !cancelled\)/);
 });
 
 test('Plans inherit message/account-deletion lifecycle instead of a parallel datastore', () => {

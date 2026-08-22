@@ -206,7 +206,7 @@ export const updateSharedPlan = onCall(
         throw new HttpsError('not-found', 'Plan not found.');
       }
       if (plan.get('planStatus') !== 'active') {
-        throw new HttpsError('failed-precondition', 'Cancelled plans cannot be edited.');
+        throw new HttpsError('failed-precondition', 'Only active plans can be edited.');
       }
       tx.update(ref, {
         text: input.title,
@@ -246,7 +246,14 @@ export const cancelSharedPlan = onCall(
           || plan.get('senderUid') !== uid) {
         throw new HttpsError('not-found', 'Plan not found.');
       }
-      if (plan.get('planStatus') === 'cancelled') return;
+      const status = plan.get('planStatus');
+      if (status === 'cancelled') return;
+      if (status !== 'active') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only active plans can be cancelled.',
+        );
+      }
       tx.update(ref, {
         planStatus: 'cancelled',
         cancelledAt: FieldValue.serverTimestamp(),

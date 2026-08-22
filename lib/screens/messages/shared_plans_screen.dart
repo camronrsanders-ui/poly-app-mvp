@@ -381,6 +381,7 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                     final plan = _plans[index];
                     final date = _dateFor(plan);
                     final mine = uid != null && plan.creatorUid == uid;
+                    final active = plan.status == 'active';
                     final cancelled = plan.status == 'cancelled';
                     return Card(
                       child: Padding(
@@ -425,7 +426,7 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
                                     ],
                                   ),
                                 ),
-                                if (mine && !cancelled)
+                                if (mine && active)
                                   PopupMenuButton<String>(
                                     tooltip: 'Plan options',
                                     onSelected: (value) {
