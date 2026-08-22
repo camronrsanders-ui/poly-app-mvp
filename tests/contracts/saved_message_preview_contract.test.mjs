@@ -47,3 +47,16 @@ test('client treats source context as ephemeral display data with safe attributi
   assert.match(screen, /Saved by \$\{widget\.otherDisplayName\}/);
   assert.match(screen, /TextOverflow\.ellipsis/);
 });
+
+test('saved date comes from the moment timestamp instead of the current clock', () => {
+  assert.match(screen, /final createdAtMs = moment\.createdAtMs/);
+  assert.match(
+    screen,
+    /DateTime\.fromMillisecondsSinceEpoch\(createdAtMs\)\.toLocal\(\)/,
+  );
+  assert.match(
+    screen,
+    /MaterialLocalizations\.of\(context\)\.formatMediumDate\(savedAt\)/,
+  );
+  assert.doesNotMatch(screen, /DateTime\.now\(\)/);
+});

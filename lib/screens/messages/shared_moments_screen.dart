@@ -261,6 +261,16 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
         : 'Saved by ${widget.otherDisplayName}';
   }
 
+  String _savedFooterLabel(SharedMoment moment, String? uid) {
+    final savedBy = _savedByLabel(moment, uid);
+    final createdAtMs = moment.createdAtMs;
+    if (createdAtMs == null) return savedBy;
+
+    final savedAt = DateTime.fromMillisecondsSinceEpoch(createdAtMs).toLocal();
+    final savedDate = MaterialLocalizations.of(context).formatMediumDate(savedAt);
+    return '$savedBy · $savedDate';
+  }
+
   Widget _subtitleFor(SharedMoment moment, String? uid) {
     final theme = Theme.of(context);
     final children = <Widget>[];
@@ -301,7 +311,7 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
     if (children.isNotEmpty) children.add(const SizedBox(height: 4));
     children.add(
       Text(
-        _savedByLabel(moment, uid),
+        _savedFooterLabel(moment, uid),
         style: theme.textTheme.labelSmall,
       ),
     );
