@@ -465,15 +465,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                         _queueMarkRead(doc.id, readBy, uid);
                       }
-                      final canLongPress =
-                          !isDeleted &&
+                      final canLongPress = !isDeleted &&
                           (FeatureFlags.sharedMomentsEnabled || !isMine);
                       return GestureDetector(
                         onLongPress: canLongPress
                             ? () => _showMessageActions(
-                                messageId: doc.id,
-                                isMine: isMine,
-                              )
+                                  messageId: doc.id,
+                                  isMine: isMine,
+                                )
                             : null,
                         child: Align(
                           alignment: isMine
@@ -491,11 +490,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             decoration: BoxDecoration(
                               color: isMine
                                   ? Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer
+                                      .colorScheme
+                                      .primaryContainer
                                   : Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest,
+                                      .colorScheme
+                                      .surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Text(text),
