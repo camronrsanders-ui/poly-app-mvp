@@ -11,7 +11,12 @@ const androidManifest = fs.readFileSync(
   'android/app/src/main/AndroidManifest.xml',
   'utf8',
 );
+const androidBuild = fs.readFileSync('android/app/build.gradle.kts', 'utf8');
 const iosInfo = fs.readFileSync('ios/Runner/Info.plist', 'utf8');
+const iosProject = fs.readFileSync(
+  'ios/Runner.xcodeproj/project.pbxproj',
+  'utf8',
+);
 const androidRunner = fs.readFileSync('tool/run_android_local.sh', 'utf8');
 const iosRunner = fs.readFileSync('tool/run_ios_local.sh', 'utf8');
 
@@ -35,17 +40,25 @@ const sharedLocationPayloadTokens = [
   'observedAtMs',
 ];
 
+test('Android and iOS use the same permanent Polycircle app identity', () => {
+  assert.ok(androidBuild.includes('namespace = "com.polycircle.app"'));
+  assert.ok(androidBuild.includes('applicationId = "com.polycircle.app"'));
+  assert.ok(iosProject.includes('PRODUCT_BUNDLE_IDENTIFIER = com.polycircle.app;'));
+  assert.ok(androidManifest.includes('android:label="Polycircle"'));
+  assert.ok(iosInfo.includes('<string>Polycircle</string>'));
+});
+
 test('Android and iOS expose the same Flutter native bridge surface', () => {
   for (const token of sharedBridgeTokens) {
-    assert.match(androidHost, new RegExp(token.replaceAll('/', '\\/')));
-    assert.match(iosHost, new RegExp(token.replaceAll('/', '\\/')));
+    assert.ok(androidHost.includes(token), `Android native host missing ${token}`);
+    assert.ok(iosHost.includes(token), `iOS native host missing ${token}`);
   }
 });
 
 test('Android and iOS keep Discover one-shot location payloads compatible', () => {
   for (const token of sharedLocationPayloadTokens) {
-    assert.match(androidHost, new RegExp(token));
-    assert.match(iosHost, new RegExp(token));
+    assert.ok(androidHost.includes(token), `Android location bridge missing ${token}`);
+    assert.ok(iosHost.includes(token), `iOS location bridge missing ${token}`);
   }
 });
 
