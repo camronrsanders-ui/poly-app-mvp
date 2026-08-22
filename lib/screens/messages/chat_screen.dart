@@ -212,9 +212,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _controller.selection = TextSelection.collapsed(offset: text.length);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.userMessage)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
       }
     } catch (_) {
       // Do not make a transient network/backend error eat the user's draft.
@@ -461,8 +460,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           ? 'Message removed'
                           : (data['text'] as String? ?? '');
                       if (!isMine) {
-                        final readBy =
-                            List<String>.from(data['readBy'] ?? const []);
+                        final readBy = List<String>.from(
+                          data['readBy'] ?? const [],
+                        );
                         _queueMarkRead(doc.id, readBy, uid);
                       }
                       final canLongPress =
@@ -491,11 +491,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             decoration: BoxDecoration(
                               color: isMine
                                   ? Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer
+                                        .colorScheme
+                                        .primaryContainer
                                   : Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
+                                        .colorScheme
+                                        .surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Text(text),
