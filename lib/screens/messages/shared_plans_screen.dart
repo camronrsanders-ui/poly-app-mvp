@@ -73,7 +73,9 @@ class _SharedPlansScreenState extends State<SharedPlansScreen> {
   String _cancelledStatusLabel(BuildContext context, SharedPlan plan) {
     final cancelledAt = _cancelledAtFor(plan);
     if (cancelledAt == null) return 'Cancelled';
-    final date = MaterialLocalizations.of(context).formatMediumDate(cancelledAt);
+    final date = MaterialLocalizations.of(
+      context,
+    ).formatMediumDate(cancelledAt);
     return 'Cancelled • $date';
   }
 
