@@ -13,6 +13,8 @@ const accountDeletion = read('functions/src/index.ts');
 const service = read('lib/services/shared_moments_service.dart');
 const messaging = read('lib/services/messaging_service.dart');
 const chat = read('lib/screens/messages/chat_screen.dart');
+const momentsScreen = read('lib/screens/messages/shared_moments_screen.dart');
+const flags = read('lib/config/feature_flags.dart');
 const rules = read('firestore.rules');
 
 test('Shared Moments stay behind trusted callables and active conversation checks', () => {
@@ -68,8 +70,13 @@ test('moment foundation supports notes and places without precise location or ra
   assert.match(fields, /geopoint/);
 });
 
-test('Shared Moments and Plans still have no visible chat controls', () => {
-  assert.doesNotMatch(chat, /Shared Moments/i);
-  assert.doesNotMatch(chat, /Save (?:a )?moment/i);
-  assert.doesNotMatch(chat, /Make (?:a )?plan/i);
+test('Shared Moments UI is present only behind the explicit client gate', () => {
+  assert.match(flags, /sharedMomentsEnabled = false/);
+  assert.match(
+    chat,
+    /if \(FeatureFlags\.sharedMomentsEnabled\)[\s\S]{0,220}Key\('conversation-shared-moments'\)/,
+  );
+  assert.match(momentsScreen, /if \(FeatureFlags\.sharedMomentsEnabled\)[\s\S]{0,100}_reload\(\)/);
+  assert.match(momentsScreen, /if \(!FeatureFlags\.sharedMomentsEnabled\) return/);
+  assert.match(momentsScreen, /if \(!FeatureFlags\.sharedMomentsEnabled\)[\s\S]{0,240}Shared Moments are still being prepared/);
 });

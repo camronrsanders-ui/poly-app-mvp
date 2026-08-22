@@ -12,6 +12,8 @@ const entry = read('functions/src/entry.ts');
 const accountDeletion = read('functions/src/index.ts');
 const service = read('lib/services/shared_plans_service.dart');
 const chat = read('lib/screens/messages/chat_screen.dart');
+const plansScreen = read('lib/screens/messages/shared_plans_screen.dart');
+const flags = read('lib/config/feature_flags.dart');
 const rules = read('firestore.rules');
 
 test('Plans stay behind trusted App Check callables and the active conversation boundary', () => {
@@ -29,7 +31,12 @@ test('Plans stay behind trusted App Check callables and the active conversation 
 test('Plan creation stays fail-closed until structured cards are approved', () => {
   assert.match(backend, /const SHARED_PLANS_CREATE_ENABLED = false/);
   assert.match(backend, /if \(!SHARED_PLANS_CREATE_ENABLED\)/);
-  assert.doesNotMatch(chat, /Make (?:a )?plan/i);
+  assert.match(flags, /sharedPlansEnabled = false/);
+  assert.match(
+    chat,
+    /if \(FeatureFlags\.sharedPlansEnabled\)[\s\S]{0,220}Key\('conversation-shared-plans'\)/,
+  );
+  assert.match(plansScreen, /if \(!FeatureFlags\.sharedPlansEnabled\) return/);
 });
 
 test('Plans use a deliberately small manual model with no calendar/location automation', () => {
@@ -49,6 +56,8 @@ test('only the creator can edit or cancel an existing plan', () => {
   assert.match(backend, /planStatus:\s*'cancelled'/);
   assert.match(service, /httpsCallable\('updateSharedPlan'\)/);
   assert.match(service, /httpsCallable\('cancelSharedPlan'\)/);
+  assert.match(plansScreen, /plan\.creatorUid == uid/);
+  assert.match(plansScreen, /if \(mine && !cancelled\)/);
 });
 
 test('Plans inherit message/account-deletion lifecycle instead of a parallel datastore', () => {
@@ -60,4 +69,10 @@ test('Plans inherit message/account-deletion lifecycle instead of a parallel dat
 test('direct clients cannot manufacture structured plan records', () => {
   assert.match(rules, /request\.resource\.data\.messageType == 'text'/);
   assert.match(service, /httpsCallable\('createSharedPlan'\)/);
+});
+
+test('plan UI rejects past selections and stays inside the backend two-year boundary', () => {
+  assert.match(plansScreen, /Duration\(days: 729\)/);
+  assert.match(plansScreen, /if \(!plannedFor\.isAfter\(DateTime\.now\(\)\)\)/);
+  assert.match(plansScreen, /Choose a future date and time/);
 });

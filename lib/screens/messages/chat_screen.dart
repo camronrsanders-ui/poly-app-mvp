@@ -2,10 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../config/feature_flags.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/ugc_text_policy.dart';
 import '../../widgets/conversation_space_header.dart';
+import 'shared_moments_screen.dart';
+import 'shared_plans_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -48,6 +51,28 @@ class _ChatScreenState extends State<ChatScreen> {
         _readUpdatesInFlight.remove(messageId);
       }
     });
+  }
+
+  void _openSharedMoments() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SharedMomentsScreen(
+          conversationId: widget.conversationId,
+          otherDisplayName: widget.otherDisplayName,
+        ),
+      ),
+    );
+  }
+
+  void _openSharedPlans() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SharedPlansScreen(
+          conversationId: widget.conversationId,
+          otherDisplayName: widget.otherDisplayName,
+        ),
+      ),
+    );
   }
 
   Future<void> _send() async {
@@ -248,6 +273,20 @@ class _ChatScreenState extends State<ChatScreen> {
           otherDisplayName: widget.otherDisplayName,
         ),
         actions: [
+          if (FeatureFlags.sharedMomentsEnabled)
+            IconButton(
+              key: const Key('conversation-shared-moments'),
+              onPressed: _openSharedMoments,
+              tooltip: 'Shared moments',
+              icon: const Icon(Icons.bookmark_outline_rounded),
+            ),
+          if (FeatureFlags.sharedPlansEnabled)
+            IconButton(
+              key: const Key('conversation-shared-plans'),
+              onPressed: _openSharedPlans,
+              tooltip: 'Plans',
+              icon: const Icon(Icons.event_outlined),
+            ),
           PopupMenuButton<String>(
             tooltip: 'Conversation safety options',
             onSelected: (value) {
