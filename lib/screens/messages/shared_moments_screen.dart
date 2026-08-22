@@ -257,7 +257,11 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
   String _supportingText(SharedMoment moment) {
     final parts = <String>[];
     if (moment.kind == 'message') {
-      parts.add('Saved from this conversation');
+      if (moment.sourceMessagePreview.isNotEmpty) {
+        parts.add('“${moment.sourceMessagePreview}”');
+      } else {
+        parts.add('Original message unavailable');
+      }
     }
     if (moment.placeLabel.isNotEmpty) parts.add(moment.placeLabel);
     if (moment.note.isNotEmpty) parts.add(moment.note);
@@ -378,7 +382,11 @@ class _SharedMomentsScreenState extends State<SharedMomentsScreen> {
                               ? null
                               : Padding(
                                   padding: const EdgeInsets.only(top: 4),
-                                  child: Text(supporting),
+                                  child: Text(
+                                    supporting,
+                                    maxLines: 6,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                           trailing: uid != null && moment.creatorUid == uid
                               ? IconButton(

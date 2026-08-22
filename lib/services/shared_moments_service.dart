@@ -10,6 +10,7 @@ class SharedMoment {
     required this.note,
     required this.placeLabel,
     required this.sourceMessageId,
+    required this.sourceMessagePreview,
     required this.createdAtMs,
   });
 
@@ -20,6 +21,7 @@ class SharedMoment {
   final String note;
   final String placeLabel;
   final String sourceMessageId;
+  final String sourceMessagePreview;
   final int? createdAtMs;
 
   factory SharedMoment.fromMap(Map<String, dynamic> data) {
@@ -31,6 +33,7 @@ class SharedMoment {
       note: data['note']?.toString() ?? '',
       placeLabel: data['placeLabel']?.toString() ?? '',
       sourceMessageId: data['sourceMessageId']?.toString() ?? '',
+      sourceMessagePreview: data['sourceMessagePreview']?.toString() ?? '',
       createdAtMs: switch (data['createdAtMs']) {
         final num value => value.toInt(),
         _ => null,

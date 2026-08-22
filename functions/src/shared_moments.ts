@@ -5,6 +5,7 @@ import {
   normalizeSharedMomentInput,
   SharedMomentInput,
 } from './shared_moment_fields';
+import {safeSharedMomentMessagePreview} from './shared_moment_preview';
 
 // Keep the write path fail-closed until the Shared Moments UI is approved and
 // protected photo-moment media has a complete moderation/delivery lifecycle.
@@ -19,6 +20,14 @@ function requireReference(raw: unknown, label: string): string {
   const value = String(raw ?? '').trim();
   if (!value || value.length > 128 || !/^[A-Za-z0-9:_-]+$/.test(value)) {
     throw new HttpsError('invalid-argument', `Invalid ${label}.`);
+  }
+  return value;
+}
+
+function storedReference(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value || value.length > 128 || !/^[A-Za-z0-9:_-]+$/.test(value)) {
+    return '';
   }
   return value;
 }
@@ -201,17 +210,44 @@ export const listSharedMoments = onCall(
       .limit(100)
       .get();
 
+    const momentDocs = snapshot.docs;
+    const sourceMessageIds = new Set<string>();
+    for (const moment of momentDocs) {
+      if (String(moment.get('momentKind') ?? '') !== 'message') continue;
+      const sourceMessageId = storedReference(moment.get('sourceMessageId'));
+      if (sourceMessageId) sourceMessageIds.add(sourceMessageId);
+    }
+
+    const sourceMessagePreviews = new Map<string, string>();
+    if (sourceMessageIds.size > 0) {
+      const sources = await db.getAll(
+        ...Array.from(sourceMessageIds, (sourceMessageId) =>
+          db.collection('messages').doc(sourceMessageId)),
+      );
+      for (const source of sources) {
+        const preview = safeSharedMomentMessagePreview(
+          source.data(),
+          conversationId,
+        );
+        if (preview) sourceMessagePreviews.set(source.id, preview);
+      }
+    }
+
     return {
-      moments: snapshot.docs.map((doc) => ({
-        momentId: doc.id,
-        creatorUid: String(doc.get('senderUid') ?? ''),
-        kind: String(doc.get('momentKind') ?? ''),
-        title: String(doc.get('momentTitle') ?? ''),
-        note: String(doc.get('momentNote') ?? ''),
-        placeLabel: String(doc.get('placeLabel') ?? ''),
-        sourceMessageId: String(doc.get('sourceMessageId') ?? ''),
-        createdAtMs: timestampMillis(doc.get('createdAt')),
-      })),
+      moments: momentDocs.map((doc) => {
+        const sourceMessageId = storedReference(doc.get('sourceMessageId'));
+        return {
+          momentId: doc.id,
+          creatorUid: String(doc.get('senderUid') ?? ''),
+          kind: String(doc.get('momentKind') ?? ''),
+          title: String(doc.get('momentTitle') ?? ''),
+          note: String(doc.get('momentNote') ?? ''),
+          placeLabel: String(doc.get('placeLabel') ?? ''),
+          sourceMessageId,
+          sourceMessagePreview: sourceMessagePreviews.get(sourceMessageId) ?? '',
+          createdAtMs: timestampMillis(doc.get('createdAt')),
+        };
+      }),
     };
   },
 );
