@@ -52,6 +52,12 @@ class SharedMomentsService {
   })  : _auth = auth ?? FirebaseAuth.instance,
         _functions = functions ?? FirebaseFunctions.instance;
 
+  static const Set<String> _displayableMomentKinds = {
+    'note',
+    'place',
+    'message',
+  };
+
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
 
@@ -134,7 +140,11 @@ class SharedMomentsService {
     return raw
         .whereType<Map>()
         .map((item) => SharedMoment.fromMap(Map<String, dynamic>.from(item)))
-        .where((moment) => moment.momentId.isNotEmpty)
+        .where(
+          (moment) =>
+              moment.momentId.isNotEmpty &&
+              _displayableMomentKinds.contains(moment.kind),
+        )
         .toList(growable: false);
   }
 
