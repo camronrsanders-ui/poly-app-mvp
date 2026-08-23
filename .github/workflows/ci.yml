@@ -66,7 +66,7 @@ jobs:
             "configuration_version": "1"
           }
           JSON
-          flutter build apk --debug
+          flutter build apk --debug --no-pub
           rm -f android/app/google-services.json
 
   ios-regression:
@@ -87,7 +87,7 @@ jobs:
       - name: Normalize and validate iOS native host
         run: bash tool/ensure_ios_runtime.sh
       - name: Build iOS simulator app
-        run: flutter build ios --simulator --debug
+        run: flutter build ios --simulator --debug --no-pub
 
   functions:
     name: Functions build, test and load
