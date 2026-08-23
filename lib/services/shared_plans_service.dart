@@ -13,6 +13,8 @@ class SharedPlan {
     required this.status,
   });
 
+  static const int _maxSupportedEpochMillis = 253402300799999;
+
   final String planId;
   final String creatorUid;
   final String title;
@@ -22,6 +24,13 @@ class SharedPlan {
   final int? cancelledAtMs;
   final String status;
 
+  static int? _trustedEpochMillis(dynamic value) {
+    if (value is! int || value < 0 || value > _maxSupportedEpochMillis) {
+      return null;
+    }
+    return value;
+  }
+
   factory SharedPlan.fromMap(Map<String, dynamic> data) {
     return SharedPlan(
       planId: data['planId']?.toString() ?? '',
@@ -29,14 +38,8 @@ class SharedPlan {
       title: data['title']?.toString() ?? '',
       note: data['note']?.toString() ?? '',
       placeLabel: data['placeLabel']?.toString() ?? '',
-      plannedForMs: switch (data['plannedForMs']) {
-        final num value => value.toInt(),
-        _ => null,
-      },
-      cancelledAtMs: switch (data['cancelledAtMs']) {
-        final num value => value.toInt(),
-        _ => null,
-      },
+      plannedForMs: _trustedEpochMillis(data['plannedForMs']),
+      cancelledAtMs: _trustedEpochMillis(data['cancelledAtMs']),
       status: data['status']?.toString() ?? '',
     );
   }
