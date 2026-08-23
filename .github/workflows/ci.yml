@@ -41,6 +41,7 @@ jobs:
           # google-services.json is intentionally not committed. The Android
           # debug build only needs structurally valid Google Services input,
           # so CI creates a non-secret demo config for compile validation.
+          trap 'rm -f android/app/google-services.json' EXIT
           cat > android/app/google-services.json <<'JSON'
           {
             "project_info": {
@@ -67,7 +68,6 @@ jobs:
           }
           JSON
           flutter build apk --debug --no-pub
-          rm -f android/app/google-services.json
 
   ios-regression:
     name: iOS simulator build regression
