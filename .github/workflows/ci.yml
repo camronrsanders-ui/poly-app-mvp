@@ -41,6 +41,10 @@ jobs:
           # google-services.json is intentionally not committed. The Android
           # debug build only needs structurally valid Google Services input,
           # so CI creates a non-secret demo config for compile validation.
+          if [[ -e android/app/google-services.json ]]; then
+            echo "Refusing to overwrite an existing Android Firebase config in CI." >&2
+            exit 1
+          fi
           trap 'rm -f android/app/google-services.json' EXIT
           cat > android/app/google-services.json <<'JSON'
           {
