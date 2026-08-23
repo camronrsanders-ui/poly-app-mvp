@@ -17,6 +17,7 @@ jobs:
   flutter:
     name: Flutter analyze and test
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,6 +71,7 @@ jobs:
   ios-regression:
     name: iOS simulator build regression
     runs-on: macos-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,6 +90,7 @@ jobs:
   functions:
     name: Functions build, test and load
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: functions
@@ -115,6 +118,7 @@ jobs:
   contracts:
     name: Client/backend security contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,6 +136,7 @@ jobs:
   security-rules:
     name: Firebase security rules
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
