@@ -143,8 +143,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Install pinned Firebase CLI
-        run: npm install -g firebase-tools@15.28.1
+      - name: Install pinned Firebase CLI without package scripts
+        run: npm install -g --ignore-scripts firebase-tools@15.28.1
       - name: Install locked security test dependencies without package scripts
         working-directory: tests/security
         run: npm ci --ignore-scripts
