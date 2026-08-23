@@ -6,6 +6,7 @@ import {normalizeSharedPlanInput, SharedPlanInput} from './shared_plan_fields';
 // Plans are modeled and testable now, but creation stays fail-closed until the
 // structured-card UI has its own approval and end-to-end staging validation.
 const SHARED_PLANS_CREATE_ENABLED = false;
+const DISPLAYABLE_SHARED_PLAN_STATUSES = new Set(['active', 'cancelled']);
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -23,6 +24,20 @@ function requireReference(raw: unknown, label: string): string {
 function timestampMillis(value: unknown): number | null {
   const candidate = value as {toMillis?: () => number} | null | undefined;
   return candidate?.toMillis?.() ?? null;
+}
+
+function isDisplayableSharedPlan(
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+): boolean {
+  const status = String(doc.get('planStatus') ?? '').trim();
+  const title = String(doc.get('planTitle') ?? '').trim();
+  const creatorUid = String(doc.get('senderUid') ?? '').trim();
+  return DISPLAYABLE_SHARED_PLAN_STATUSES.has(status)
+    && title.length > 0
+    && title.length <= 120
+    && creatorUid.length > 0
+    && creatorUid.length <= 128
+    && doc.get('plannedFor') instanceof Timestamp;
 }
 
 async function enforceRateLimit(
@@ -175,7 +190,9 @@ export const listSharedPlans = onCall(
       .orderBy('plannedFor', 'asc')
       .limit(100)
       .get();
-    return {plans: snapshot.docs.map(planResult)};
+    return {
+      plans: snapshot.docs.filter(isDisplayableSharedPlan).map(planResult),
+    };
   },
 );
 

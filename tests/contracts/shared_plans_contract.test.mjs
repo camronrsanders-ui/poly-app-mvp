@@ -67,6 +67,28 @@ test('only the creator can edit or cancel an existing plan', () => {
   assert.doesNotMatch(plansScreen, /if \(mine && !cancelled\)/);
 });
 
+test('plan list paths reject malformed and unknown-status stored records', () => {
+  assert.match(
+    backend,
+    /const DISPLAYABLE_SHARED_PLAN_STATUSES = new Set\(\['active', 'cancelled'\]\)/,
+  );
+  assert.match(backend, /function isDisplayableSharedPlan/);
+  assert.match(backend, /DISPLAYABLE_SHARED_PLAN_STATUSES\.has\(status\)/);
+  assert.match(backend, /doc\.get\('plannedFor'\) instanceof Timestamp/);
+  assert.match(
+    backend,
+    /snapshot\.docs\.filter\(isDisplayableSharedPlan\)\.map\(planResult\)/,
+  );
+  assert.match(
+    service,
+    /static const Set<String> _displayableStatuses = \{'active', 'cancelled'\}/,
+  );
+  assert.match(service, /plan\.creatorUid\.isNotEmpty/);
+  assert.match(service, /plan\.title\.trim\(\)\.isNotEmpty/);
+  assert.match(service, /plan\.plannedForMs != null/);
+  assert.match(service, /_displayableStatuses\.contains\(plan\.status\)/);
+});
+
 test('Plans inherit message/account-deletion lifecycle instead of a parallel datastore', () => {
   assert.match(backend, /collection\('messages'\)\.doc\(\)/);
   assert.match(accountDeletion, /collection\('messages'\)\.where\('senderUid', '==', uid\)/);

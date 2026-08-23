@@ -49,6 +49,8 @@ class SharedPlansService {
   })  : _auth = auth ?? FirebaseAuth.instance,
         _functions = functions ?? FirebaseFunctions.instance;
 
+  static const Set<String> _displayableStatuses = {'active', 'cancelled'};
+
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
 
@@ -118,7 +120,15 @@ class SharedPlansService {
     return raw
         .whereType<Map>()
         .map((item) => SharedPlan.fromMap(Map<String, dynamic>.from(item)))
-        .where((plan) => plan.planId.isNotEmpty)
+        .where(
+          (plan) =>
+              plan.planId.isNotEmpty &&
+              plan.creatorUid.isNotEmpty &&
+              plan.title.trim().isNotEmpty &&
+              plan.title.length <= 120 &&
+              plan.plannedForMs != null &&
+              _displayableStatuses.contains(plan.status),
+        )
         .toList(growable: false);
   }
 
