@@ -89,6 +89,14 @@ test('plan list paths reject malformed and unknown-status stored records', () =>
   assert.match(service, /_displayableStatuses\.contains\(plan\.status\)/);
 });
 
+test('plan timestamp decoding rejects fractional, negative, and out-of-range values', () => {
+  assert.match(service, /static const int _maxSupportedEpochMillis = 253402300799999/);
+  assert.match(service, /static int\? _trustedEpochMillis\(dynamic value\)/);
+  assert.match(service, /value is! int \|\| value < 0 \|\| value > _maxSupportedEpochMillis/);
+  assert.match(service, /plannedForMs:\s*_trustedEpochMillis\(data\['plannedForMs'\]\)/);
+  assert.match(service, /cancelledAtMs:\s*_trustedEpochMillis\(data\['cancelledAtMs'\]\)/);
+});
+
 test('Plans inherit message/account-deletion lifecycle instead of a parallel datastore', () => {
   assert.match(backend, /collection\('messages'\)\.doc\(\)/);
   assert.match(accountDeletion, /collection\('messages'\)\.where\('senderUid', '==', uid\)/);
@@ -128,7 +136,7 @@ test('plan cards identify the creator without adding identity fields', () => {
 test('cancelled plan history uses the trusted server cancellation timestamp', () => {
   assert.match(backend, /cancelledAtMs:\s*timestampMillis\(doc\.get\('cancelledAt'\)\)/);
   assert.match(service, /final int\? cancelledAtMs/);
-  assert.match(service, /cancelledAtMs:\s*switch \(data\['cancelledAtMs'\]\)/);
+  assert.match(service, /cancelledAtMs:\s*_trustedEpochMillis\(data\['cancelledAtMs'\]\)/);
   assert.match(plansScreen, /final millis = plan\.cancelledAtMs/);
   assert.match(
     plansScreen,
