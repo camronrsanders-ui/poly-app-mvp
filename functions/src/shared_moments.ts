@@ -10,6 +10,7 @@ import {safeSharedMomentMessagePreview} from './shared_moment_preview';
 // Keep the write path fail-closed until the Shared Moments UI is approved and
 // protected photo-moment media has a complete moderation/delivery lifecycle.
 const SHARED_MOMENTS_CREATE_ENABLED = false;
+const DISPLAYABLE_SHARED_MOMENT_KINDS = new Set(['note', 'place', 'message']);
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -210,7 +211,11 @@ export const listSharedMoments = onCall(
       .limit(100)
       .get();
 
-    const momentDocs = snapshot.docs;
+    // Read paths stay narrower than the reserved data model. Unknown kinds and
+    // photo moments remain invisible until a protected photo lifecycle exists.
+    const momentDocs = snapshot.docs.filter((doc) =>
+      DISPLAYABLE_SHARED_MOMENT_KINDS.has(String(doc.get('momentKind') ?? '').trim()),
+    );
     const sourceMessageIds = new Set<string>();
     for (const moment of momentDocs) {
       if (String(moment.get('momentKind') ?? '') !== 'message') continue;
