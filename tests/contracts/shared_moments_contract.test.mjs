@@ -34,6 +34,22 @@ test('Shared Moments creation stays server-gated until the product and photo lif
   assert.doesNotMatch(service, /createPhoto/);
 });
 
+test('Shared Moments read path fails closed for reserved and unknown kinds', () => {
+  assert.match(
+    backend,
+    /const DISPLAYABLE_SHARED_MOMENT_KINDS = new Set\(\['note', 'place', 'message'\]\)/,
+  );
+  assert.match(
+    backend,
+    /snapshot\.docs\.filter\(\(doc\) =>[\s\S]{0,180}DISPLAYABLE_SHARED_MOMENT_KINDS\.has/,
+  );
+  assert.match(
+    service,
+    /static const Set<String> _displayableMomentKinds = \{[\s\S]{0,120}'note',[\s\S]{0,120}'place',[\s\S]{0,120}'message'/,
+  );
+  assert.match(service, /_displayableMomentKinds\.contains\(moment\.kind\)/);
+});
+
 test('Shared Moments inherit message lifecycle instead of a parallel datastore', () => {
   assert.match(backend, /collection\('messages'\)\.doc\(\)/);
   assert.match(backend, /senderUid:\s*uid/);
