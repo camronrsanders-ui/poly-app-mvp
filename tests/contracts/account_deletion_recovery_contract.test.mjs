@@ -55,6 +55,23 @@ test('Private Vault user-scoped rate limits are included in deletion cleanup', (
   }
 });
 
+test('profile-media and moderation rate limits stay covered by account deletion cleanup', () => {
+  for (const action of [
+    'profile_photo_upload',
+    'profile_photo_confirm',
+    'profile_photo_review',
+    'profile_photo_access',
+    'profile_photo_delete',
+    'profile_photo_list',
+    'profile_photo_moderation_list',
+    'moderation_list',
+    'moderation_review',
+    'moderation_account',
+  ]) {
+    assert.match(deletion, new RegExp(`'${action}'`), `${action} must be cleaned on deletion`);
+  }
+});
+
 test('client login and session gate permit only deletion-pending paused accounts into recovery', () => {
   assert.match(auth, /status == 'paused' && data\?\['deletionRequestedAt'\] != null/);
   assert.match(auth, /status != 'active' && !deletionPending/);
