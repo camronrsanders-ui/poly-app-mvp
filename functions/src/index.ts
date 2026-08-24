@@ -692,6 +692,8 @@ export const deleteMyAccount = onCall(
       for (const action of [
         'discover', 'discover_location', 'like', 'pass', 'conversation', 'connections_list', 'circle_view', 'delete_account',
         'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',
+        'shared_moment_create', 'shared_moment_list', 'shared_moment_delete',
+        'shared_plan_create', 'shared_plan_list', 'shared_plan_update', 'shared_plan_cancel',
         'moderation_list', 'moderation_review', 'moderation_account',
         'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
         'private_media_preference_clear',

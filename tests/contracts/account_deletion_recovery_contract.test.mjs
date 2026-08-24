@@ -55,6 +55,20 @@ test('Private Vault user-scoped rate limits are included in deletion cleanup', (
   }
 });
 
+test('Shared Moments and Shared Plans user-scoped rate limits are included in deletion cleanup', () => {
+  for (const action of [
+    'shared_moment_create',
+    'shared_moment_list',
+    'shared_moment_delete',
+    'shared_plan_create',
+    'shared_plan_list',
+    'shared_plan_update',
+    'shared_plan_cancel',
+  ]) {
+    assert.match(deletion, new RegExp(`'${action}'`), `${action} must be cleaned on deletion`);
+  }
+});
+
 test('profile-media and moderation rate limits stay covered by account deletion cleanup', () => {
   for (const action of [
     'profile_photo_upload',
