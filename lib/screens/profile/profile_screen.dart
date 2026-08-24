@@ -42,9 +42,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _deleting = false;
   Object? _loadError;
   bool _partnered = false;
-  bool _openToConnections = true;
-  String _profileVisibility = 'public';
-  String _mapVisibility = 'matches_only';
+  bool _openToConnections = false;
+  String _profileVisibility = 'hidden';
+  String _mapVisibility = 'private';
   List<String> _intentions = [];
   final Set<String> _preferredStructures = {};
   final Set<String> _preferredIntentions = {};
@@ -141,11 +141,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           data['partnered'] is bool ? data['partnered'] as bool : false;
       _openToConnections = data['openToConnections'] is bool
           ? data['openToConnections'] as bool
-          : true;
+          : false;
       _profileVisibility = _choice(
-          data['profileVisibility'], _profileVisibilityOptions, 'public');
+          data['profileVisibility'], _profileVisibilityOptions, 'hidden');
       _mapVisibility =
-          _choice(data['mapVisibility'], _mapVisibilityOptions, 'matches_only');
+          _choice(data['mapVisibility'], _mapVisibilityOptions, 'private');
       _intentions = _strings(data['intentionTags'])
           .where(connectionIntentionOptions.contains)
           .take(12)
