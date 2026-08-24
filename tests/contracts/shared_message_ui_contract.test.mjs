@@ -17,7 +17,7 @@ test('Messages keeps conversation primary while gated tools live in the app bar'
   assert.match(chat, /actions:\s*\[/);
   assert.match(chat, /conversation-shared-moments/);
   assert.match(chat, /conversation-shared-plans/);
-  assert.match(chat, /Expanded\([\s\S]*StreamBuilder<QuerySnapshot<Map<String, dynamic>>>/);
+  assert.match(chat, /Expanded\([\s\S]*child:\s*_buildMessageContent\(uid\)/);
   assert.doesNotMatch(chat, /NavigationBar\([\s\S]*Shared moments/i);
 });
 
