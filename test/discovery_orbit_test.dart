@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:polycircle/theme/app_theme.dart';
 import 'package:polycircle/widgets/discovery_orbit.dart';
 
 Map<String, dynamic> _profile(
@@ -163,7 +164,7 @@ void main() {
             );
 
         expect(focused, greaterThan(rear * 1.7));
-        expect(rear, greaterThanOrEqualTo(47));
+        expect(rear, greaterThanOrEqualTo(AppTheme.minimumTapTarget));
       }
 
       expect(
@@ -377,10 +378,29 @@ void main() {
     final nextSize = tester.getSize(
       find.byKey(const ValueKey('discovery-next-profile')),
     );
-    expect(previousSize.width, greaterThanOrEqualTo(44));
-    expect(previousSize.height, greaterThanOrEqualTo(44));
-    expect(nextSize.width, greaterThanOrEqualTo(44));
-    expect(nextSize.height, greaterThanOrEqualTo(44));
+    final profileWorldSize = tester.getSize(
+      find.byKey(const ValueKey('discovery-enter-profile-world')),
+    );
+    expect(
+      previousSize.width,
+      greaterThanOrEqualTo(AppTheme.minimumTapTarget),
+    );
+    expect(
+      previousSize.height,
+      greaterThanOrEqualTo(AppTheme.minimumTapTarget),
+    );
+    expect(
+      nextSize.width,
+      greaterThanOrEqualTo(AppTheme.minimumTapTarget),
+    );
+    expect(
+      nextSize.height,
+      greaterThanOrEqualTo(AppTheme.minimumTapTarget),
+    );
+    expect(
+      profileWorldSize.height,
+      greaterThanOrEqualTo(AppTheme.minimumTapTarget),
+    );
 
     await _next(tester);
     expect(find.text('Profile 1, 21'), findsOneWidget);
@@ -515,7 +535,10 @@ void main() {
 
     expect(otherSizes, isNotEmpty);
     expect(otherSizes.every((size) => size < focused), isTrue);
-    expect(otherSizes.every((size) => size >= 47), isTrue);
+    expect(
+      otherSizes.every((size) => size >= AppTheme.minimumTapTarget),
+      isTrue,
+    );
   });
 
   testWidgets('selected profile information follows focus', (tester) async {

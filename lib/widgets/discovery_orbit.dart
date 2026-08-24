@@ -4,6 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/app_theme.dart';
+
 /// Pure helpers for keeping every Discover candidate reachable while rendering
 /// only the part of a large orbit that can be presented clearly.
 class DiscoveryOrbitMath {
@@ -95,7 +97,7 @@ class DiscoveryOrbitVisuals {
     if (count <= 1) return 88;
     if (count <= 3) return 84;
     if (count <= DiscoveryOrbitMath.maxVisibleProfiles) return 80;
-    return 76;
+    return 77;
   }
 
   static double nodeScale({
@@ -785,8 +787,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                 color: const Color(0xFFD9C7E8),
                 disabledColor: Colors.white30,
                 constraints: const BoxConstraints.tightFor(
-                  width: 44,
-                  height: 44,
+                  width: AppTheme.minimumTapTarget,
+                  height: AppTheme.minimumTapTarget,
                 ),
                 padding: const EdgeInsets.all(10),
                 visualDensity: VisualDensity.standard,
@@ -830,8 +832,8 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                 color: const Color(0xFFD9C7E8),
                 disabledColor: Colors.white30,
                 constraints: const BoxConstraints.tightFor(
-                  width: 44,
-                  height: 44,
+                  width: AppTheme.minimumTapTarget,
+                  height: AppTheme.minimumTapTarget,
                 ),
                 padding: const EdgeInsets.all(10),
                 visualDensity: VisualDensity.standard,
@@ -1030,7 +1032,9 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                           ? const Color(0xFF44364D)
                           : const Color(0xFF8050A9),
                     ),
-                    minimumSize: const Size.fromHeight(44),
+                    minimumSize: const Size.fromHeight(
+                      AppTheme.minimumTapTarget,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
