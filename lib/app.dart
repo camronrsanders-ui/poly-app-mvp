@@ -23,6 +23,8 @@ class PolycircleApp extends StatelessWidget {
       title: 'Polycircle',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       builder: (context, child) {
         final content = child ?? const SizedBox.shrink();
         if (!kDebugMode || !useFirebaseEmulators) return content;
