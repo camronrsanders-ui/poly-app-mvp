@@ -760,7 +760,8 @@ class _ChatLoadingState extends StatelessWidget {
           _LoadingBubble(
             alignment: Alignment.centerRight,
             width: 230,
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
           ),
           const SizedBox(height: AppSpacing.sm),
           _LoadingBubble(

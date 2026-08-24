@@ -375,9 +375,8 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark
-            ? const Color(0xFFF0E5F6)
-            : const Color(0xFF2A1E30),
+        backgroundColor:
+            isDark ? const Color(0xFFF0E5F6) : const Color(0xFF2A1E30),
         contentTextStyle: typography.bodyMedium?.copyWith(
           color: isDark ? const Color(0xFF21172B) : const Color(0xFFF9F2FD),
         ),
@@ -426,7 +425,8 @@ class AppTheme {
         unselectedLabelColor: semantic.textSecondary,
         indicatorColor: scheme.primary,
         dividerColor: semantic.border,
-        labelStyle: typography.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+        labelStyle:
+            typography.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         unselectedLabelStyle: typography.labelLarge,
       ),
     );

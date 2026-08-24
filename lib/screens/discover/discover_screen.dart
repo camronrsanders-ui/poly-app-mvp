@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -651,7 +650,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       return _StateMessage(
         icon: Icons.cloud_off_outlined,
         title: 'Discover is taking a break',
-        text: 'We could not load profiles. Check your connection and try again.',
+        text:
+            'We could not load profiles. Check your connection and try again.',
         debugDetails: kDebugMode ? pageError.toString() : null,
         action: FilledButton.tonalIcon(
           onPressed: _reload,
@@ -739,7 +739,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           if (_prefetching && _focusedIndex >= _profiles.length - 1)
             const Padding(
               key: ValueKey('discover-page-boundary-loading'),
-              padding: EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+              padding:
+                  EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
               child: Center(
                 child: SizedBox(
                   width: 22,
@@ -941,7 +942,8 @@ class _DiscoverWorld extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     'Explore your orbit',
-                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                    style:
+                                        theme.textTheme.headlineSmall?.copyWith(
                                       color: semantic.textPrimary,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.35,
@@ -972,9 +974,10 @@ class _DiscoverWorld extends StatelessWidget {
                                     distanceBusy ? null : onChangeDistance,
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: semantic.textPrimary,
-                                  backgroundColor:
-                                      semantic.surfaceRaised.withValues(alpha: 0.70),
-                                  side: BorderSide(color: semantic.borderStrong),
+                                  backgroundColor: semantic.surfaceRaised
+                                      .withValues(alpha: 0.70),
+                                  side:
+                                      BorderSide(color: semantic.borderStrong),
                                   minimumSize: const Size(
                                     0,
                                     AppTheme.minimumTapTarget,
