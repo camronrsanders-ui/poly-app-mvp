@@ -7,6 +7,7 @@ import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/shared_moments_service.dart';
 import '../../services/ugc_text_policy.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/conversation_space_header.dart';
 import 'shared_moments_screen.dart';
 import 'shared_plans_screen.dart';
@@ -376,13 +377,37 @@ class _ChatScreenState extends State<ChatScreen> {
     details.dispose();
   }
 
+  void _retryMessages() {
+    if (mounted) setState(() {});
+  }
+
+  String _formatMessageTime(Object? rawTimestamp) {
+    if (rawTimestamp is! Timestamp) return '';
+    final value = rawTimestamp.toDate().toLocal();
+    final hour = value.hour == 0
+        ? 12
+        : value.hour > 12
+            ? value.hour - 12
+            : value.hour;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final period = value.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      return const Scaffold(body: Center(child: Text('Sign in to chat.')));
+      return const Scaffold(
+        body: _ChatStateView(
+          icon: Icons.lock_outline_rounded,
+          title: 'Sign in to chat',
+          message: 'Your conversations are available after you sign in.',
+        ),
+      );
     }
 
+    final semantic = PolycircleColors.of(context);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -422,130 +447,423 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           children: [
             Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: _messages.watchMessages(widget.conversationId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return const Center(
-                      child: Text('Could not load messages.'),
-                    );
-                  }
-                  final docs = snapshot.data?.docs ?? [];
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'Start with something genuine. Your connection does not have to fit a traditional script.',
-                          textAlign: TextAlign.center,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  border: Border(
+                    top: BorderSide(color: semantic.border),
+                  ),
+                ),
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _messages.watchMessages(widget.conversationId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData) {
+                      return const _ChatLoadingState();
+                    }
+                    if (snapshot.hasError) {
+                      return _ChatStateView(
+                        icon: Icons.cloud_off_outlined,
+                        title: 'Could not load messages',
+                        message:
+                            'Your conversation is still here. Check your connection and try again.',
+                        action: FilledButton.tonalIcon(
+                          onPressed: _retryMessages,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Try again'),
                         ),
+                      );
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return const _ChatStateView(
+                        icon: Icons.waving_hand_outlined,
+                        title: 'Start your conversation',
+                        message:
+                            'Start with something genuine. Your connection does not have to fit a traditional script.',
+                      );
+                    }
+                    return ListView.builder(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.md,
+                        AppSpacing.md,
+                        AppSpacing.sm,
                       ),
-                    );
-                  }
-                  return ListView.builder(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data();
-                      final senderUid = data['senderUid'] as String? ?? '';
-                      final isMine = senderUid == uid;
-                      final isDeleted = data['isDeleted'] == true;
-                      final text = isDeleted
-                          ? 'Message removed'
-                          : (data['text'] as String? ?? '');
-                      if (!isMine) {
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data();
+                        final senderUid = data['senderUid'] as String? ?? '';
+                        final isMine = senderUid == uid;
+                        final isDeleted = data['isDeleted'] == true;
+                        final text = isDeleted
+                            ? 'Message removed'
+                            : (data['text'] as String? ?? '');
                         final readBy = List<String>.from(
                           data['readBy'] ?? const [],
                         );
-                        _queueMarkRead(doc.id, readBy, uid);
-                      }
-                      final canLongPress = !isDeleted &&
-                          (FeatureFlags.sharedMomentsEnabled || !isMine);
-                      return GestureDetector(
-                        onLongPress: canLongPress
-                            ? () => _showMessageActions(
-                                  messageId: doc.id,
-                                  isMine: isMine,
-                                )
-                            : null,
-                        child: Align(
-                          alignment: isMine
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-                            ),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isMine
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer
-                                  : Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Text(text),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+                        if (!isMine) {
+                          _queueMarkRead(doc.id, readBy, uid);
+                        }
+                        final canLongPress = !isDeleted &&
+                            (FeatureFlags.sharedMomentsEnabled || !isMine);
+                        return _MessageBubble(
+                          text: text,
+                          timestamp: _formatMessageTime(data['createdAt']),
+                          isMine: isMine,
+                          isDeleted: isDeleted,
+                          isRead: isMine && readBy.contains(widget.otherUid),
+                          onLongPress: canLongPress
+                              ? () => _showMessageActions(
+                                    messageId: doc.id,
+                                    isMine: isMine,
+                                  )
+                              : null,
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('conversation-message-composer'),
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 5,
-                      maxLength: 2000,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: 'Message…',
-                        counterText: '',
+            ),
+            _MessageComposer(
+              controller: _controller,
+              sending: _sending,
+              onSend: _send,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({
+    required this.text,
+    required this.timestamp,
+    required this.isMine,
+    required this.isDeleted,
+    required this.isRead,
+    this.onLongPress,
+  });
+
+  final String text;
+  final String timestamp;
+  final bool isMine;
+  final bool isDeleted;
+  final bool isRead;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final semantic = PolycircleColors.of(context);
+    final background = isMine ? scheme.primary : semantic.surfaceRaised;
+    final foreground = isMine ? scheme.onPrimary : semantic.textPrimary;
+    final metadataColor = isMine
+        ? scheme.onPrimary.withValues(alpha: 0.84)
+        : semantic.textSecondary;
+    final border = isMine ? Colors.transparent : semantic.border;
+
+    final statusLabel = isMine ? (isRead ? 'Read' : 'Sent') : '';
+    final semanticsParts = <String>[
+      isMine ? 'You' : 'Received message',
+      text,
+      if (timestamp.isNotEmpty) timestamp,
+      if (statusLabel.isNotEmpty) statusLabel,
+    ];
+
+    return Semantics(
+      label: semanticsParts.join(', '),
+      button: onLongPress != null,
+      hint: onLongPress == null ? null : 'Long press for message actions',
+      child: Align(
+        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onLongPress: onLongPress,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.82,
+              minHeight: AppTheme.minimumTapTarget,
+            ),
+            margin: EdgeInsets.only(
+              bottom: AppSpacing.xs,
+              left: isMine ? AppSpacing.xxxl : 0,
+              right: isMine ? 0 : AppSpacing.xxxl,
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.sm,
+              AppSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(AppRadius.lg),
+                topRight: const Radius.circular(AppRadius.lg),
+                bottomLeft: Radius.circular(isMine ? AppRadius.lg : 6),
+                bottomRight: Radius.circular(isMine ? 6 : AppRadius.lg),
+              ),
+              boxShadow: isMine
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: semantic.shadow,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
+                    ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  text,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: foreground,
+                    fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
+                    height: 1.35,
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    tooltip: 'Send message',
+                ),
+                if (timestamp.isNotEmpty || isMine) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (timestamp.isNotEmpty)
+                        Text(
+                          timestamp,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: metadataColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (timestamp.isNotEmpty && isMine)
+                        const SizedBox(width: AppSpacing.xs),
+                      if (isMine) ...[
+                        Icon(
+                          isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                          size: 15,
+                          color: metadataColor,
+                        ),
+                        const SizedBox(width: AppSpacing.xxs),
+                        Text(
+                          isRead ? 'Read' : 'Sent',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: metadataColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageComposer extends StatelessWidget {
+  const _MessageComposer({
+    required this.controller,
+    required this.sending,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    return Material(
+      color: semantic.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: semantic.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sm,
+          AppSpacing.xs,
+          AppSpacing.sm,
+          AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('conversation-message-composer'),
+                controller: controller,
+                minLines: 1,
+                maxLines: 5,
+                maxLength: 2000,
+                textInputAction: TextInputAction.newline,
+                decoration: const InputDecoration(
+                  hintText: 'Message…',
+                  counterText: '',
+                ),
               ),
             ),
+            const SizedBox(width: AppSpacing.xs),
+            SizedBox.square(
+              dimension: AppTheme.minimumTapTarget,
+              child: IconButton.filled(
+                onPressed: sending ? null : onSend,
+                icon: sending
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+                tooltip: 'Send message',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatLoadingState extends StatelessWidget {
+  const _ChatLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    return Semantics(
+      label: 'Loading messages',
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        children: [
+          _LoadingBubble(
+            alignment: Alignment.centerLeft,
+            width: 190,
+            color: semantic.surfaceRaised,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _LoadingBubble(
+            alignment: Alignment.centerRight,
+            width: 230,
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _LoadingBubble(
+            alignment: Alignment.centerLeft,
+            width: 150,
+            color: semantic.surfaceRaised,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBubble extends StatelessWidget {
+  const _LoadingBubble({
+    required this.alignment,
+    required this.width,
+    required this.color,
+  });
+
+  final Alignment alignment;
+  final double width;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: Container(
+        width: width,
+        height: 58,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatStateView extends StatelessWidget {
+  const _ChatStateView({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = PolycircleColors.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: 34,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: semantic.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: semantic.textSecondary,
+                ),
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              action!,
+            ],
           ],
         ),
       ),
