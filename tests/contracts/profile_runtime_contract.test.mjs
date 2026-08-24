@@ -27,15 +27,19 @@ test('Profile transient retry stays fail-closed for non-transient Firebase error
   assert.match(profile, /attempt == 3 \|\| !_shouldRetryProfileLoad\(error\)\) rethrow/);
 });
 
-test('Profile loader sanitizes legacy dropdown/list values before widget construction', () => {
+test('Profile loader sanitizes legacy values and keeps privacy fields fail-closed', () => {
   assert.match(profile, /String _choice/);
   assert.match(
     profile,
-    /_choice\(\s*data\['profileVisibility'\],\s*_profileVisibilityOptions,\s*'public'\s*\)/,
+    /_openToConnections = data\['openToConnections'\] is bool[\s\S]*:\s*false;/,
   );
   assert.match(
     profile,
-    /_choice\(\s*data\['mapVisibility'\],\s*_mapVisibilityOptions,\s*'matches_only'\s*\)/,
+    /_choice\(\s*data\['profileVisibility'\],\s*_profileVisibilityOptions,\s*'hidden'\s*\)/,
+  );
+  assert.match(
+    profile,
+    /_choice\(\s*data\['mapVisibility'\],\s*_mapVisibilityOptions,\s*'private'\s*\)/,
   );
   assert.match(profile, /where\(connectionIntentionOptions\.contains\)/);
   assert.match(profile, /where\(relationshipStructureOptions\.contains\)/);
