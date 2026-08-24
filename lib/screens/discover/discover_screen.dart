@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -9,6 +10,7 @@ import '../../services/connection_service.dart';
 import '../../services/discover_location_service.dart';
 import '../../services/discovery_service.dart';
 import '../../services/profile_media_service.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/discovery_orbit.dart';
 import '../profile/profile_detail_screen.dart';
 import '../safety/safety_center_screen.dart';
@@ -352,7 +354,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   Future<void> _refresh() async {
     final hasLocation = await _refreshLocation(force: false);
     if (!mounted || !hasLocation) return;
-    if (!mounted) return;
     await _startFreshSession();
   }
 
@@ -376,83 +377,57 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Future<void> _like(Map<String, dynamic> profile) async {
     final uid = profile['uid'] as String?;
-
     if (uid == null || _actingOn.contains(uid)) return;
 
     setState(() => _actingOn.add(uid));
-
     try {
       final matched = await _likeUser(uid);
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            matched ? 'You connected 🎉' : 'Interest sent.',
-          ),
+          content: Text(matched ? 'You connected 🎉' : 'Interest sent.'),
         ),
       );
-
       _removeProfile(uid);
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover like failed: $error');
         debugPrintStack(stackTrace: stackTrace);
       }
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not send interest right now.'),
-        ),
+        const SnackBar(content: Text('Could not send interest right now.')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _actingOn.remove(uid));
-      }
+      if (mounted) setState(() => _actingOn.remove(uid));
     }
   }
 
   Future<void> _pass(Map<String, dynamic> profile) async {
     final uid = profile['uid'] as String?;
-
     if (uid == null || _actingOn.contains(uid)) return;
 
     setState(() => _actingOn.add(uid));
-
     try {
       await _passUser(uid);
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Passed. This profile will stay out of Discover.',
-          ),
+          content: Text('Passed. This profile will stay out of Discover.'),
         ),
       );
-
       _removeProfile(uid);
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Discover pass failed: $error');
         debugPrintStack(stackTrace: stackTrace);
       }
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not save that Pass right now.'),
-        ),
+        const SnackBar(content: Text('Could not save that Pass right now.')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _actingOn.remove(uid));
-      }
+      if (mounted) setState(() => _actingOn.remove(uid));
     }
   }
 
@@ -469,7 +444,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
 
     if (!mounted) return;
-
     if (result == 'liked' || result == 'matched' || result == 'blocked') {
       final uid = _profileUid(profile);
       if (uid != null) _removeProfile(uid);
@@ -483,7 +457,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       future: _photosFor(uid),
       builder: (context, snapshot) {
         final photos = snapshot.data ?? const <VisibleProfilePhoto>[];
-
         if (photos.isNotEmpty) {
           return Image.network(
             photos.first.url.toString(),
@@ -503,17 +476,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             color: Color(0xFF21122F),
             child: Center(
               child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFFC596FF),
-                ),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
           );
         }
-
         return _photoFallback();
       },
     );
@@ -571,9 +540,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     try {
       final hasLocation = await _refreshLocation(force: true);
       if (!mounted) return;
-      setState(() {
-        _initializing = false;
-      });
+      setState(() => _initializing = false);
       if (hasLocation) await _startFreshSession();
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -600,8 +567,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => _DiscoverDistanceSheet(
-        selectedMiles: _distanceMiles,
+      builder: (context) => Theme(
+        data: AppTheme.dark,
+        child: _DiscoverDistanceSheet(selectedMiles: _distanceMiles),
       ),
     );
     if (selected == null || selected == _distanceMiles || !mounted) return;
@@ -617,9 +585,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     try {
       await _discovery.saveDistanceMiles(distanceMiles);
       if (!mounted) return;
-      setState(() {
-        _distanceMiles = distanceMiles;
-      });
+      setState(() => _distanceMiles = distanceMiles);
       if (_locationProblem == null) await _startFreshSession();
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -651,16 +617,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               : 'We could not get a current location. Check your connection and device location, then retry.',
       action: Wrap(
         alignment: WrapAlignment.center,
-        spacing: 8,
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
         children: [
-          TextButton.icon(
+          FilledButton.tonalIcon(
             key: const ValueKey('discover-location-retry'),
             onPressed: _retryLocation,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             label: const Text('Retry'),
           ),
           if (servicesDisabled || permissionUnavailable)
-            TextButton.icon(
+            OutlinedButton.icon(
               key: const ValueKey('discover-location-settings'),
               onPressed: _openLocationSettings,
               icon: const Icon(Icons.settings_outlined),
@@ -673,9 +640,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Widget _discoverContent() {
     if (_loadingInitialPage) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFC596FF)),
-      );
+      return const _DiscoverLoadingState();
     }
 
     final pageError = _pageError;
@@ -684,14 +649,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         return _locationUnavailable(DiscoverLocationStatus.unavailable);
       }
       return _StateMessage(
-        icon: Icons.error_outline,
+        icon: Icons.cloud_off_outlined,
         title: 'Discover is taking a break',
-        text:
-            'We could not load profiles. Check your connection and try again.',
+        text: 'We could not load profiles. Check your connection and try again.',
         debugDetails: kDebugMode ? pageError.toString() : null,
-        action: TextButton(
+        action: FilledButton.tonalIcon(
           onPressed: _reload,
-          child: const Text('Try again'),
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Try again'),
         ),
       );
     }
@@ -699,24 +664,27 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (_profiles.isEmpty) {
       final nextDistance = nextDiscoverDistanceMiles(_distanceMiles);
       return _StateMessage(
-        icon: Icons.travel_explore_outlined,
+        icon: Icons.travel_explore_rounded,
         title: 'No new worlds within $_distanceMiles miles.',
         text:
-            'Your selected distance stays in control. Refresh or explicitly increase it to explore farther.',
+            'You’re caught up nearby. Refresh to check again, or choose a wider radius when you want to explore farther.',
         action: Wrap(
           alignment: WrapAlignment.center,
-          spacing: 8,
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
           children: [
-            TextButton(
+            FilledButton.tonalIcon(
               key: const ValueKey('discover-empty-refresh'),
               onPressed: _reload,
-              child: const Text('Refresh'),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh'),
             ),
             if (nextDistance != null)
-              TextButton(
+              OutlinedButton.icon(
                 key: const ValueKey('discover-increase-radius'),
                 onPressed: () => _setDistance(nextDistance),
-                child: Text('Increase to $nextDistance mi'),
+                icon: const Icon(Icons.radar_rounded),
+                label: Text('Increase to $nextDistance mi'),
               ),
           ],
         ),
@@ -726,46 +694,64 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final atEnd = !_hasMore && _focusedIndex >= _profiles.length - 1;
     final nextDistance = nextDiscoverDistanceMiles(_distanceMiles);
     return RefreshIndicator(
-      color: const Color(0xFFC596FF),
+      color: AppTheme.accentBlue,
       backgroundColor: const Color(0xFF21122F),
       onRefresh: _refresh,
       child: ListView(
         key: const ValueKey('discover-world-scroll-view'),
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
+        padding: const EdgeInsets.fromLTRB(0, AppSpacing.xxs, 0, AppSpacing.xl),
         children: [
-          DiscoveryOrbit(
-            profiles: _profiles,
-            imageBuilder: _profileImage,
-            onViewProfile: _viewProfile,
-            onLike: _like,
-            onPass: _pass,
-            isActing: (uid) => _actingOn.contains(uid),
-            onFocusChanged: _focusChanged,
-            onRequestMore: () => unawaited(_prefetchNextPage()),
-            hasMoreProfiles: _hasMore,
-            loadingMore: _prefetching,
-            counterLabelBuilder: _counterLabel,
-            counterSemanticsBuilder: _counterSemantics,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0x45140C1D),
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+                border: Border.all(color: const Color(0x664A2B61)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 24,
+                    offset: Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+                child: DiscoveryOrbit(
+                  profiles: _profiles,
+                  imageBuilder: _profileImage,
+                  onViewProfile: _viewProfile,
+                  onLike: _like,
+                  onPass: _pass,
+                  isActing: (uid) => _actingOn.contains(uid),
+                  onFocusChanged: _focusChanged,
+                  onRequestMore: () => unawaited(_prefetchNextPage()),
+                  hasMoreProfiles: _hasMore,
+                  loadingMore: _prefetching,
+                  counterLabelBuilder: _counterLabel,
+                  counterSemanticsBuilder: _counterSemantics,
+                ),
+              ),
+            ),
           ),
           if (_prefetching && _focusedIndex >= _profiles.length - 1)
             const Padding(
               key: ValueKey('discover-page-boundary-loading'),
-              padding: EdgeInsets.only(top: 2, bottom: 8),
+              padding: EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
               child: Center(
                 child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFFC596FF),
-                  ),
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
                 ),
               ),
             ),
           if (pageError != null && !_prefetching && _hasMore)
             _DiscoverPagingMessage(
               key: const ValueKey('discover-page-retry'),
+              icon: Icons.cloud_off_outlined,
               text: 'The next nearby worlds could not load yet.',
               actionLabel: 'Retry',
               onAction: () => unawaited(_prefetchNextPage()),
@@ -773,6 +759,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           if (atEnd)
             _DiscoverPagingMessage(
               key: const ValueKey('discover-end-of-results'),
+              icon: Icons.auto_awesome_rounded,
               text: 'You’ve explored the nearby worlds available right now.',
               actionLabel: 'Refresh',
               onAction: _reload,
@@ -788,30 +775,33 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return _DiscoverWorld(
-      onOpenSafetyCenter: _openSafetyCenter,
-      distanceMiles: _distanceMiles,
-      distanceBusy: _savingDistance,
-      onChangeDistance: _showDistancePicker,
-      child: _initializing
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFC596FF)),
-            )
-          : _locationProblem != null
-              ? _locationUnavailable(_locationProblem!)
-              : _setupError != null
-                  ? _StateMessage(
-                      icon: Icons.error_outline,
-                      title: 'Discover is taking a break',
-                      text:
-                          'We could not prepare nearby Discover. Check your connection and try again.',
-                      debugDetails: kDebugMode ? _setupError.toString() : null,
-                      action: TextButton(
-                        onPressed: _retryLocation,
-                        child: const Text('Try again'),
-                      ),
-                    )
-                  : _discoverContent(),
+    return Theme(
+      data: AppTheme.dark,
+      child: _DiscoverWorld(
+        onOpenSafetyCenter: _openSafetyCenter,
+        distanceMiles: _distanceMiles,
+        distanceBusy: _savingDistance,
+        onChangeDistance: _showDistancePicker,
+        child: _initializing
+            ? const _DiscoverLoadingState()
+            : _locationProblem != null
+                ? _locationUnavailable(_locationProblem!)
+                : _setupError != null
+                    ? _StateMessage(
+                        icon: Icons.cloud_off_outlined,
+                        title: 'Discover is taking a break',
+                        text:
+                            'We could not prepare nearby Discover. Check your connection and try again.',
+                        debugDetails:
+                            kDebugMode ? _setupError.toString() : null,
+                        action: FilledButton.tonalIcon(
+                          onPressed: _retryLocation,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Try again'),
+                        ),
+                      )
+                    : _discoverContent(),
+      ),
     );
   }
 }
@@ -819,6 +809,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 class _DiscoverPagingMessage extends StatelessWidget {
   const _DiscoverPagingMessage({
     super.key,
+    required this.icon,
     required this.text,
     required this.actionLabel,
     required this.onAction,
@@ -826,6 +817,7 @@ class _DiscoverPagingMessage extends StatelessWidget {
     this.onSecondary,
   });
 
+  final IconData icon;
   final String text;
   final String actionLabel;
   final VoidCallback onAction;
@@ -834,26 +826,47 @@ class _DiscoverPagingMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: const Color(0xA6140C1D),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0x884A2B61)),
+          color: semantic.surfaceRaised.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: semantic.border),
         ),
         child: Row(
           children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 20, color: AppTheme.accentBlue),
+            ),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 text,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFC8B8D5),
-                      height: 1.25,
+                      color: semantic.textSecondary,
+                      height: 1.35,
                     ),
               ),
             ),
+            const SizedBox(width: AppSpacing.xs),
             TextButton(onPressed: onAction, child: Text(actionLabel)),
             if (secondaryLabel != null && onSecondary != null)
               TextButton(
@@ -884,6 +897,8 @@ class _DiscoverWorld extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = PolycircleColors.of(context);
     return ColoredBox(
       key: const ValueKey('discover-cosmic-world'),
       color: const Color(0xFF05030B),
@@ -891,9 +906,7 @@ class _DiscoverWorld extends StatelessWidget {
         children: [
           const Positioned.fill(
             child: RepaintBoundary(
-              child: CustomPaint(
-                painter: _DiscoverWorldPainter(),
-              ),
+              child: CustomPaint(painter: _DiscoverWorldPainter()),
             ),
           ),
           SafeArea(
@@ -901,7 +914,12 @@ class _DiscoverWorld extends StatelessWidget {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 10, 3),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                    AppSpacing.xs,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -909,71 +927,75 @@ class _DiscoverWorld extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Explore your orbit',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    color: const Color(0xFFF8F2FF),
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.35,
+                            Row(
+                              children: [
+                                Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: const BoxDecoration(
+                                    color: AppTheme.accentPink,
+                                    shape: BoxShape.circle,
                                   ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    'Explore your orbit',
+                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                      color: semantic.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: AppSpacing.xxs),
                             Text(
                               'Move through the people whose worlds may cross yours.',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: const Color(0xFFB7A9C4),
-                                    height: 1.25,
-                                  ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: semantic.textSecondary,
+                                height: 1.35,
+                              ),
                             ),
-                            const SizedBox(height: 9),
+                            const SizedBox(height: AppSpacing.sm),
                             Semantics(
                               button: true,
                               label:
                                   'Discovery radius, within $distanceMiles miles',
                               hint: 'Activate to change your nearby radius',
                               child: OutlinedButton.icon(
-                                key: const ValueKey(
-                                  'discover-radius-control',
-                                ),
+                                key: const ValueKey('discover-radius-control'),
                                 onPressed:
                                     distanceBusy ? null : onChangeDistance,
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFEBD9FF),
-                                  backgroundColor: const Color(0x7321122F),
-                                  side: const BorderSide(
-                                    color: Color(0xFF69408D),
-                                    width: 0.9,
+                                  foregroundColor: semantic.textPrimary,
+                                  backgroundColor:
+                                      semantic.surfaceRaised.withValues(alpha: 0.70),
+                                  side: BorderSide(color: semantic.borderStrong),
+                                  minimumSize: const Size(
+                                    0,
+                                    AppTheme.minimumTapTarget,
                                   ),
-                                  minimumSize: const Size(0, 34),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 11,
-                                    vertical: 6,
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.xs,
                                   ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
                                   shape: const StadiumBorder(),
                                 ),
                                 icon: distanceBusy
                                     ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
+                                        width: 16,
+                                        height: 16,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Color(0xFFC596FF),
                                         ),
                                       )
                                     : const Icon(
                                         Icons.location_on_outlined,
-                                        size: 17,
+                                        size: 18,
                                       ),
                                 label: Text('Within $distanceMiles mi'),
                               ),
@@ -981,20 +1003,18 @@ class _DiscoverWorld extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Semantics(
-                        button: true,
-                        label: 'Open Safety center',
+                      const SizedBox(width: AppSpacing.xs),
+                      SizedBox.square(
+                        dimension: AppTheme.minimumTapTarget,
                         child: IconButton(
                           key: const ValueKey('discover-safety-center'),
                           tooltip: 'Safety center',
                           onPressed: onOpenSafetyCenter,
                           style: IconButton.styleFrom(
-                            foregroundColor: const Color(0xFFE7D5F8),
-                            backgroundColor: const Color(0x66231631),
-                            side: const BorderSide(
-                              color: Color(0xFF4B2B63),
-                            ),
+                            foregroundColor: semantic.textPrimary,
+                            backgroundColor:
+                                semantic.surfaceRaised.withValues(alpha: 0.72),
+                            side: BorderSide(color: semantic.border),
                           ),
                           icon: const Icon(Icons.shield_outlined),
                         ),
@@ -1019,21 +1039,24 @@ class _DiscoverDistanceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = PolycircleColors.of(context);
     return SafeArea(
       top: false,
       child: Container(
         key: const ValueKey('discover-radius-sheet'),
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 22),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF21122F), Color(0xFF0D0914)],
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        decoration: BoxDecoration(
+          color: semantic.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
           ),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border(
-            top: BorderSide(color: Color(0xFF754AA0)),
-          ),
+          border: Border(top: BorderSide(color: semantic.borderStrong)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1044,57 +1067,200 @@ class _DiscoverDistanceSheet extends StatelessWidget {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7C6A89),
-                  borderRadius: BorderRadius.circular(999),
+                  color: semantic.borderStrong,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'Explore nearby',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFFF8F1FF),
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: semantic.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
               'Choose how far your Orbit reaches. It will never widen silently.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB9ACC4),
-                  ),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: semantic.textSecondary,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             for (final miles in discoverDistanceOptionsMiles)
-              Semantics(
-                button: true,
-                selected: miles == selectedMiles,
-                label: '$miles mile Discover radius',
-                child: ListTile(
-                  key: ValueKey('discover-radius-$miles'),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: miles == selectedMiles
-                          ? const Color(0xFFB77CFA)
-                          : Colors.transparent,
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Semantics(
+                  button: true,
+                  selected: miles == selectedMiles,
+                  label: '$miles mile Discover radius',
+                  child: Material(
+                    color: miles == selectedMiles
+                        ? theme.colorScheme.primary.withValues(alpha: 0.16)
+                        : semantic.surfaceRaised,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      side: BorderSide(
+                        color: miles == selectedMiles
+                            ? theme.colorScheme.primary
+                            : semantic.border,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      key: ValueKey('discover-radius-$miles'),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                      ),
+                      textColor: semantic.textPrimary,
+                      iconColor: theme.colorScheme.primary,
+                      title: Text(
+                        '$miles mi',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      trailing: miles == selectedMiles
+                          ? const Icon(Icons.check_circle_rounded)
+                          : const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.of(context).pop(miles),
                     ),
                   ),
-                  tileColor: miles == selectedMiles
-                      ? const Color(0xFF4A2469)
-                      : Colors.transparent,
-                  textColor: const Color(0xFFF1E8F8),
-                  iconColor: const Color(0xFFD3A7FF),
-                  title: Text('$miles mi'),
-                  trailing: miles == selectedMiles
-                      ? const Icon(Icons.check_circle_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(miles),
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DiscoverLoadingState extends StatelessWidget {
+  const _DiscoverLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    return Semantics(
+      label: 'Loading nearby profiles',
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 220,
+                height: 220,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 210,
+                      height: 210,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: semantic.border),
+                      ),
+                    ),
+                    Container(
+                      width: 142,
+                      height: 142,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: semantic.border.withValues(alpha: 0.72),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [AppTheme.brandPurple, AppTheme.accentPink],
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.xl),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x663DC7F3),
+                            blurRadius: 28,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.public_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                    const Positioned(
+                      top: 18,
+                      right: 42,
+                      child: _OrbitDot(color: AppTheme.accentBlue, size: 16),
+                    ),
+                    const Positioned(
+                      bottom: 30,
+                      left: 26,
+                      child: _OrbitDot(color: AppTheme.accentGold, size: 13),
+                    ),
+                    const Positioned(
+                      bottom: 18,
+                      right: 55,
+                      child: _OrbitDot(color: AppTheme.accentPink, size: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              const CircularProgressIndicator(),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Finding nearby worlds…',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: semantic.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                'Matching your preferences while keeping precise location private.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: semantic.textSecondary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrbitDot extends StatelessWidget {
+  const _OrbitDot({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.42),
+            blurRadius: 12,
+          ),
+        ],
       ),
     );
   }
@@ -1202,53 +1368,80 @@ class _StateMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final semantic = PolycircleColors.of(context);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: const Color(0xFFB987F2)),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: const Color(0xFFF7F0FF),
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFFB9ACC4),
-              ),
-            ),
-            if (debugDetails != null && debugDetails!.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              SelectableText(
-                debugDetails!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF9C8FA8),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            decoration: BoxDecoration(
+              color: semantic.surfaceRaised.withValues(alpha: 0.84),
+              borderRadius: BorderRadius.circular(AppRadius.xl),
+              border: Border.all(color: semantic.border),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  blurRadius: 28,
+                  offset: Offset(0, 12),
                 ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Theme(
-              data: theme.copyWith(
-                textButtonTheme: TextButtonThemeData(
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFD8B6FF),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        theme.colorScheme.primary.withValues(alpha: 0.24),
+                        AppTheme.accentBlue.withValues(alpha: 0.12),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    border: Border.all(color: semantic.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 34, color: AppTheme.accentBlue),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: semantic.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: semantic.textSecondary,
+                    height: 1.45,
                   ),
                 ),
-              ),
-              child: action,
+                if (debugDetails != null && debugDetails!.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SelectableText(
+                    debugDetails!,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: semantic.textMuted,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                action,
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
