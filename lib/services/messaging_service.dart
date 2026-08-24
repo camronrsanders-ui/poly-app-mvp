@@ -50,6 +50,22 @@ class MessagingService {
         .snapshots();
   }
 
+  Future<QuerySnapshot<Map<String, dynamic>>> loadOlderMessages({
+    required String conversationId,
+    required DocumentSnapshot<Map<String, dynamic>> before,
+    int limit = 30,
+  }) {
+    _requireUid();
+    return _firestore
+        .collection('messages')
+        .where('conversationId', isEqualTo: conversationId)
+        .where('messageType', isEqualTo: 'text')
+        .orderBy('createdAt')
+        .endBeforeDocument(before)
+        .limitToLast(limit)
+        .get();
+  }
+
   Future<void> sendMessage(
       {required String conversationId, required String text}) async {
     final senderUid = _requireUid();

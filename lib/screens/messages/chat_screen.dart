@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +13,90 @@ import '../../theme/app_theme.dart';
 import '../../widgets/conversation_space_header.dart';
 import 'shared_moments_screen.dart';
 import 'shared_plans_screen.dart';
+
+int _compareChatItems<T>(
+  T left,
+  T right, {
+  required String Function(T item) idOf,
+  required Timestamp? Function(T item) createdAtOf,
+}) {
+  final leftTime = createdAtOf(left);
+  final rightTime = createdAtOf(right);
+  if (leftTime == null && rightTime == null) {
+    return idOf(left).compareTo(idOf(right));
+  }
+  if (leftTime == null) return 1;
+  if (rightTime == null) return -1;
+
+  final byTime = leftTime.compareTo(rightTime);
+  return byTime != 0 ? byTime : idOf(left).compareTo(idOf(right));
+}
+
+/// Public only as a narrow regression-test seam for chat history ordering.
+@visibleForTesting
+List<T> mergeChatDocs<T>({
+  required Iterable<T> retained,
+  required Iterable<T> live,
+  required String Function(T item) idOf,
+  required Timestamp? Function(T item) createdAtOf,
+}) {
+  final mergedById = <String, T>{};
+  for (final item in retained) {
+    mergedById[idOf(item)] = item;
+  }
+  for (final item in live) {
+    mergedById[idOf(item)] = item;
+  }
+
+  final sorted = mergedById.values.toList(growable: false)
+    ..sort(
+      (left, right) => _compareChatItems(
+        left,
+        right,
+        idOf: idOf,
+        createdAtOf: createdAtOf,
+      ),
+    );
+  return sorted;
+}
+
+/// Public only as a narrow regression-test seam for live-window retention.
+@visibleForTesting
+List<T> chatDocsEvictedFromLiveWindow<T>({
+  required List<T> previousLive,
+  required List<T> newLive,
+  required String Function(T item) idOf,
+  required int liveWindowSize,
+}) {
+  if (previousLive.isEmpty || newLive.length != liveWindowSize) {
+    return <T>[];
+  }
+
+  final firstNewId = idOf(newLive.first);
+  final prefixLength =
+      previousLive.indexWhere((item) => idOf(item) == firstNewId);
+  final newIds = newLive.map(idOf).toSet();
+  if (prefixLength < 0) {
+    // A resumed bounded listener can advance by more than one full window.
+    // Retain the prior window only when the replacement is full and has no
+    // overlap at all; overlapping removals remain ambiguous and fail closed.
+    final previousIds = previousLive.map(idOf).toSet();
+    final newContainsPrevious =
+        newLive.any((item) => previousIds.contains(idOf(item)));
+    if (!newContainsPrevious) {
+      return previousLive
+          .where((item) => !newIds.contains(idOf(item)))
+          .toList(growable: false);
+    }
+    return <T>[];
+  }
+  if (prefixLength == 0) return <T>[];
+
+  return previousLive
+      .take(prefixLength)
+      .where((item) => !newIds.contains(idOf(item)))
+      .toList(growable: false);
+}
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -29,18 +115,193 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  static const int _liveWindowSize = 100;
+  static const int _historyPageSize = 30;
+  static const double _historyLoadThreshold = 200;
+
   final _controller = TextEditingController();
+  final _scrollController = ScrollController();
   final _messages = MessagingService();
   final _safety = SafetyService();
   final _sharedMoments = SharedMomentsService();
   final Set<String> _readUpdatesInFlight = {};
   final Set<String> _momentSavesInFlight = {};
+  final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>
+      _retainedDocsById = {};
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = const [];
+  bool _loadingLiveMessages = true;
+  Object? _liveMessagesError;
+  bool _loadingHistory = false;
+  bool _hasMoreHistory = true;
+  bool _historyError = false;
+  bool _initialScrollScheduled = false;
+  bool _didInitialScroll = false;
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    if (FirebaseAuth.instance.currentUser?.uid != null) {
+      _listenToMessages();
+    }
+  }
+
+  @override
   void dispose() {
+    unawaited(_messageSubscription?.cancel());
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _listenToMessages() {
+    _messageSubscription =
+        _messages.watchMessages(widget.conversationId).listen(
+              _onLiveSnapshot,
+              onError: _onLiveError,
+              cancelOnError: true,
+            );
+  }
+
+  void _onLiveSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (!mounted) return;
+
+    final newLiveDocs = snapshot.docs.toList(growable: false);
+    final evictedDocs = chatDocsEvictedFromLiveWindow(
+      previousLive: _liveDocs,
+      newLive: newLiveDocs,
+      idOf: (doc) => doc.id,
+      liveWindowSize: _liveWindowSize,
+    );
+
+    setState(() {
+      for (final doc in evictedDocs) {
+        _retainedDocsById[doc.id] = doc;
+      }
+      _liveDocs = newLiveDocs;
+      _loadingLiveMessages = false;
+      _liveMessagesError = null;
+    });
+
+    if (!_didInitialScroll &&
+        !_initialScrollScheduled &&
+        newLiveDocs.isNotEmpty) {
+      _initialScrollScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initialScrollScheduled = false;
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        _didInitialScroll = true;
+      });
+    }
+  }
+
+  void _onLiveError(Object error) {
+    if (!mounted) return;
+    setState(() {
+      _loadingLiveMessages = false;
+      _liveMessagesError = error;
+    });
+  }
+
+  Future<void> _retryMessages() async {
+    if (!mounted || _loadingLiveMessages) return;
+    setState(() {
+      _loadingLiveMessages = true;
+      _liveMessagesError = null;
+    });
+
+    final previousSubscription = _messageSubscription;
+    _messageSubscription = null;
+    if (previousSubscription != null) {
+      await previousSubscription.cancel();
+    }
+    if (!mounted) return;
+    _listenToMessages();
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _visibleDocs {
+    return mergeChatDocs<QueryDocumentSnapshot<Map<String, dynamic>>>(
+      retained: _retainedDocsById.values,
+      live: _liveDocs,
+      idOf: (doc) => doc.id,
+      createdAtOf: (doc) => doc.data()['createdAt'] as Timestamp?,
+    );
+  }
+
+  void _onScroll() {
+    if (!_didInitialScroll || !_scrollController.hasClients) return;
+    if (_loadingHistory || !_hasMoreHistory || _historyError) return;
+    if (_liveMessagesError != null) return;
+    if (_scrollController.position.pixels <= _historyLoadThreshold) {
+      unawaited(_loadOlderHistory());
+    }
+  }
+
+  Future<void> _loadOlderHistory() async {
+    if (_loadingHistory || !_hasMoreHistory || _liveMessagesError != null) {
+      return;
+    }
+
+    final docs = _visibleDocs;
+    if (docs.isEmpty) return;
+    final cursor = docs.first;
+    if (cursor.data()['createdAt'] is! Timestamp) return;
+
+    setState(() {
+      _loadingHistory = true;
+      _historyError = false;
+    });
+
+    try {
+      final snapshot = await _messages.loadOlderMessages(
+        conversationId: widget.conversationId,
+        before: cursor,
+        limit: _historyPageSize,
+      );
+      if (!mounted) return;
+
+      final hadScrollPosition = _scrollController.hasClients;
+      final oldPixels =
+          hadScrollPosition ? _scrollController.position.pixels : 0.0;
+      final oldMaxExtent =
+          hadScrollPosition ? _scrollController.position.maxScrollExtent : 0.0;
+      final pageDocs = snapshot.docs.toList(growable: false);
+      final liveIds = _liveDocs.map((doc) => doc.id).toSet();
+
+      setState(() {
+        for (final doc in pageDocs) {
+          if (!liveIds.contains(doc.id)) {
+            _retainedDocsById[doc.id] = doc;
+          }
+        }
+        if (pageDocs.length < _historyPageSize) {
+          _hasMoreHistory = false;
+        }
+        _loadingHistory = false;
+      });
+
+      if (hadScrollPosition) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scrollController.hasClients) return;
+          final newMaxExtent = _scrollController.position.maxScrollExtent;
+          final addedExtent = newMaxExtent - oldMaxExtent;
+          final target =
+              (oldPixels + addedExtent).clamp(0.0, newMaxExtent).toDouble();
+          _scrollController.jumpTo(target);
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingHistory = false;
+        _historyError = true;
+      });
+    }
   }
 
   void _queueMarkRead(String messageId, List<String> readBy, String uid) {
@@ -377,10 +638,6 @@ class _ChatScreenState extends State<ChatScreen> {
     details.dispose();
   }
 
-  void _retryMessages() {
-    if (mounted) setState(() {});
-  }
-
   String _formatMessageTime(Object? rawTimestamp) {
     if (rawTimestamp is! Timestamp) return '';
     final value = rawTimestamp.toDate().toLocal();
@@ -392,6 +649,84 @@ class _ChatScreenState extends State<ChatScreen> {
     final minute = value.minute.toString().padLeft(2, '0');
     final period = value.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
+  }
+
+  Widget _buildMessageContent(String uid) {
+    if (_loadingLiveMessages) {
+      return const _ChatLoadingState();
+    }
+    if (_liveMessagesError != null) {
+      return _ChatStateView(
+        icon: Icons.cloud_off_outlined,
+        title: 'Could not load messages',
+        message:
+            'Your conversation is still here. Check your connection and try again.',
+        action: FilledButton.tonalIcon(
+          onPressed: _retryMessages,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Try again'),
+        ),
+      );
+    }
+
+    final docs = _visibleDocs;
+    if (docs.isEmpty) {
+      return const _ChatStateView(
+        icon: Icons.waving_hand_outlined,
+        title: 'Start your conversation',
+        message:
+            'Start with something genuine. Your connection does not have to fit a traditional script.',
+      );
+    }
+
+    final showHistoryStatus = _loadingHistory || _historyError;
+    return ListView.builder(
+      controller: _scrollController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      itemCount: docs.length + (showHistoryStatus ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (showHistoryStatus && index == 0) {
+          return _HistoryStatusRow(
+            loading: _loadingHistory,
+            onRetry: () => unawaited(_loadOlderHistory()),
+          );
+        }
+
+        final docIndex = showHistoryStatus ? index - 1 : index;
+        final doc = docs[docIndex];
+        final data = doc.data();
+        final senderUid = data['senderUid'] as String? ?? '';
+        final isMine = senderUid == uid;
+        final isDeleted = data['isDeleted'] == true;
+        final text =
+            isDeleted ? 'Message removed' : (data['text'] as String? ?? '');
+        final readBy = List<String>.from(data['readBy'] ?? const []);
+        if (!isMine) {
+          _queueMarkRead(doc.id, readBy, uid);
+        }
+        final canLongPress =
+            !isDeleted && (FeatureFlags.sharedMomentsEnabled || !isMine);
+        return _MessageBubble(
+          text: text,
+          timestamp: _formatMessageTime(data['createdAt']),
+          isMine: isMine,
+          isDeleted: isDeleted,
+          isRead: isMine && readBy.contains(widget.otherUid),
+          onLongPress: canLongPress
+              ? () => _showMessageActions(
+                    messageId: doc.id,
+                    isMine: isMine,
+                  )
+              : null,
+        );
+      },
+    );
   }
 
   @override
@@ -454,79 +789,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     top: BorderSide(color: semantic.border),
                   ),
                 ),
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: _messages.watchMessages(widget.conversationId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting &&
-                        !snapshot.hasData) {
-                      return const _ChatLoadingState();
-                    }
-                    if (snapshot.hasError) {
-                      return _ChatStateView(
-                        icon: Icons.cloud_off_outlined,
-                        title: 'Could not load messages',
-                        message:
-                            'Your conversation is still here. Check your connection and try again.',
-                        action: FilledButton.tonalIcon(
-                          onPressed: _retryMessages,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Try again'),
-                        ),
-                      );
-                    }
-                    final docs = snapshot.data?.docs ?? [];
-                    if (docs.isEmpty) {
-                      return const _ChatStateView(
-                        icon: Icons.waving_hand_outlined,
-                        title: 'Start your conversation',
-                        message:
-                            'Start with something genuine. Your connection does not have to fit a traditional script.',
-                      );
-                    }
-                    return ListView.builder(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.md,
-                        AppSpacing.md,
-                        AppSpacing.md,
-                        AppSpacing.sm,
-                      ),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data();
-                        final senderUid = data['senderUid'] as String? ?? '';
-                        final isMine = senderUid == uid;
-                        final isDeleted = data['isDeleted'] == true;
-                        final text = isDeleted
-                            ? 'Message removed'
-                            : (data['text'] as String? ?? '');
-                        final readBy = List<String>.from(
-                          data['readBy'] ?? const [],
-                        );
-                        if (!isMine) {
-                          _queueMarkRead(doc.id, readBy, uid);
-                        }
-                        final canLongPress = !isDeleted &&
-                            (FeatureFlags.sharedMomentsEnabled || !isMine);
-                        return _MessageBubble(
-                          text: text,
-                          timestamp: _formatMessageTime(data['createdAt']),
-                          isMine: isMine,
-                          isDeleted: isDeleted,
-                          isRead: isMine && readBy.contains(widget.otherUid),
-                          onLongPress: canLongPress
-                              ? () => _showMessageActions(
-                                    messageId: doc.id,
-                                    isMine: isMine,
-                                  )
-                              : null,
-                        );
-                      },
-                    );
-                  },
-                ),
+                child: _buildMessageContent(uid),
               ),
             ),
             _MessageComposer(
@@ -536,6 +799,71 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HistoryStatusRow extends StatelessWidget {
+  const _HistoryStatusRow({
+    required this.loading,
+    required this.onRetry,
+  });
+
+  final bool loading;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    if (loading) {
+      return Semantics(
+        label: 'Loading earlier messages',
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'Loading earlier messages…',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: semantic.textSecondary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 20,
+            color: semantic.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              'Couldn’t load earlier messages.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: semantic.textSecondary,
+                  ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }
