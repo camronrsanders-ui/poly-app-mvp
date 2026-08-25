@@ -28,6 +28,43 @@ test('Android host uses permanent Polycircle application identity', () => {
   assert.doesNotMatch(appGradle, /com\.example\.polycircle/);
 });
 
+test('Android release signing fails closed and never falls back to debug keys', () => {
+  for (const name of [
+    'POLYCIRCLE_ANDROID_KEYSTORE_PATH',
+    'POLYCIRCLE_ANDROID_KEYSTORE_PASSWORD',
+    'POLYCIRCLE_ANDROID_KEY_ALIAS',
+    'POLYCIRCLE_ANDROID_KEY_PASSWORD',
+  ]) {
+    assert.match(appGradle, new RegExp(name));
+  }
+
+  assert.match(
+    appGradle,
+    /val hasCompleteReleaseSigning = releaseSigningValues\.all \{ it != null \}/,
+  );
+  assert.match(
+    appGradle,
+    /signingConfigs\s*\{[\s\S]*create\("release"\)/,
+  );
+  assert.match(
+    appGradle,
+    /signingConfig = if \(hasCompleteReleaseSigning\)/,
+  );
+  assert.match(appGradle, /verifyReleaseSigning/);
+  assert.match(appGradle, /preReleaseBuild/);
+  assert.match(appGradle, /dependsOn\(verifyReleaseSigning\)/);
+  assert.match(appGradle, /throw GradleException/);
+
+  assert.doesNotMatch(
+    appGradle,
+    /signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)/,
+  );
+  assert.doesNotMatch(appGradle, /storePassword\s*=\s*"/);
+  assert.doesNotMatch(appGradle, /keyPassword\s*=\s*"/);
+  assert.doesNotMatch(appGradle, /keyAlias\s*=\s*"/);
+  assert.doesNotMatch(appGradle, /storeFile\s*=\s*file\("/);
+});
+
 test('Android Firebase configuration is wired through Google Services', () => {
   assert.match(
     settings,

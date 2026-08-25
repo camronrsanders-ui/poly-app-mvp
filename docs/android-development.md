@@ -103,4 +103,19 @@ Protected-media processing/delivery, deployed callable behavior, Play Integrity 
 
 ## Release-signing boundary
 
-Debug/emulator testing does not require production Play signing. Do not create or commit a production keystore merely to make local testing work. Release signing, Play Console registration, store listing/compliance, and production App Check/Play Integrity validation should be handled as a separate release-stage task after the debug Android host is reproducibly green.
+Debug/emulator testing does not require production Play signing. Do not create or commit a production keystore merely to make local testing work.
+
+Android release builds now fail closed instead of falling back to the debug signing key. Real release signing is supplied outside Git with all four environment variables:
+
+- `POLYCIRCLE_ANDROID_KEYSTORE_PATH`
+- `POLYCIRCLE_ANDROID_KEYSTORE_PASSWORD`
+- `POLYCIRCLE_ANDROID_KEY_ALIAS`
+- `POLYCIRCLE_ANDROID_KEY_PASSWORD`
+
+All four values must be present and non-blank, and the configured keystore path must point to an existing file when a release build runs. Missing or partial configuration stops the release build. Ordinary debug development and PR CI do not require release credentials.
+
+The repository must never contain the production `.jks` / `.keystore` file or signing passwords. This configuration boundary does not create or provision a signing key.
+
+There is no debug-signing fallback for the Android `release` build type. The existing `POLYCIRCLE_ANDROID_LOCAL_RELEASE_SMOKE` switch controls only the already-documented local cleartext behavior; it does not bypass release signing and does not authorize a distributable artifact.
+
+Play Console registration, production signing-key provisioning, store listing/compliance, and production App Check / Play Integrity validation remain release-stage work.
