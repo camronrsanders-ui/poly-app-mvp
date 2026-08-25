@@ -8,21 +8,44 @@ import '../messages/chat_screen.dart';
 import '../profile/profile_detail_screen.dart';
 import '../safety/safety_center_screen.dart';
 
+typedef ConnectionsLoader = Future<List<Map<String, dynamic>>> Function();
+typedef EndConnectionAction = Future<void> Function(String otherUid);
+typedef ConnectionPhotoLoader = Future<List<VisibleProfilePhoto>> Function(
+  String uid,
+);
+
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
     super.key,
     this.onFindPeople,
-  });
+  })  : _loadConnections = null,
+        _endConnection = null,
+        _loadVisiblePhotos = null;
+
+  @visibleForTesting
+  const ConnectionsScreen.test({
+    super.key,
+    this.onFindPeople,
+    required ConnectionsLoader loadConnections,
+    required EndConnectionAction endConnection,
+    required ConnectionPhotoLoader loadVisiblePhotos,
+  })  : _loadConnections = loadConnections,
+        _endConnection = endConnection,
+        _loadVisiblePhotos = loadVisiblePhotos;
 
   final VoidCallback? onFindPeople;
+  final ConnectionsLoader? _loadConnections;
+  final EndConnectionAction? _endConnection;
+  final ConnectionPhotoLoader? _loadVisiblePhotos;
 
   @override
   State<ConnectionsScreen> createState() => _ConnectionsScreenState();
 }
 
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
-  final _connections = ConnectionService();
-  final _profileMedia = ProfileMediaService();
+  late final ConnectionsLoader _loadConnections;
+  late final EndConnectionAction _endConnection;
+  late final ConnectionPhotoLoader _loadVisiblePhotos;
   final _spotlightController = PageController(viewportFraction: 0.9);
 
   late Future<List<Map<String, dynamic>>> _future;
@@ -35,7 +58,27 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _connections.loadConnections();
+
+    final injectedLoadConnections = widget._loadConnections;
+    final injectedEndConnection = widget._endConnection;
+    final injectedLoadVisiblePhotos = widget._loadVisiblePhotos;
+
+    if (injectedLoadConnections != null &&
+        injectedEndConnection != null &&
+        injectedLoadVisiblePhotos != null) {
+      _loadConnections = injectedLoadConnections;
+      _endConnection = injectedEndConnection;
+      _loadVisiblePhotos = injectedLoadVisiblePhotos;
+    } else {
+      final connections = ConnectionService();
+      final profileMedia = ProfileMediaService();
+
+      _loadConnections = connections.loadConnections;
+      _endConnection = connections.endConnection;
+      _loadVisiblePhotos = profileMedia.listVisiblePhotos;
+    }
+
+    _future = _loadConnections();
   }
 
   @override
@@ -51,7 +94,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
     return _photoFutures.putIfAbsent(
       uid,
-      () => _profileMedia.listVisiblePhotos(uid),
+      () => _loadVisiblePhotos(uid),
     );
   }
 
@@ -60,12 +103,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
     setState(() {
       _photoFutures.clear();
-      _future = _connections.loadConnections();
+      _future = _loadConnections();
     });
   }
 
   Future<void> _refresh() async {
-    final future = _connections.loadConnections();
+    final future = _loadConnections();
 
     if (!mounted) return;
 
@@ -186,7 +229,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     setState(() => _busy.add(otherUid));
 
     try {
-      await _connections.endConnection(otherUid);
+      await _endConnection(otherUid);
 
       if (!mounted) return;
 

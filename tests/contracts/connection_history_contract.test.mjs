@@ -95,3 +95,29 @@ test('existing connections can reopen the trusted profile view without another C
   assert.match(profileDetail, /this\.showConnectAction\s*=\s*true/);
   assert.match(profileDetail, /if \(widget\.showConnectAction\)/);
 });
+
+
+test('Connections UI binds the unmatch seam to production services', () => {
+  assert.match(connectionsScreen, /final connections = ConnectionService\(\);/);
+  assert.match(
+    connectionsScreen,
+    /_loadConnections = connections\.loadConnections;/,
+  );
+  assert.match(
+    connectionsScreen,
+    /_endConnection = connections\.endConnection;/,
+  );
+  assert.match(
+    connectionsScreen,
+    /final profileMedia = ProfileMediaService\(\);/,
+  );
+  assert.match(
+    connectionsScreen,
+    /_loadVisiblePhotos = profileMedia\.listVisiblePhotos;/,
+  );
+  assert.match(connectionsScreen, /await _endConnection\(otherUid\);/);
+  assert.match(
+    connectionsScreen,
+    /will close the conversation[\s\S]*revoke any Private Vault access in both directions[\s\S]*undone automatically/,
+  );
+});
