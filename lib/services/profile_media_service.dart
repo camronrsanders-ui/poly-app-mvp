@@ -6,6 +6,15 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../config/firebase_runtime.dart';
 
+const int _maxSupportedEpochMillis = 253402300799999;
+
+DateTime? _trustedDateFromMillis(Object? value) {
+  if (value is! int || value < 0 || value > _maxSupportedEpochMillis) {
+    return null;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(value);
+}
+
 class ProfileMediaUpload {
   const ProfileMediaUpload({
     required this.photoId,
@@ -38,11 +47,6 @@ class ProfileMediaStatus {
   final DateTime? reviewedAt;
 
   factory ProfileMediaStatus.fromMap(Map<String, dynamic> data) {
-    DateTime? dateFromMillis(Object? raw) {
-      final value = raw is num ? raw.toInt() : null;
-      return value == null ? null : DateTime.fromMillisecondsSinceEpoch(value);
-    }
-
     final photoId = data['photoId'] as String?;
     if (photoId == null || photoId.isEmpty) {
       throw StateError('Profile photo status was missing its photoId.');
@@ -51,9 +55,9 @@ class ProfileMediaStatus {
       photoId: photoId,
       status: data['status'] as String? ?? 'unknown',
       contentType: data['contentType'] as String? ?? '',
-      createdAt: dateFromMillis(data['createdAtMs']),
-      processedAt: dateFromMillis(data['processedAtMs']),
-      reviewedAt: dateFromMillis(data['reviewedAtMs']),
+      createdAt: _trustedDateFromMillis(data['createdAtMs']),
+      processedAt: _trustedDateFromMillis(data['processedAtMs']),
+      reviewedAt: _trustedDateFromMillis(data['reviewedAtMs']),
     );
   }
 }
@@ -78,15 +82,10 @@ class VisibleProfilePhoto {
         rawUrl.isEmpty) {
       throw StateError('Visible profile photo response was incomplete.');
     }
-    final createdAtMs = data['createdAtMs'] is num
-        ? (data['createdAtMs'] as num).toInt()
-        : null;
     return VisibleProfilePhoto(
       photoId: photoId,
       url: Uri.parse(rawUrl),
-      createdAt: createdAtMs == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(createdAtMs),
+      createdAt: _trustedDateFromMillis(data['createdAtMs']),
     );
   }
 }
