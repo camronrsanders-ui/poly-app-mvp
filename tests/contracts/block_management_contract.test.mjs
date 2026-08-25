@@ -41,6 +41,15 @@ test('unblock re-revokes private access before removing the block', () => {
 test('Safety Center can list and unblock without restoring old connections', () => {
   assert.match(safetyService, /httpsCallable\('listMyBlocks'\)/);
   assert.match(safetyCenter, /Manage blocked members/);
-  assert.match(safetyCenter, /_safety\.unblockUser\(uid\)/);
+  assert.match(safetyCenter, /final safety = SafetyService\(\);/);
+  assert.match(
+    safetyCenter,
+    /_loadBlockedUsers = safety\.listBlockedUsers;/,
+  );
+  assert.match(
+    safetyCenter,
+    /_unblockMember = safety\.unblockUser;/,
+  );
+  assert.match(safetyCenter, /await _unblockMember\(uid\);/);
   assert.match(safetyCenter, /does not restore a previous match, conversation, or private-media access/);
 });
