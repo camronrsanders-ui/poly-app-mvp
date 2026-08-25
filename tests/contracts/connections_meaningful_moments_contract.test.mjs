@@ -22,11 +22,25 @@ test('Connections owns a unique meaningful-moments experience', () => {
 });
 
 test('Connections preserves trusted connection actions', () => {
-  assert.match(connections, /loadConnections\(\)/);
+  assert.match(connections, /final connections = ConnectionService\(\);/);
+  assert.match(
+    connections,
+    /_loadConnections = connections\.loadConnections;/,
+  );
+  assert.match(
+    connections,
+    /_endConnection = connections\.endConnection;/,
+  );
+  assert.match(connections, /final profileMedia = ProfileMediaService\(\);/);
+  assert.match(
+    connections,
+    /_loadVisiblePhotos = profileMedia\.listVisiblePhotos;/,
+  );
+  assert.match(connections, /_loadConnections\(\)/);
+  assert.match(connections, /await _endConnection\(otherUid\)/);
+  assert.match(connections, /_loadVisiblePhotos\(uid\)/);
   assert.match(connections, /ensureConversation\(otherUid\)/);
-  assert.match(connections, /endConnection\(otherUid\)/);
   assert.match(connections, /showConnectAction: false/);
-  assert.match(connections, /listVisiblePhotos\(uid\)/);
 });
 
 test('Connections avoids invented message content and uses trusted recency data', () => {
