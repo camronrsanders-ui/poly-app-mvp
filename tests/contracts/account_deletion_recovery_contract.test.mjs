@@ -90,7 +90,13 @@ test('client login and session gate permit only deletion-pending paused accounts
   assert.match(auth, /status == 'paused' && data\?\['deletionRequestedAt'\] != null/);
   assert.match(auth, /status != 'active' && !deletionPending/);
   assert.match(app, /status == 'paused' && account\['deletionRequestedAt'\] != null/);
-  assert.match(app, /_DeletionRecoveryScreen/);
+  assert.match(app, /DeletionRecoveryScreen/);
+  assert.match(app, /final account = AccountService\(\);/);
+  assert.match(
+    app,
+    /_deleteAccount = account\.deleteMyAccount;/,
+  );
+  assert.match(app, /await _deleteAccount\(\);/);
   assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);
 });
 

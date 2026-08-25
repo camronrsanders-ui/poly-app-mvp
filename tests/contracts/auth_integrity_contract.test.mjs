@@ -39,7 +39,10 @@ test('only a trusted pending-deletion marker can bypass normal active-account lo
     app,
     /final deletionPending\s*=\s*status\s*==\s*'paused'\s*&&\s*account\['deletionRequestedAt'\]\s*!=\s*null/,
   );
-  assert.match(app, /_DeletionRecoveryScreen/);
+  assert.match(
+    app,
+    /if \(deletionPending\)[\s\S]*return DeletionRecoveryScreen\(/,
+  );
   assert.match(app, /Finish deleting my account/);
   assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);
 });

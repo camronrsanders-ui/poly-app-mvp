@@ -14,6 +14,8 @@ import 'services/auth_service.dart';
 import 'services/profile_service.dart';
 import 'theme/app_theme.dart';
 
+typedef DeleteAccountAction = Future<void> Function();
+
 class PolycircleApp extends StatelessWidget {
   const PolycircleApp({super.key});
 
@@ -108,7 +110,7 @@ class _SessionGateState extends State<_SessionGate> {
             final deletionPending =
                 status == 'paused' && account['deletionRequestedAt'] != null;
             if (deletionPending) {
-              return _DeletionRecoveryScreen(
+              return DeletionRecoveryScreen(
                 onFinished: _auth.signOut,
                 onSignOut: _auth.signOut,
               );
@@ -140,22 +142,40 @@ class _LoadingScreen extends StatelessWidget {
       );
 }
 
-class _DeletionRecoveryScreen extends StatefulWidget {
-  const _DeletionRecoveryScreen(
-      {required this.onFinished, required this.onSignOut});
+@visibleForTesting
+class DeletionRecoveryScreen extends StatefulWidget {
+  const DeletionRecoveryScreen({
+    super.key,
+    required this.onFinished,
+    required this.onSignOut,
+    this.deleteAccount,
+  });
 
   final Future<void> Function() onFinished;
   final Future<void> Function() onSignOut;
+  final DeleteAccountAction? deleteAccount;
 
   @override
-  State<_DeletionRecoveryScreen> createState() =>
-      _DeletionRecoveryScreenState();
+  State<DeletionRecoveryScreen> createState() => _DeletionRecoveryScreenState();
 }
 
-class _DeletionRecoveryScreenState extends State<_DeletionRecoveryScreen> {
-  final _account = AccountService();
+class _DeletionRecoveryScreenState extends State<DeletionRecoveryScreen> {
+  late final DeleteAccountAction _deleteAccount;
   bool _working = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final injectedDelete = widget.deleteAccount;
+    if (injectedDelete != null) {
+      _deleteAccount = injectedDelete;
+    } else {
+      final account = AccountService();
+      _deleteAccount = account.deleteMyAccount;
+    }
+  }
 
   Future<void> _finishDeletion() async {
     if (_working) return;
@@ -164,7 +184,7 @@ class _DeletionRecoveryScreenState extends State<_DeletionRecoveryScreen> {
       _error = null;
     });
     try {
-      await _account.deleteMyAccount();
+      await _deleteAccount();
       await widget.onFinished();
     } catch (error) {
       if (!mounted) return;
