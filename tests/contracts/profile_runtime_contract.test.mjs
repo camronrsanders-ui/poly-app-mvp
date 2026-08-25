@@ -41,6 +41,14 @@ test('Profile loader sanitizes legacy values and keeps privacy fields fail-close
     profile,
     /_choice\(\s*data\['mapVisibility'\],\s*_mapVisibilityOptions,\s*'private'\s*\)/,
   );
+  assert.match(
+    profile,
+    /_profileVisibility = value \?\? 'hidden'/,
+  );
+  assert.match(
+    profile,
+    /_mapVisibility = value \?\? 'private'/,
+  );
   assert.match(profile, /where\(connectionIntentionOptions\.contains\)/);
   assert.match(profile, /where\(relationshipStructureOptions\.contains\)/);
 });

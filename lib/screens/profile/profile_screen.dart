@@ -458,7 +458,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 value: 'matches_only', child: Text('Connections only')),
           ],
           onChanged: (value) =>
-              setState(() => _profileVisibility = value ?? 'public'),
+              setState(() => _profileVisibility = value ?? 'hidden'),
         ),
         const SizedBox(height: 14),
         DropdownButtonFormField<String>(
@@ -471,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             DropdownMenuItem(value: 'private', child: Text('Private')),
           ],
           onChanged: (value) =>
-              setState(() => _mapVisibility = value ?? 'matches_only'),
+              setState(() => _mapVisibility = value ?? 'private'),
         ),
         const SizedBox(height: 28),
         const Divider(),
