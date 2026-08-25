@@ -135,6 +135,9 @@ test('reporting visibly includes child safety and threat categories', () => {
 });
 
 test('profile reports identify the profile being reported', () => {
+  assert.match(profileDetail, /final safety = _safety;/);
+  assert.match(profileDetail, /return safety\.reportUser\(/);
+  assert.match(profileDetail, /await _reportUser\(/);
   assert.match(profileDetail, /contentType: 'profile'/);
   assert.match(profileDetail, /contentId: _uid/);
   assert.match(safetyBackend, /Profile report does not match the reported account/);

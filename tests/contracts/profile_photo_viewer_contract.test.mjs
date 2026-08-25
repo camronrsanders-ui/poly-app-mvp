@@ -25,7 +25,15 @@ test('remote profile photo listing returns only short-lived signed delivery URLs
 test('profile detail requests protected visible photos instead of raw Storage paths', () => {
   assert.match(mediaService, /listVisiblePhotos\(String ownerUid\)/);
   assert.match(mediaService, /httpsCallable\('listMyProfilePhotos'\)/);
-  assert.match(profileDetail, /_profileMedia\.listVisiblePhotos\(_uid\)/);
+  assert.match(
+    profileDetail,
+    /final profileMedia = ProfileMediaService\(\);/,
+  );
+  assert.match(
+    profileDetail,
+    /_loadVisiblePhotos = profileMedia\.listVisiblePhotos;/,
+  );
+  assert.match(profileDetail, /_loadVisiblePhotos\(_uid\)/);
   assert.match(profileDetail, /Image\.network\(/);
   assert.doesNotMatch(profileDetail, /storagePath/);
 });

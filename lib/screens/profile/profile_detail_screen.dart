@@ -6,27 +6,68 @@ import '../../services/profile_media_service.dart';
 import '../../services/safety_service.dart';
 import '../../widgets/why_our_worlds_cross.dart';
 
+typedef ProfileReportAction = Future<void> Function({
+  required String reportedUid,
+  required String reason,
+  required String details,
+  required String contentType,
+  String? contentId,
+  String? conversationId,
+});
+
+typedef ProfileCircleLoader = Future<List<Map<String, dynamic>>> Function(
+    String ownerUid);
+
+typedef ProfileVisiblePhotosLoader = Future<List<VisibleProfilePhoto>> Function(
+    String ownerUid);
+
 class ProfileDetailScreen extends StatefulWidget {
   const ProfileDetailScreen({
     super.key,
     required this.profile,
     this.showConnectAction = true,
-  });
+  })  : _reportUser = null,
+        _loadCircle = null,
+        _loadVisiblePhotos = null,
+        _showWorldCrossing = true;
+
+  @visibleForTesting
+  const ProfileDetailScreen.test({
+    super.key,
+    required this.profile,
+    this.showConnectAction = false,
+    required ProfileReportAction reportUser,
+    required ProfileCircleLoader loadCircle,
+    required ProfileVisiblePhotosLoader loadVisiblePhotos,
+  })  : _reportUser = reportUser,
+        _loadCircle = loadCircle,
+        _loadVisiblePhotos = loadVisiblePhotos,
+        _showWorldCrossing = false;
 
   final Map<String, dynamic> profile;
   final bool showConnectAction;
+  final ProfileReportAction? _reportUser;
+  final ProfileCircleLoader? _loadCircle;
+  final ProfileVisiblePhotosLoader? _loadVisiblePhotos;
+  final bool _showWorldCrossing;
 
   @override
   State<ProfileDetailScreen> createState() => _ProfileDetailScreenState();
 }
 
 class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
-  final _connections = ConnectionService();
-  final _safety = SafetyService();
-  final _circle = CircleViewService();
-  final _profileMedia = ProfileMediaService();
+  ConnectionService? _connectionService;
+  SafetyService? _safetyService;
+  late final ProfileReportAction _reportUser;
+  late final ProfileCircleLoader _loadCircle;
+  late final ProfileVisiblePhotosLoader _loadVisiblePhotos;
   late final Future<List<VisibleProfilePhoto>> _photoFuture;
   bool _acting = false;
+
+  ConnectionService get _connections =>
+      _connectionService ??= ConnectionService();
+
+  SafetyService get _safety => _safetyService ??= SafetyService();
 
   String get _uid => widget.profile['uid']?.toString() ?? '';
   String _text(String key) => widget.profile[key]?.toString().trim() ?? '';
@@ -34,9 +75,47 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   @override
   void initState() {
     super.initState();
+
+    final injectedReport = widget._reportUser;
+    final injectedCircle = widget._loadCircle;
+    final injectedPhotos = widget._loadVisiblePhotos;
+
+    if (injectedReport != null &&
+        injectedCircle != null &&
+        injectedPhotos != null) {
+      _reportUser = injectedReport;
+      _loadCircle = injectedCircle;
+      _loadVisiblePhotos = injectedPhotos;
+    } else {
+      final safety = _safety;
+      final circle = CircleViewService();
+      final profileMedia = ProfileMediaService();
+
+      _reportUser = ({
+        required String reportedUid,
+        required String reason,
+        required String details,
+        required String contentType,
+        String? contentId,
+        String? conversationId,
+      }) {
+        return safety.reportUser(
+          reportedUid: reportedUid,
+          reason: reason,
+          details: details,
+          contentType: contentType,
+          contentId: contentId,
+          conversationId: conversationId,
+        );
+      };
+
+      _loadCircle = circle.loadForProfile;
+      _loadVisiblePhotos = profileMedia.listVisiblePhotos;
+    }
+
     _photoFuture = _uid.isEmpty
         ? Future.value(const <VisibleProfilePhoto>[])
-        : _profileMedia.listVisiblePhotos(_uid);
+        : _loadVisiblePhotos(_uid);
   }
 
   List<String> _strings(String key) {
@@ -122,7 +201,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       'other': 'Other',
     };
     var reason = 'harassment';
-    final details = TextEditingController();
+    var detailsText = '';
 
     final submitted = await showDialog<bool>(
       context: context,
@@ -148,7 +227,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: details,
+                onChanged: (value) => detailsText = value,
                 maxLength: 2000,
                 maxLines: 4,
                 decoration: const InputDecoration(
@@ -171,13 +250,12 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       ),
     );
 
-    final detailText = details.text.trim();
-    details.dispose();
+    final detailText = detailsText.trim();
     if (submitted != true || !mounted) return;
 
     setState(() => _acting = true);
     try {
-      await _safety.reportUser(
+      await _reportUser(
         reportedUid: _uid,
         reason: reason,
         details: detailText,
@@ -333,7 +411,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-          WhyOurWorldsCrossSection(otherProfile: widget.profile),
+          if (widget._showWorldCrossing)
+            WhyOurWorldsCrossSection(otherProfile: widget.profile),
           const SizedBox(height: 22),
           if (pronouns.isNotEmpty ||
               gender.isNotEmpty ||
@@ -390,9 +469,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           ),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _uid.isEmpty
-                ? Future.value(const [])
-                : _circle.loadForProfile(_uid),
+            future: _uid.isEmpty ? Future.value(const []) : _loadCircle(_uid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
