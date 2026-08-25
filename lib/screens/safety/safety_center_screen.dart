@@ -6,6 +6,9 @@ import '../../services/profile_photo_moderation_service.dart';
 import '../../services/safety_service.dart';
 import 'profile_photo_moderation_screen.dart';
 
+typedef BlockedUsersLoader = Future<List<Map<String, dynamic>>> Function();
+typedef UnblockMemberAction = Future<void> Function(String uid);
+
 class SafetyCenterScreen extends StatelessWidget {
   const SafetyCenterScreen({super.key});
 
@@ -113,7 +116,7 @@ class SafetyCenterScreen extends StatelessWidget {
           ),
           OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const _BlockedMembersScreen()),
+              MaterialPageRoute(builder: (_) => const BlockedMembersScreen()),
             ),
             icon: const Icon(Icons.manage_accounts_outlined),
             label: const Text('Manage blocked members'),
@@ -187,26 +190,51 @@ class SafetyCenterScreen extends StatelessWidget {
   }
 }
 
-class _BlockedMembersScreen extends StatefulWidget {
-  const _BlockedMembersScreen();
+@visibleForTesting
+class BlockedMembersScreen extends StatefulWidget {
+  const BlockedMembersScreen({
+    super.key,
+    this.loadBlockedUsers,
+    this.unblockMember,
+  }) : assert(
+          (loadBlockedUsers == null) == (unblockMember == null),
+          'loadBlockedUsers and unblockMember must be supplied together.',
+        );
+
+  final BlockedUsersLoader? loadBlockedUsers;
+  final UnblockMemberAction? unblockMember;
 
   @override
-  State<_BlockedMembersScreen> createState() => _BlockedMembersScreenState();
+  State<BlockedMembersScreen> createState() => _BlockedMembersScreenState();
 }
 
-class _BlockedMembersScreenState extends State<_BlockedMembersScreen> {
-  final _safety = SafetyService();
+class _BlockedMembersScreenState extends State<BlockedMembersScreen> {
+  late final BlockedUsersLoader _loadBlockedUsers;
+  late final UnblockMemberAction _unblockMember;
   late Future<List<Map<String, dynamic>>> _future;
   final Set<String> _working = {};
 
   @override
   void initState() {
     super.initState();
-    _future = _safety.listBlockedUsers();
+
+    final injectedLoader = widget.loadBlockedUsers;
+    final injectedUnblock = widget.unblockMember;
+
+    if (injectedLoader != null && injectedUnblock != null) {
+      _loadBlockedUsers = injectedLoader;
+      _unblockMember = injectedUnblock;
+    } else {
+      final safety = SafetyService();
+      _loadBlockedUsers = safety.listBlockedUsers;
+      _unblockMember = safety.unblockUser;
+    }
+
+    _future = _loadBlockedUsers();
   }
 
   Future<void> _refresh() async {
-    final next = _safety.listBlockedUsers();
+    final next = _loadBlockedUsers();
     setState(() => _future = next);
     await next;
   }
@@ -237,7 +265,7 @@ class _BlockedMembersScreenState extends State<_BlockedMembersScreen> {
 
     setState(() => _working.add(uid));
     try {
-      await _safety.unblockUser(uid);
+      await _unblockMember(uid);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('$label unblocked.')));
