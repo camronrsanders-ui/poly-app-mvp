@@ -8,6 +8,10 @@ const index = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8')
 const auth = fs.readFileSync(path.join(root, 'lib/services/auth_service.dart'), 'utf8');
 const accountService = fs.readFileSync(path.join(root, 'lib/services/account_service.dart'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'lib/app.dart'), 'utf8');
+const profileScreen = fs.readFileSync(
+  path.join(root, 'lib/screens/profile/profile_screen.dart'),
+  'utf8',
+);
 
 const deletion = index.match(/export const deleteMyAccount[\s\S]*?export \{blockUser/)?.[0] ?? '';
 
@@ -98,6 +102,25 @@ test('client login and session gate permit only deletion-pending paused accounts
   );
   assert.match(app, /await _deleteAccount\(\);/);
   assert.match(app, /if \(status != 'active'\)[\s\S]*_AccountUnavailableScreen/);
+});
+
+test('initial account deletion requires the two-step destructive confirmation gate', () => {
+  assert.match(
+    profileScreen,
+    /Future<bool> confirmPermanentAccountDeletion\(/,
+  );
+  assert.match(
+    profileScreen,
+    /Type DELETE to permanently delete your Polycircle account\./,
+  );
+  assert.match(
+    profileScreen,
+    /confirmationText\.trim\(\) == 'DELETE'/,
+  );
+  assert.match(
+    profileScreen,
+    /Future<void> _deleteAccount\(\) async \{[\s\S]*if \(_deleting\) return;[\s\S]*final confirmed = await confirmPermanentAccountDeletion\(context\);[\s\S]*if \(!confirmed \|\| !mounted\) return;[\s\S]*await _accountService\.deleteMyAccount\(\);/,
+  );
 });
 
 test('deletion client signs out on stale-auth or retryable backend cleanup failure', () => {

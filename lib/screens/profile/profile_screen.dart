@@ -10,6 +10,72 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'profile_photos_screen.dart';
 
+@visibleForTesting
+Future<bool> confirmPermanentAccountDeletion(
+  BuildContext context,
+) async {
+  final first = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete your account?'),
+      content: const Text(
+        'This permanently removes your profile and account-owned data. '
+        'It cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+
+  if (first != true || !context.mounted) return false;
+
+  var confirmationText = '';
+
+  final second = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Final confirmation'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Type DELETE to permanently delete your Polycircle account.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            onChanged: (value) => confirmationText = value,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'DELETE'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            confirmationText.trim() == 'DELETE',
+          ),
+          child: const Text('Delete account'),
+        ),
+      ],
+    ),
+  );
+
+  return second == true;
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -243,51 +309,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _deleteAccount() async {
-    final first = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete your account?'),
-        content: const Text(
-            'This permanently removes your profile and account-owned data. It cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Continue')),
-        ],
-      ),
-    );
-    if (first != true || !mounted) return;
+    if (_deleting) return;
 
-    final confirm = TextEditingController();
-    final second = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Final confirmation'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text(
-              'Type DELETE to permanently delete your Polycircle account.'),
-          const SizedBox(height: 12),
-          TextField(
-              controller: confirm,
-              autocorrect: false,
-              decoration: const InputDecoration(labelText: 'DELETE')),
-        ]),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, confirm.text.trim() == 'DELETE'),
-              child: const Text('Delete account')),
-        ],
-      ),
-    );
-    confirm.dispose();
-    if (second != true || !mounted) return;
+    final confirmed = await confirmPermanentAccountDeletion(context);
+    if (!confirmed || !mounted) return;
 
     setState(() => _deleting = true);
     try {
@@ -305,7 +330,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Account deletion could not be completed.')),
+            content: Text('Account deletion could not be completed.'),
+          ),
         );
       }
     } finally {
