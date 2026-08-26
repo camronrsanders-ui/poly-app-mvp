@@ -32,6 +32,39 @@ test('owner profile exposes protected photo management without storing media URL
 
 test('active-photo preview requests a fresh protected access URL on demand', () => {
   assert.match(screen, /photo\.status != 'active'/);
-  assert.match(screen, /_service\.getAccessUrl\(photo\.photoId\)/);
+  assert.match(screen, /_getAccessUrl\(photo\.photoId\)/);
   assert.doesNotMatch(screen, /SharedPreferences|secure_storage|writeAsString|photoUrls/);
+});
+
+
+test('profile photo production binding stays lazy and duplicate deletion is guarded', () => {
+  assert.match(screen, /ProfileMediaService\? _serviceInstance/);
+  assert.match(
+    screen,
+    /ProfileMediaService get _service[\s\S]{0,180}ProfileMediaService\(\)/,
+  );
+  assert.match(
+    screen,
+    /return _service\.listMyPhotos\(\)/,
+  );
+  assert.match(
+    screen,
+    /return _service\.getAccessUrl\(photoId\)/,
+  );
+  assert.match(
+    screen,
+    /return _service\.deletePhoto\(photoId\)/,
+  );
+  assert.match(
+    screen,
+    /final Set<String> _deletingPhotoIds = <String>\{\}/,
+  );
+  assert.match(
+    screen,
+    /if \(_deletingPhotoIds\.contains\(photo\.photoId\)\) return/,
+  );
+  assert.match(
+    screen,
+    /enabled:\s*!_deletingPhotoIds\.contains\(photo\.photoId\)/,
+  );
 });

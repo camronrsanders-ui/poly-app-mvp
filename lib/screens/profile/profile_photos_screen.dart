@@ -1,20 +1,43 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/profile_media_service.dart';
 
+typedef ProfilePhotosLoader = Future<List<ProfileMediaStatus>> Function();
+typedef ProfilePhotoAccessLoader = Future<Uri> Function(String photoId);
+typedef ProfilePhotoDeleteAction = Future<void> Function(String photoId);
+
 class ProfilePhotosScreen extends StatefulWidget {
-  const ProfilePhotosScreen({super.key});
+  const ProfilePhotosScreen({super.key})
+      : loadPhotos = null,
+        getAccessUrl = null,
+        deletePhoto = null;
+
+  @visibleForTesting
+  const ProfilePhotosScreen.test({
+    super.key,
+    required this.loadPhotos,
+    required this.getAccessUrl,
+    required this.deletePhoto,
+  });
+
+  final ProfilePhotosLoader? loadPhotos;
+  final ProfilePhotoAccessLoader? getAccessUrl;
+  final ProfilePhotoDeleteAction? deletePhoto;
 
   @override
   State<ProfilePhotosScreen> createState() => _ProfilePhotosScreenState();
 }
 
 class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
-  final _service = ProfileMediaService();
+  ProfileMediaService? _serviceInstance;
+
+  ProfileMediaService get _service =>
+      _serviceInstance ??= ProfileMediaService();
+
   final _picker = ImagePicker();
+  final Set<String> _deletingPhotoIds = <String>{};
 
   bool _loading = true;
   bool _uploading = false;
@@ -26,10 +49,28 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
     _reload();
   }
 
+  Future<List<ProfileMediaStatus>> _loadPhotos() {
+    final loadPhotos = widget.loadPhotos;
+    if (loadPhotos != null) return loadPhotos();
+    return _service.listMyPhotos();
+  }
+
+  Future<Uri> _getAccessUrl(String photoId) {
+    final getAccessUrl = widget.getAccessUrl;
+    if (getAccessUrl != null) return getAccessUrl(photoId);
+    return _service.getAccessUrl(photoId);
+  }
+
+  Future<void> _deletePhotoById(String photoId) {
+    final deletePhoto = widget.deletePhoto;
+    if (deletePhoto != null) return deletePhoto(photoId);
+    return _service.deletePhoto(photoId);
+  }
+
   Future<void> _reload() async {
     if (mounted) setState(() => _loading = true);
     try {
-      final photos = await _service.listMyPhotos();
+      final photos = await _loadPhotos();
       if (mounted) setState(() => _photos = photos);
     } catch (_) {
       if (mounted) {
@@ -142,7 +183,7 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
   Future<void> _viewPhoto(ProfileMediaStatus photo) async {
     if (photo.status != 'active') return;
     try {
-      final url = await _service.getAccessUrl(photo.photoId);
+      final url = await _getAccessUrl(photo.photoId);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -194,6 +235,8 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
   }
 
   Future<void> _deletePhoto(ProfileMediaStatus photo) async {
+    if (_deletingPhotoIds.contains(photo.photoId)) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -210,10 +253,15 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true ||
+        !mounted ||
+        _deletingPhotoIds.contains(photo.photoId)) {
+      return;
+    }
 
+    setState(() => _deletingPhotoIds.add(photo.photoId));
     try {
-      await _service.deletePhoto(photo.photoId);
+      await _deletePhotoById(photo.photoId);
       await _reload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -226,6 +274,12 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
           const SnackBar(
               content: Text('Could not delete this photo right now.')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deletingPhotoIds.remove(photo.photoId));
+      } else {
+        _deletingPhotoIds.remove(photo.photoId);
       }
     }
   }
@@ -293,6 +347,7 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
                           ? () => _viewPhoto(photo)
                           : null,
                       trailing: PopupMenuButton<String>(
+                        enabled: !_deletingPhotoIds.contains(photo.photoId),
                         onSelected: (value) {
                           if (value == 'view') _viewPhoto(photo);
                           if (value == 'delete') _deletePhoto(photo);
