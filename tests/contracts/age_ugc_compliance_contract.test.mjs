@@ -153,6 +153,25 @@ test('message reports carry validated content context without copying message te
     /if \(!FeatureFlags\.sharedMomentsEnabled\) \{[\s\S]{0,180}await _report\(messageId: messageId\)/,
   );
   assert.match(chatScreen, /contentType: reportingMessage \? 'message' : 'account'/);
+  assert.match(
+    chatScreen,
+    /@visibleForTesting[\s\S]{0,240}showChatReportFlow/,
+  );
+  assert.match(chatScreen, /await showChatReportFlow\(/);
+  assert.match(chatScreen, /reportedUid: widget\.otherUid/);
+  assert.match(chatScreen, /conversationId: widget\.conversationId/);
+  assert.match(chatScreen, /messageId: messageId/);
+  assert.match(chatScreen, /return _safety\.reportUser\(/);
+  assert.match(chatScreen, /bool _reporting = false;/);
+  assert.match(
+    chatScreen,
+    /Future<void> _showMessageActions\([\s\S]{0,220}if \(_reporting\) return;/,
+  );
+  assert.match(
+    chatScreen,
+    /Future<void> _report\(\{String\? messageId\}\) async \{[\s\S]{0,160}if \(_reporting\) return;/,
+  );
+  assert.match(chatScreen, /enabled: !_reporting/);
   assert.match(safetyService, /Message reports require message context/);
   assert.match(safetyBackend, /String\(message\.get\('senderUid'\) \?\? ''\) !== reportedUid/);
   assert.match(safetyBackend, /participants\.includes\(reporterUid\)/);

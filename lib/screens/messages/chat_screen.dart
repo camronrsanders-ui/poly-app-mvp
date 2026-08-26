@@ -98,6 +98,130 @@ List<T> chatDocsEvictedFromLiveWindow<T>({
       .toList(growable: false);
 }
 
+typedef ChatReportAction = Future<void> Function({
+  required String reportedUid,
+  required String reason,
+  required String details,
+  required String contentType,
+  String? contentId,
+  String? conversationId,
+});
+
+@visibleForTesting
+Future<void> showChatReportFlow({
+  required BuildContext context,
+  required String reportedUid,
+  required String otherDisplayName,
+  required String conversationId,
+  String? messageId,
+  required ChatReportAction reportUser,
+}) async {
+  const reasons = <String, String>{
+    'harassment': 'Harassment',
+    'threats_violence': 'Threats or violence',
+    'child_safety': 'Child safety / underage concern',
+    'sexual_content': 'Sexual content or solicitation',
+    'nonconsensual_content': 'Non-consensual content',
+    'hate_speech': 'Hate speech',
+    'fake_profile': 'Fake profile',
+    'misrepresentation': 'Misrepresentation',
+    'spam': 'Spam or scam',
+    'other': 'Other',
+  };
+
+  var reason = reasons.keys.first;
+  var detailsText = '';
+  final reportingMessage = messageId != null;
+
+  final submitted = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setLocalState) => AlertDialog(
+        title: Text(
+          reportingMessage ? 'Report this message' : 'Report $otherDisplayName',
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (reportingMessage) ...[
+                const Text(
+                  'The report will include a protected reference to this message so moderators can review the correct content. The message text is not copied into your report details automatically.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<String>(
+                initialValue: reason,
+                items: reasons.entries
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) =>
+                    setLocalState(() => reason = value ?? reason),
+                decoration: const InputDecoration(labelText: 'Reason'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => detailsText = value,
+                maxLines: 4,
+                maxLength: 2000,
+                decoration: const InputDecoration(
+                  labelText: 'Details (optional)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Submit report'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (submitted != true) return;
+
+  try {
+    await reportUser(
+      reportedUid: reportedUid,
+      reason: reason,
+      details: detailsText,
+      contentType: reportingMessage ? 'message' : 'account',
+      contentId: messageId,
+      conversationId: reportingMessage ? conversationId : null,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Report submitted. Thank you for helping protect the community.',
+          ),
+        ),
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not submit the report right now.'),
+        ),
+      );
+    }
+  }
+}
+
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -139,6 +263,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialScrollScheduled = false;
   bool _didInitialScroll = false;
   bool _sending = false;
+  bool _reporting = false;
 
   @override
   void initState() {
@@ -411,6 +536,7 @@ class _ChatScreenState extends State<ChatScreen> {
     required String messageId,
     required bool isMine,
   }) async {
+    if (_reporting) return;
     if (!FeatureFlags.sharedMomentsEnabled) {
       if (!isMine) {
         await _report(messageId: messageId);
@@ -533,109 +659,39 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _report({String? messageId}) async {
-    const reasons = <String, String>{
-      'harassment': 'Harassment',
-      'threats_violence': 'Threats or violence',
-      'child_safety': 'Child safety / underage concern',
-      'sexual_content': 'Sexual content or solicitation',
-      'nonconsensual_content': 'Non-consensual content',
-      'hate_speech': 'Hate speech',
-      'fake_profile': 'Fake profile',
-      'misrepresentation': 'Misrepresentation',
-      'spam': 'Spam or scam',
-      'other': 'Other',
-    };
-    var reason = reasons.keys.first;
-    final details = TextEditingController();
-    final reportingMessage = messageId != null;
-    final submitted = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: Text(
-            reportingMessage
-                ? 'Report this message'
-                : 'Report ${widget.otherDisplayName}',
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (reportingMessage) ...[
-                  const Text(
-                    'The report will include a protected reference to this message so moderators can review the correct content. The message text is not copied into your report details automatically.',
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                DropdownButtonFormField<String>(
-                  initialValue: reason,
-                  items: reasons.entries
-                      .map(
-                        (entry) => DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) =>
-                      setLocalState(() => reason = value ?? reason),
-                  decoration: const InputDecoration(labelText: 'Reason'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: details,
-                  maxLines: 4,
-                  maxLength: 2000,
-                  decoration: const InputDecoration(
-                    labelText: 'Details (optional)',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Submit report'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (submitted == true) {
-      try {
-        await _safety.reportUser(
-          reportedUid: widget.otherUid,
-          reason: reason,
-          details: details.text,
-          contentType: reportingMessage ? 'message' : 'account',
-          contentId: messageId,
-          conversationId: reportingMessage ? widget.conversationId : null,
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Report submitted. Thank you for helping protect the community.',
-              ),
-            ),
+    if (_reporting) return;
+
+    setState(() => _reporting = true);
+    try {
+      await showChatReportFlow(
+        context: context,
+        reportedUid: widget.otherUid,
+        otherDisplayName: widget.otherDisplayName,
+        conversationId: widget.conversationId,
+        messageId: messageId,
+        reportUser: ({
+          required String reportedUid,
+          required String reason,
+          required String details,
+          required String contentType,
+          String? contentId,
+          String? conversationId,
+        }) {
+          return _safety.reportUser(
+            reportedUid: reportedUid,
+            reason: reason,
+            details: details,
+            contentType: contentType,
+            contentId: contentId,
+            conversationId: conversationId,
           );
-        }
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not submit the report right now.'),
-            ),
-          );
-        }
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _reporting = false);
       }
     }
-    details.dispose();
   }
 
   String _formatMessageTime(Object? rawTimestamp) {
@@ -765,6 +821,7 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: const Icon(Icons.event_outlined),
             ),
           PopupMenuButton<String>(
+            enabled: !_reporting,
             tooltip: 'Conversation safety options',
             onSelected: (value) {
               if (value == 'report') _report();
