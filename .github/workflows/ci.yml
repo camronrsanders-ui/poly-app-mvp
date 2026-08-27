@@ -35,43 +35,67 @@ jobs:
         run: flutter analyze --no-pub
       - name: Run Flutter tests
         run: flutter test --no-pub
-      - name: Build Android debug APK
+      - name: Build Android production and staging debug APKs
         shell: bash
         run: |
-          # google-services.json is intentionally not committed. The Android
-          # debug build only needs structurally valid Google Services input,
-          # so CI creates a non-secret demo config for compile validation.
-          if [[ -e android/app/google-services.json ]]; then
+          PRODUCTION_CONFIG="android/app/src/production/google-services.json"
+          STAGING_CONFIG="android/app/src/staging/google-services.json"
+
+          if [[ -e android/app/google-services.json || -e "$PRODUCTION_CONFIG" || -e "$STAGING_CONFIG" ]]; then
             echo "Refusing to overwrite an existing Android Firebase config in CI." >&2
             exit 1
           fi
-          trap 'rm -f android/app/google-services.json' EXIT
-          cat > android/app/google-services.json <<'JSON'
+
+          mkdir -p android/app/src/production android/app/src/staging
+          trap 'rm -f "$PRODUCTION_CONFIG" "$STAGING_CONFIG"' EXIT
+
+          cat > "$PRODUCTION_CONFIG" <<'JSON'
           {
             "project_info": {
               "project_number": "000000000000",
               "project_id": "demo-polycircle",
               "storage_bucket": "demo-polycircle.appspot.com"
             },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-                  "android_client_info": {
-                    "package_name": "com.polycircle.app"
-                  }
-                },
-                "api_key": [
-                  {
-                    "current_key": "demo-not-a-real-api-key"
-                  }
-                ]
-              }
-            ],
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                "android_client_info": {
+                  "package_name": "com.polycircle.app"
+                }
+              },
+              "api_key": [{
+                "current_key": "demo-not-a-real-api-key"
+              }]
+            }],
             "configuration_version": "1"
           }
           JSON
-          flutter build apk --debug --no-pub
+
+          cat > "$STAGING_CONFIG" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000001",
+              "project_id": "demo-polycircle-staging",
+              "storage_bucket": "demo-polycircle-staging.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000001:android:0000000000000000000001",
+                "android_client_info": {
+                  "package_name": "com.polycircle.app.staging"
+                }
+              },
+              "api_key": [{
+                "current_key": "demo-not-a-real-api-key"
+              }]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+          flutter build apk --flavor production --debug --no-pub
+          flutter build apk --flavor staging --debug --no-pub
+
 
   ios-regression:
     name: iOS simulator build regression
@@ -90,8 +114,52 @@ jobs:
         run: flutter pub get --enforce-lockfile
       - name: Normalize and validate iOS native host
         run: bash tool/ensure_ios_runtime.sh
-      - name: Build iOS simulator app
-        run: flutter build ios --simulator --debug --no-pub
+      - name: Build iOS production and staging simulator apps
+        shell: bash
+        run: |
+          PRODUCTION_PLIST="ios/Runner/Firebase/production/GoogleService-Info.plist"
+          STAGING_PLIST="ios/Runner/Firebase/staging/GoogleService-Info.plist"
+
+          if [[ -e ios/Runner/GoogleService-Info.plist || -e "$PRODUCTION_PLIST" || -e "$STAGING_PLIST" ]]; then
+            echo "Refusing to overwrite an existing iOS Firebase config in CI." >&2
+            exit 1
+          fi
+
+          mkdir -p ios/Runner/Firebase/production ios/Runner/Firebase/staging
+          trap 'rm -f "$PRODUCTION_PLIST" "$STAGING_PLIST"' EXIT
+
+          cat > "$PRODUCTION_PLIST" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>PROJECT_ID</key>
+            <string>poly-circle-j5v6dy</string>
+            <key>BUNDLE_ID</key>
+            <string>com.polycircle.app</string>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000000:ios:0000000000000000000000</string>
+          </dict>
+          </plist>
+          PLIST
+
+          cat > "$STAGING_PLIST" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>PROJECT_ID</key>
+            <string>polycircle-staging-82204f</string>
+            <key>BUNDLE_ID</key>
+            <string>com.polycircle.app.staging</string>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000001:ios:0000000000000000000001</string>
+          </dict>
+          </plist>
+          PLIST
+
+          flutter build ios --flavor production --simulator --debug --no-pub
+          flutter build ios --flavor staging --simulator --debug --no-pub
 
   functions:
     name: Functions build, test and load

@@ -40,12 +40,32 @@ const sharedLocationPayloadTokens = [
   'observedAtMs',
 ];
 
-test('Android and iOS use the same permanent Polycircle app identity', () => {
+test('Android and iOS preserve production identity and separate staging identity', () => {
   assert.ok(androidBuild.includes('namespace = "com.polycircle.app"'));
   assert.ok(androidBuild.includes('applicationId = "com.polycircle.app"'));
-  assert.ok(iosProject.includes('PRODUCT_BUNDLE_IDENTIFIER = com.polycircle.app;'));
-  assert.ok(androidManifest.includes('android:label="Polycircle"'));
-  assert.ok(iosInfo.includes('<string>Polycircle</string>'));
+  assert.ok(androidBuild.includes('applicationIdSuffix = ".staging"'));
+
+  assert.ok(
+    iosProject.includes(
+      'PRODUCT_BUNDLE_IDENTIFIER = com.polycircle.app;',
+    ),
+  );
+
+  assert.ok(
+    iosProject.includes(
+      'PRODUCT_BUNDLE_IDENTIFIER = com.polycircle.app.staging;',
+    ),
+  );
+
+  assert.ok(
+    androidManifest.includes('android:label="@string/app_name"'),
+  );
+
+  assert.ok(
+    iosInfo.includes(
+      '<string>$(POLYCIRCLE_APP_DISPLAY_NAME)</string>',
+    ),
+  );
 });
 
 test('Android and iOS expose the same Flutter native bridge surface', () => {
@@ -72,9 +92,13 @@ test('location permissions remain foreground-only on both platforms', () => {
   assert.doesNotMatch(iosInfo, /NSLocationAlwaysAndWhenInUseUsageDescription/);
 });
 
-test('Android and iOS local launchers target the same guarded Firebase emulator stack', () => {
+test('Android and iOS local launchers target the same guarded staging emulator environment', () => {
   for (const runner of [androidRunner, iosRunner]) {
-    assert.match(runner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+    assert.match(
+      runner,
+      /FIREBASE_PROJECT_ID="polycircle-staging-82204f"/,
+    );
+    assert.match(runner, /--flavor staging/);
     assert.match(runner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
     assert.match(runner, /POLYCIRCLE_DISCOVER_FIXTURE_RADIUS/);
     assert.match(runner, /--only auth,firestore,functions,storage/);

@@ -41,6 +41,11 @@ const infoPlist = fs.readFileSync(
   'utf8',
 );
 
+const ci = fs.readFileSync(
+  path.join(root, '.github/workflows/ci.yml'),
+  'utf8',
+);
+
 test('iOS defines explicit production and staging build environments', () => {
   for (const configuration of [
     'Debug-production',
@@ -129,5 +134,49 @@ test('iOS runtime validation preserves both native identities', () => {
   assert.doesNotMatch(
     runtime,
     /PLIST="ios\/Runner\/GoogleService-Info\.plist"/,
+  );
+});
+
+
+test('CI compiles both native environments explicitly', () => {
+  assert.match(
+    ci,
+    /android\/app\/src\/production\/google-services\.json/,
+  );
+  assert.match(
+    ci,
+    /android\/app\/src\/staging\/google-services\.json/,
+  );
+  assert.match(
+    ci,
+    /flutter build apk --flavor production --debug --no-pub/,
+  );
+  assert.match(
+    ci,
+    /flutter build apk --flavor staging --debug --no-pub/,
+  );
+  assert.match(
+    ci,
+    /ios\/Runner\/Firebase\/production\/GoogleService-Info\.plist/,
+  );
+  assert.match(
+    ci,
+    /ios\/Runner\/Firebase\/staging\/GoogleService-Info\.plist/,
+  );
+  assert.match(
+    ci,
+    /flutter build ios --flavor production --simulator --debug --no-pub/,
+  );
+  assert.match(
+    ci,
+    /flutter build ios --flavor staging --simulator --debug --no-pub/,
+  );
+  assert.doesNotMatch(
+    ci,
+    /flutter build apk --debug --no-pub/,
+  );
+  assert.doesNotMatch(
+    ci,
+    /flutter build ios --simulator --debug --no-pub/,
   );
 });

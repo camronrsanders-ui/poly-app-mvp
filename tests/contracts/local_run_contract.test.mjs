@@ -33,8 +33,30 @@ test('development preflight checks the runtime versions and app source before si
   assert.match(preflight, /node --test tests\/contracts\/\*\.test\.mjs/);
 });
 
-test('development preflight validates Android native Firebase wiring when the host exists', () => {
-  assert.match(preflight, /android\/app\/google-services\.json/);
+test('development preflight validates explicit environment-specific Firebase wiring', () => {
+  assert.match(preflight, /ENVIRONMENT="\$\{1:-\}"/);
+  assert.match(preflight, /production\|staging/);
+
+  assert.match(
+    preflight,
+    /android\/app\/src\/production\/google-services\.json/,
+  );
+
+  assert.match(
+    preflight,
+    /android\/app\/src\/staging\/google-services\.json/,
+  );
+
+  assert.match(
+    preflight,
+    /ios\/Runner\/Firebase\/production\/GoogleService-Info\.plist/,
+  );
+
+  assert.match(
+    preflight,
+    /ios\/Runner\/Firebase\/staging\/GoogleService-Info\.plist/,
+  );
+
   assert.match(preflight, /project_info\?\.project_id/);
   assert.match(preflight, /EXPECTED_FIREBASE_PROJECT_ID/);
   assert.match(preflight, /android\/app\/build\.gradle\.kts/);
@@ -51,13 +73,15 @@ test('Java runtime helper activates Homebrew Java 21 in the caller environment',
 });
 
 test('one-command iOS runner matches the native Firebase project while routing every used backend service locally', () => {
-  assert.match(iosRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+  assert.match(iosRunner, /FIREBASE_PROJECT_ID="polycircle-staging-82204f"/);
   assert.match(iosRunner, /ensure_java21\.sh/);
   assert.match(iosRunner, /--project "\$FIREBASE_PROJECT_ID"/);
   assert.match(iosRunner, /--only auth,firestore,functions,storage/);
   assert.match(iosRunner, /USE_FIREBASE_EMULATORS=true/);
   assert.match(iosRunner, /FIREBASE_EMULATOR_HOST=127\.0\.0\.1/);
   assert.match(iosRunner, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true/);
+  assert.match(iosRunner, /dev_preflight\.sh staging/);
+  assert.match(iosRunner, /--flavor staging/);
   assert.doesNotMatch(iosRunner, /firebase deploy/);
 });
 
@@ -84,31 +108,42 @@ test('one-command iOS runner refreshes approved branding when the source artwork
   assert.match(iosRunner, /install_branding\.sh --if-present/);
 });
 
-test('one-command iOS runner repairs an incomplete or stale native iOS shell before validation', () => {
+test('one-command iOS runner validates the explicit production and staging native host', () => {
   assert.match(iosRunner, /ensure_ios_runtime\.sh/);
+
   assert.match(
     iosRepair,
-    /flutter create --platforms=ios --org com\.polycircle \./,
+    /flutter create[\s\S]*--platforms=ios[\s\S]*--org com\.polycircle/,
   );
-  assert.match(
-    iosRepair,
-    /EXPECTED_IOS_BUNDLE_ID="com\.polycircle\.app"/,
-  );
+
+  assert.match(iosRepair, /com\.polycircle\.app/);
+  assert.match(iosRepair, /com\.polycircle\.app\.staging/);
+  assert.match(iosRepair, /Debug-production/);
+  assert.match(iosRepair, /Debug-staging/);
+  assert.match(iosRepair, /Release-production/);
+  assert.match(iosRepair, /Release-staging/);
+
   assert.doesNotMatch(
     iosRepair,
-    /flutter create --platforms=ios --org com\.mycompany \./,
+    /PLIST="ios\/Runner\/GoogleService-Info\.plist"/,
   );
-  assert.match(iosRepair, /GoogleService-Info\.plist/);
+
+  assert.doesNotMatch(
+    iosRepair,
+    /EXPECTED_IOS_BUNDLE_ID=/,
+  );
+
   assert.match(iosRepair, /IPHONEOS_DEPLOYMENT_TARGET/);
   assert.match(iosRepair, /15\.0/);
-  assert.match(iosRepair, /preserved GoogleService-Info\.plist/);
-  assert.doesNotMatch(iosRepair, /flutter create --platforms=ios \./);
 });
 
 test('one-command Android runner refuses incomplete native configuration and keeps Firebase traffic local', () => {
   assert.match(androidRunner, /\[\[ ! -d android \]\]/);
-  assert.match(androidRunner, /android\/app\/google-services\.json/);
-  assert.match(androidRunner, /FIREBASE_PROJECT_ID="poly-circle-j5v6dy"/);
+  assert.match(
+    androidRunner,
+    /android\/app\/src\/staging\/google-services\.json/,
+  );
+  assert.match(androidRunner, /FIREBASE_PROJECT_ID="polycircle-staging-82204f"/);
   assert.match(androidRunner, /ensure_java21\.sh/);
   assert.match(androidRunner, /ANDROID_HOST="\$\{POLYCIRCLE_ANDROID_FIREBASE_HOST:-10\.0\.2\.2\}"/);
   assert.match(androidRunner, /--only auth,firestore,functions,storage/);
@@ -120,6 +155,8 @@ test('one-command Android runner refuses incomplete native configuration and kee
   assert.match(androidRunner, /POLYCIRCLE_DISCOVER_FIXTURE_COUNT/);
   assert.match(androidRunner, /POLYCIRCLE_DISCOVER_FIXTURE_RADIUS/);
   assert.match(androidRunner, /emu geo fix -45\.6789 12\.3456/);
+  assert.match(androidRunner, /dev_preflight\.sh staging/);
+  assert.match(androidRunner, /--flavor staging/);
   assert.doesNotMatch(androidRunner, /firebase deploy/);
 });
 

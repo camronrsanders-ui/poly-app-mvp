@@ -11,7 +11,7 @@ source "$ROOT_DIR/tool/ensure_node22.sh"
 source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE="${1:-iPhone 17}"
-FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
+FIREBASE_PROJECT_ID="polycircle-staging-82204f"
 DISCOVER_FIXTURE_COUNT="${POLYCIRCLE_DISCOVER_FIXTURE_COUNT:-2}"
 DISCOVER_FIXTURE_RADIUS="${POLYCIRCLE_DISCOVER_FIXTURE_RADIUS:-20}"
 EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data"
@@ -47,7 +47,7 @@ fi
 
 bash tool/ensure_ios_runtime.sh
 bash tool/install_branding.sh --if-present
-bash tool/dev_preflight.sh
+bash tool/dev_preflight.sh staging
 
 printf '\nStarting Polycircle local Firebase test run\n'
 printf 'Requested device: %s\n' "$DEVICE"
@@ -111,7 +111,7 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1"
+RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run --flavor staging -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1"
 
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \
