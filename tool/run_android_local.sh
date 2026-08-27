@@ -11,7 +11,7 @@ source "$ROOT_DIR/tool/ensure_node22.sh"
 source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE_REQUEST="${1:-}"
-FIREBASE_PROJECT_ID="poly-circle-j5v6dy"
+FIREBASE_PROJECT_ID="polycircle-staging-82204f"
 ANDROID_HOST="${POLYCIRCLE_ANDROID_FIREBASE_HOST:-10.0.2.2}"
 DISCOVER_FIXTURE_COUNT="${POLYCIRCLE_DISCOVER_FIXTURE_COUNT:-2}"
 DISCOVER_FIXTURE_RADIUS="${POLYCIRCLE_DISCOVER_FIXTURE_RADIUS:-20}"
@@ -52,15 +52,15 @@ if [[ ! -d android ]]; then
   exit 1
 fi
 
-if [[ ! -f android/app/google-services.json ]]; then
-  printf "Android Firebase configuration is missing: android/app/google-services.json\n" >&2
-  printf "Download the config for package com.polycircle.app from the Polycircle Firebase project and place it there locally.\n" >&2
+if [[ ! -f android/app/src/staging/google-services.json ]]; then
+  printf "Android Firebase configuration is missing: android/app/src/staging/google-services.json\n" >&2
+  printf "Download the config for package com.polycircle.app.staging from the Polycircle staging Firebase project and place it there locally.\n" >&2
   printf "The file is intentionally git-ignored; do not commit it.\n" >&2
   exit 1
 fi
 
 bash tool/install_branding.sh --if-present
-bash tool/dev_preflight.sh
+bash tool/dev_preflight.sh staging
 
 DEVICES_JSON="$(flutter devices --machine 2>/dev/null || true)"
 DEVICE_ID="$(printf '%s' "$DEVICES_JSON" | DEVICE_REQUEST="$DEVICE_REQUEST" node -e '
@@ -125,7 +125,7 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=$ANDROID_HOST"
+RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run --flavor staging -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=$ANDROID_HOST"
 
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \

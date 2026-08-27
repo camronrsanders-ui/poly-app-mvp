@@ -25,6 +25,16 @@ const preflight = fs.readFileSync(
 test('Android host uses permanent Polycircle application identity', () => {
   assert.match(appGradle, /namespace\s*=\s*"com\.polycircle\.app"/);
   assert.match(appGradle, /applicationId\s*=\s*"com\.polycircle\.app"/);
+  assert.match(appGradle, /flavorDimensions \+= "environment"/);
+  assert.match(appGradle, /resValues\s*=\s*true/);
+  assert.match(appGradle, /create\("production"\)/);
+  assert.match(appGradle, /create\("staging"\)/);
+  assert.match(appGradle, /applicationIdSuffix = "\.staging"/);
+  assert.match(appGradle, /resValue\("string", "app_name", "Polycircle"\)/);
+  assert.match(
+    appGradle,
+    /resValue\("string", "app_name", "Polycircle Staging"\)/,
+  );
   assert.doesNotMatch(appGradle, /com\.example\.polycircle/);
 });
 
@@ -51,7 +61,8 @@ test('Android release signing fails closed and never falls back to debug keys', 
     /signingConfig = if \(hasCompleteReleaseSigning\)/,
   );
   assert.match(appGradle, /verifyReleaseSigning/);
-  assert.match(appGradle, /preReleaseBuild/);
+  assert.match(appGradle, /it\.name\.startsWith\("pre"\)/);
+  assert.match(appGradle, /it\.name\.endsWith\("ReleaseBuild"\)/);
   assert.match(appGradle, /dependsOn\(verifyReleaseSigning\)/);
   assert.match(appGradle, /throw GradleException/);
 
@@ -89,7 +100,21 @@ test('Android local runner is emulator-only and preserves local state', () => {
 });
 
 
-test('Android Firebase preflight selects the client matching the permanent package', () => {
+test('Android Firebase preflight is explicit and environment-aware', () => {
+  assert.match(preflight, /ENVIRONMENT="\$\{1:-\}"/);
+  assert.match(preflight, /production\|staging/);
+  assert.match(preflight, /poly-circle-j5v6dy/);
+  assert.match(preflight, /polycircle-staging-82204f/);
+  assert.match(preflight, /com\.polycircle\.app"/);
+  assert.match(preflight, /com\.polycircle\.app\.staging"/);
+  assert.match(
+    preflight,
+    /android\/app\/src\/production\/google-services\.json/,
+  );
+  assert.match(
+    preflight,
+    /android\/app\/src\/staging\/google-services\.json/,
+  );
   assert.match(preflight, /ANDROID_MATCHING_APP_ID/);
   assert.match(preflight, /package_name === expected/);
   assert.match(preflight, /EXPECTED_ANDROID_APP_ID/);

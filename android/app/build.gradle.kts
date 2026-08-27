@@ -41,6 +41,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -59,6 +63,22 @@ android {
         // Production stays cleartext-disabled. Local optimized Android smoke
         // builds may explicitly enable emulator networking from the host shell.
         manifestPlaceholders["polycircleUsesCleartextTraffic"] = "false"
+    }
+
+    flavorDimensions += "environment"
+
+    productFlavors {
+        create("production") {
+            dimension = "environment"
+            resValue("string", "app_name", "Polycircle")
+        }
+
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "Polycircle Staging")
+        }
     }
 
     signingConfigs {
@@ -112,7 +132,10 @@ val verifyReleaseSigning by tasks.registering {
     }
 }
 
-tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+tasks.matching {
+    it.name.startsWith("pre") &&
+        it.name.endsWith("ReleaseBuild")
+}.configureEach {
     dependsOn(verifyReleaseSigning)
 }
 

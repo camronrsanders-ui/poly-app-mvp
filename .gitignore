@@ -51,7 +51,9 @@ secrets/
 # accidental production/staging project binding from being committed during
 # development. Release CI should inject the intended environment explicitly.
 ios/Runner/GoogleService-Info.plist
+ios/Runner/Firebase/*/GoogleService-Info.plist
 android/app/google-services.json
+android/app/src/*/google-services.json
 lib/firebase_options.dart
 
 # OS
