@@ -129,3 +129,29 @@ Closing an issue, having backend scaffolding, or making the UI visible is never 
 
 ## Merge policy
 `restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests. Keep PR #4 in draft while staging/payment-dependent, legal, and operational gates remain outstanding.
+
+## Native environment separation
+
+Repository source defines explicit production and staging native environments:
+
+```text
+Android production: com.polycircle.app
+Android staging:    com.polycircle.app.staging
+iOS production:     com.polycircle.app
+iOS staging:        com.polycircle.app.staging
+```
+
+CI and release validation select environments explicitly:
+
+```bash
+flutter build apk --flavor production --debug
+flutter build apk --flavor staging --debug
+flutter build ios --flavor production --simulator --debug
+flutter build ios --flavor staging --simulator --debug
+```
+
+Real Firebase native client configurations remain untracked and environment-specific. No cross-environment fallback or runtime Firebase project selector is permitted.
+
+Android release variants remain protected by fail-closed external signing configuration and must never fall back to the debug signing key.
+
+Environment separation does not mark staging acceptance complete. Real staging deployment, App Check enforcement, physical-device validation, Crashlytics delivery, protected-media/account-deletion E2E, operational moderation, legal/policy, production signing, and store-submission gates remain open until independently validated.

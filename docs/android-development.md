@@ -119,3 +119,41 @@ The repository must never contain the production `.jks` / `.keystore` file or si
 There is no debug-signing fallback for the Android `release` build type. The existing `POLYCIRCLE_ANDROID_LOCAL_RELEASE_SMOKE` switch controls only the already-documented local cleartext behavior; it does not bypass release signing and does not authorize a distributable artifact.
 
 Play Console registration, production signing-key provisioning, store listing/compliance, and production App Check / Play Integrity validation remain release-stage work.
+
+## Production and staging environments
+
+Polycircle uses explicit Android environments. CI and release commands must specify a flavor:
+
+```bash
+flutter build apk --flavor production --debug
+flutter build apk --flavor staging --debug
+```
+
+Native identities:
+
+```text
+production: com.polycircle.app
+staging:    com.polycircle.app.staging
+```
+
+Firebase client configuration is environment-specific and remains untracked:
+
+```text
+android/app/src/production/google-services.json
+android/app/src/staging/google-services.json
+```
+
+Do not restore or rely on `android/app/google-services.json`.
+
+Development preflight also requires an explicit environment:
+
+```bash
+bash tool/dev_preflight.sh production
+bash tool/dev_preflight.sh staging
+```
+
+The one-command Android emulator runner intentionally uses the staging flavor and staging Firebase project while Firebase services are routed to local emulators.
+
+Release signing remains fail-closed for both production and staging release variants. Neither may fall back to the debug signing key.
+
+Source/build readiness does not close physical-device, staging deployment, App Check/Play Integrity, protected-media, account-deletion, signing, or store acceptance gates.
