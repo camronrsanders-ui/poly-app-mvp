@@ -1,16 +1,16 @@
 # Android development and test readiness
 
-Android is the next native platform target for Polycircle. Keep this work on `restart-foundation`; do not merge PR #4 or modify `main` as part of native preparation.
+Android is a supported native platform target for Polycircle. Keep this work on `restart-foundation`; do not merge PR #4 or modify `main` as part of native preparation.
 
-## Current blocker
+## Current repository state
 
-The Flutter package is cross-platform, and the client already selects Firebase App Check's Android debug provider in debug builds and Play Integrity in non-debug Android builds. However, the repository does not yet contain a committed `android/` Flutter host project, so Android cannot currently build or launch from this branch.
+The Android Flutter host is committed, uses the permanent Polycircle application identity `com.polycircle.app`, includes the native Firebase/Google Services wiring, and is exercised by automated Android debug APK builds in verified CI checkpoints.
 
-Do not treat Android as ready until all native files below are present and an automated Android debug build succeeds.
+Android source/build readiness does not equal external-beta readiness. Remaining Android release work includes real physical-device validation, Play Integrity and App Check validation on the real release path, Play Console production configuration, production signing-key provisioning outside Git, and real staging validation of callable, protected-media, and account-deletion behavior.
 
-## Safe native-project generation
+## Native host recovery / regeneration
 
-Use the Flutter SDK currently selected for the project and generate only the missing Android host from the repository root. Before accepting generated changes, make sure the package/application identifier is the intended Polycircle Android identifier and matches the Firebase Android app registration.
+The committed Android host should normally be preserved. If it is damaged or deliberately regenerated, use the Flutter SDK currently selected for the project and regenerate only the Android platform from the repository root. Before accepting generated changes, make sure the package/application identifier is the intended Polycircle Android identifier and matches the Firebase Android app registration.
 
 A typical regeneration command is:
 

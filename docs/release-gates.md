@@ -54,7 +54,7 @@ Required in addition to Gate 1:
 - Firebase App Check configured and verified on staging and real devices.
 - Rate limits verified under emulator/staging tests.
 - Crash/error reporting configured without sensitive payload logging.
-- Android beta/release artifacts use a dedicated non-debug signing configuration; the current debug-key release fallback is local-smoke-only and must not be used for distributed builds.
+- Android beta/release artifacts require a dedicated external non-debug signing configuration; missing or incomplete release-signing configuration fails closed, and the release build type never falls back to the Android debug signing key. Production signing-key provisioning remains a release-stage requirement.
 - Google Play production configuration selects 18+ as the only target age group and enables Restrict Minor Access for the dating/matchmaking app.
 - Google Play Age Signals `SHARED`, `NOT_SHARED`, and `VERIFICATION_REQUIRED` paths are exercised on real Play-installed test builds/accounts.
 - Apple Declared Age Range capability is enabled for the production App ID/signing profile and the 18+ range flow is exercised with Apple-supported sandbox/real-device testing.

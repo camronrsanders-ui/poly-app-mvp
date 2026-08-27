@@ -91,14 +91,14 @@ Avoid non-essential animation that cannot respect reduced-motion preferences. Cu
 
 ## Media
 
-Profile photos are member-generated and cannot reliably have meaningful author-provided alt text in the current design. Do not invent descriptive personal attributes from images. UI controls around photos still need semantic labels such as “Profile photo 1 of 3.”
+Profile photos are member-generated and cannot reliably have meaningful author-provided alt text in the current design. Do not invent descriptive personal attributes from images. Profile-photo carousel pages now expose deliberate position semantics such as “Profile photo 1 of 3”; these semantics still require real VoiceOver/TalkBack acceptance testing.
 
 ## Known release work
 
 - Add targeted widget tests for semantics on core controls.
 - Run real VoiceOver/TalkBack acceptance journeys.
 - Verify large-text layouts on every core screen.
-- Add semantics to photo-page position if not exposed sufficiently by platform defaults.
+- Validate profile-photo carousel position semantics during real VoiceOver/TalkBack acceptance.
 - Perform a contrast review against the final branded theme.
 - Review any future web/desktop focus/keyboard behavior separately.
 
