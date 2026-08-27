@@ -37,3 +37,12 @@ test('profile detail requests protected visible photos instead of raw Storage pa
   assert.match(profileDetail, /Image\.network\(/);
   assert.doesNotMatch(profileDetail, /storagePath/);
 });
+
+test('profile photo carousel exposes deliberate position semantics and excludes raw image semantics', () => {
+  assert.match(profileDetail, /Semantics\(/);
+  assert.match(
+    profileDetail,
+    /label:\s*'Profile photo \$\{index \+ 1\} of \$\{photos\.length\}'/,
+  );
+  assert.match(profileDetail, /excludeFromSemantics:\s*true/);
+});

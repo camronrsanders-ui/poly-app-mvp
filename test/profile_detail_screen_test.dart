@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/profile/profile_detail_screen.dart';
+import 'package:polycircle/services/profile_media_service.dart';
 
 const targetProfile = <String, dynamic>{
   'uid': 'target-1',
@@ -11,15 +12,16 @@ const targetProfile = <String, dynamic>{
 
 Future<void> pumpProfile(
   WidgetTester tester,
-  ProfileReportAction reportUser,
-) async {
+  ProfileReportAction reportUser, {
+  List<VisibleProfilePhoto> photos = const [],
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: ProfileDetailScreen.test(
         profile: targetProfile,
         reportUser: reportUser,
         loadCircle: (_) async => const [],
-        loadVisiblePhotos: (_) async => const [],
+        loadVisiblePhotos: (_) async => photos,
       ),
     ),
   );
@@ -39,6 +41,53 @@ Future<void> openReport(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'Profile photo carousel exposes position semantics without personal description',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+
+      await pumpProfile(
+        tester,
+        ({
+          required String reportedUid,
+          required String reason,
+          required String details,
+          required String contentType,
+          String? contentId,
+          String? conversationId,
+        }) async {},
+        photos: [
+          VisibleProfilePhoto(
+            photoId: 'photo-1',
+            url: Uri.parse('https://example.test/photo-1'),
+          ),
+          VisibleProfilePhoto(
+            photoId: 'photo-2',
+            url: Uri.parse('https://example.test/photo-2'),
+          ),
+        ],
+      );
+
+      expect(
+        find.bySemanticsLabel('Profile photo 1 of 2'),
+        findsOneWidget,
+      );
+
+      await tester.drag(
+        find.byType(PageView),
+        const Offset(-400, 0),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(
+        find.bySemanticsLabel('Profile photo 2 of 2'),
+        findsOneWidget,
+      );
+
+      semanticsHandle.dispose();
+    },
+  );
+
   testWidgets(
     'Profile report requires explicit submission',
     (tester) async {

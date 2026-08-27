@@ -320,17 +320,21 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             itemCount: photos.length,
             itemBuilder: (context, index) {
               final photo = photos[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.network(
-                    photo.url.toString(),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: CircleAvatar(
-                        radius: 48,
-                        child: Icon(Icons.person, size: 46),
+              return Semantics(
+                label: 'Profile photo ${index + 1} of ${photos.length}',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.network(
+                      photo.url.toString(),
+                      excludeFromSemantics: true,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: CircleAvatar(
+                          radius: 48,
+                          child: Icon(Icons.person, size: 46),
+                        ),
                       ),
                     ),
                   ),
