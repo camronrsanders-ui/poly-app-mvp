@@ -155,3 +155,38 @@ Real Firebase native client configurations remain untracked and environment-spec
 Android release variants remain protected by fail-closed external signing configuration and must never fall back to the debug signing key.
 
 Environment separation does not mark staging acceptance complete. Real staging deployment, App Check enforcement, physical-device validation, Crashlytics delivery, protected-media/account-deletion E2E, operational moderation, legal/policy, production signing, and store-submission gates remain open until independently validated.
+
+## Staging deployment guard
+
+Live R2D Firebase deployment must go through:
+
+```bash
+bash tool/deploy_staging.sh \
+  --approved-head <exact-verified-sha> \
+  <component>
+```
+
+Allowed components are deliberately limited to:
+
+```text
+firestore:rules
+firestore:indexes
+storage
+functions
+```
+
+The wrapper always supplies the literal staging project ID:
+
+```text
+polycircle-staging-82204f
+```
+
+It refuses deployment when the approved SHA does not match the current checked-out and remote restart-foundation head, when staged changes exist, or when deployment-sensitive tracked files are dirty.
+
+Use --check-only to exercise the full predeployment validation without changing Firebase resources.
+
+A bare firebase deploy is not an approved Polycircle release procedure.
+
+`.firebaserc` remains intentionally local-only and ignored by Git. Firebase aliases are convenience metadata only and are not part of the deployment security boundary. The staging wrapper supplies the literal staging project ID on every live deploy command.
+
+The presence of this guard does not authorize billing, API enablement, Firestore/Storage initialization, App Check enforcement, or any production Firebase modification.

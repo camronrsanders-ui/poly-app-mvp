@@ -61,7 +61,7 @@ lib/firebase_options.dart
 Thumbs.db
 
 # Local Firebase configuration
-.firebaseRC
+.firebaserc
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 
