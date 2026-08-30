@@ -79,18 +79,30 @@ test('wrapper fails closed on staged or deployment-sensitive tracked changes', (
   assert.doesNotMatch(deploy, /\.firebaserc/);
 });
 
+test('wrapper requires the Functions Node runtime and exact lockfile install', () => {
+  assert.match(deploy, /NODE_MAJOR=/);
+  assert.match(deploy, /NODE_MAJOR" == "22"/);
+  assert.match(deploy, /staging Functions require Node 22/);
+  assert.match(deploy, /ci --ignore-scripts/);
+});
+
 test('wrapper validates build, contracts, and security before live deploy', () => {
   assert.match(deploy, /run build/);
   assert.match(deploy, /--test tests\/contracts\/\*\.test\.mjs/);
   assert.match(deploy, /security_static_scan\.sh/);
 
+  const lockedInstall = deploy.indexOf('ci --ignore-scripts');
+  const build = deploy.indexOf('run build');
   const checkOnlyExit = deploy.indexOf(
     'STAGING DEPLOYMENT CHECK PASSED — NO DEPLOYMENT PERFORMED',
   );
   const liveDeploy = deploy.indexOf('"$FIREBASE_BIN" deploy');
 
+  assert.notEqual(lockedInstall, -1);
+  assert.notEqual(build, -1);
   assert.notEqual(checkOnlyExit, -1);
   assert.notEqual(liveDeploy, -1);
+  assert.ok(lockedInstall < build);
   assert.ok(checkOnlyExit < liveDeploy);
 });
 
