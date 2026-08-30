@@ -138,6 +138,12 @@ NPM_BIN="$(command -v npm || true)"
   exit 1
 }
 
+NODE_MAJOR="$("$NODE_BIN" -p "process.versions.node.split('.')[0]")"
+[[ "$NODE_MAJOR" == "22" ]] || {
+  echo "STOP: staging Functions require Node 22; found Node $("$NODE_BIN" --version)" >&2
+  exit 1
+}
+
 [[ "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID" ]] || {
   echo "STOP: staging and production project IDs unexpectedly match" >&2
   exit 1
@@ -154,6 +160,7 @@ echo "HEAD:      $CURRENT_HEAD"
 
 (
   cd functions
+  "$NPM_BIN" ci --ignore-scripts
   "$NPM_BIN" run build
 )
 
