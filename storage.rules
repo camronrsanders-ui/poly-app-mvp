@@ -1,0 +1,12 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // All media delivery and mutation use trusted backend functions or short-lived
+    // signed URLs. Firebase Storage client access is intentionally default-deny.
+    // This prevents profile visibility, blocks, moderation state, or Private Vault
+    // authorization from being bypassed by direct SDK reads/writes.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

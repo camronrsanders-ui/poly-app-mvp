@@ -1,0 +1,12 @@
+{
+  "name": "polycircle-security-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test firestore.rules.test.mjs user_account.rules.test.mjs compliance.rules.test.mjs profile_timestamp.rules.test.mjs inactive_account.rules.test.mjs chat_timestamp.rules.test.mjs storage.rules.test.mjs profile_media.rules.test.mjs conversation_lifecycle.rules.test.mjs report.rules.test.mjs moderation.rules.test.mjs circle_privacy.rules.test.mjs private_vault.rules.test.mjs privacy_boundary.rules.test.mjs pass.rules.test.mjs monetization.rules.test.mjs circle_membership.rules.test.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.1",
+    "firebase": "12.16.0"
+  }
+}
