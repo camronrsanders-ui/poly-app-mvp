@@ -31,10 +31,12 @@ test('local seed requires loopback emulator hosts before it can write anything',
   assert.match(seed, /Refusing to seed: emulator hosts must be loopback addresses/);
 });
 
-test('real Polycircle project ID is accepted only with explicit emulator-only acknowledgement', () => {
-  assert.match(seed, /nativeFirebaseProjectId = 'poly-circle-j5v6dy'/);
+test('approved Polycircle project IDs are accepted only with explicit emulator-only acknowledgement', () => {
+  assert.match(seed, /nativeFirebaseProjectIds = new Set/);
+  assert.match(seed, /'poly-circle-j5v6dy'/);
+  assert.match(seed, /'polycircle-staging-82204f'/);
   assert.match(seed, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR/);
-  assert.match(seed, /projectId === nativeFirebaseProjectId/);
+  assert.match(seed, /nativeFirebaseProjectIds\.has\(projectId\)/);
   assert.match(seed, /projectId\.startsWith\('demo-'\)/);
 });
 

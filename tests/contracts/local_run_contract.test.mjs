@@ -82,6 +82,10 @@ test('one-command iOS runner matches the native Firebase project while routing e
   assert.match(iosRunner, /POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true/);
   assert.match(iosRunner, /dev_preflight\.sh staging/);
   assert.match(iosRunner, /--flavor staging/);
+  assert.match(
+    iosRunner,
+    /firebase-emulator-data\/\$FIREBASE_PROJECT_ID/,
+  );
   assert.doesNotMatch(iosRunner, /firebase deploy/);
 });
 
@@ -157,6 +161,10 @@ test('one-command Android runner refuses incomplete native configuration and kee
   assert.match(androidRunner, /emu geo fix -45\.6789 12\.3456/);
   assert.match(androidRunner, /dev_preflight\.sh staging/);
   assert.match(androidRunner, /--flavor staging/);
+  assert.match(
+    androidRunner,
+    /firebase-emulator-data\/\$FIREBASE_PROJECT_ID/,
+  );
   assert.doesNotMatch(androidRunner, /firebase deploy/);
 });
 

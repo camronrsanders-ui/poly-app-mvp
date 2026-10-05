@@ -5,7 +5,10 @@ const {getStorage} = require('firebase-admin/storage');
 const {readFile} = require('node:fs/promises');
 const path = require('node:path');
 
-const nativeFirebaseProjectId = 'poly-circle-j5v6dy';
+const nativeFirebaseProjectIds = new Set([
+  'poly-circle-j5v6dy',
+  'polycircle-staging-82204f',
+]);
 
 function isLoopbackEmulatorHost(value) {
   if (typeof value !== 'string') return false;
@@ -50,11 +53,11 @@ function requireEmulatorEnvironment() {
     || '';
 
   const demoProject = projectId.startsWith('demo-');
-  const explicitlyApprovedNativeProject = projectId === nativeFirebaseProjectId
+  const explicitlyApprovedNativeProject = nativeFirebaseProjectIds.has(projectId)
     && process.env.POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR === 'true';
   if (!demoProject && !explicitlyApprovedNativeProject) {
     throw new Error(
-      `Refusing to seed project "${projectId || '[unknown]'}". Use a demo-* project, or use the guarded Polycircle local runner for ${nativeFirebaseProjectId}.`,
+      `Refusing to seed project "${projectId || '[unknown]'}". Use a demo-* project, or use the guarded Polycircle local runner for an approved native project.`,
     );
   }
   return projectId;
@@ -362,6 +365,7 @@ function fictionalCoordinateAtDistance(distanceMiles) {
 const waitForLocalEmulator = (milliseconds) => new Promise(
   (resolve) => setTimeout(resolve, milliseconds),
 );
+let localMediaFunctionsWarmed = false;
 
 async function saveDiscoverFixturePhoto(file, bytes, metadata) {
   const maximumAttempts = 4;
@@ -374,7 +378,11 @@ async function saveDiscoverFixturePhoto(file, bytes, metadata) {
       // Storage finalize events are asynchronous. A small local-only pause
       // prevents the Functions/Storage emulators from receiving all 45
       // protected-photo events in one burst on modest development machines.
-      await waitForLocalEmulator(250);
+      // Give both media trigger workers one cold-start window after the first
+      // upload; subsequent uploads then remain deliberately serialized.
+      const settleDelayMs = localMediaFunctionsWarmed ? 600 : 10_000;
+      localMediaFunctionsWarmed = true;
+      await waitForLocalEmulator(settleDelayMs);
       return;
     } catch (error) {
       const retryable = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT']
@@ -453,6 +461,19 @@ async function seedDiscoverPhotos() {
       emulatorFixture: true,
     });
   }
+}
+
+async function seedIncomingInterest() {
+  // Emulator-only deterministic mutual-match fixture.
+  // Alex has already expressed interest in Cam, but Cam must still
+  // explicitly Send interest before a match can exist.
+  await db.collection('likes').doc('local-alex_local-cam').set({
+    likeId: 'local-alex_local-cam',
+    fromUid: 'local-alex',
+    toUid: 'local-cam',
+    createdAt: FieldValue.serverTimestamp(),
+    emulatorFixture: true,
+  });
 }
 
 async function seedExistingConnection() {
@@ -572,6 +593,7 @@ async function main() {
   for (const person of seededPeople) await seedPerson(person);
   await seedDiscoverLocations();
   await seedDiscoverPhotos();
+  await seedIncomingInterest();
   await seedExistingConnection();
   await seedRelationshipCards();
 
