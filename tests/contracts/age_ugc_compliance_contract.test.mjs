@@ -146,7 +146,7 @@ test('profile reports identify the profile being reported', () => {
 test('message reports carry validated content context without copying message text', () => {
   assert.match(
     chatScreen,
-    /final canLongPress =\s*!isDeleted &&\s*\(FeatureFlags\.sharedMomentsEnabled \|\| !isMine\)/,
+    /final canLongPress = !isDeleted/,
   );
   assert.match(
     chatScreen,

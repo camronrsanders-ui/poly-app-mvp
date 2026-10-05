@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/feature_flags.dart';
+import '../../services/connection_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/shared_moments_service.dart';
@@ -246,6 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final _messages = MessagingService();
+  final _connections = ConnectionService();
   final _safety = SafetyService();
   final _sharedMoments = SharedMomentsService();
   final Set<String> _readUpdatesInFlight = {};
@@ -264,6 +266,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _didInitialScroll = false;
   bool _sending = false;
   bool _reporting = false;
+  bool _endingConnection = false;
 
   @override
   void initState() {
@@ -532,13 +535,50 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _confirmUnsendMessage(String messageId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsend this message?'),
+        content: const Text(
+          'The message will be removed for everyone. '
+          'A "Message removed" marker will remain.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Unsend'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _messages.unsendMessage(messageId);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Could not unsend this message right now.')),
+      );
+    }
+  }
+
   Future<void> _showMessageActions({
     required String messageId,
     required bool isMine,
   }) async {
     if (_reporting) return;
     if (!FeatureFlags.sharedMomentsEnabled) {
-      if (!isMine) {
+      if (isMine) {
+        await _confirmUnsendMessage(messageId);
+      } else {
         await _report(messageId: messageId);
       }
       return;
@@ -560,6 +600,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 subtitle: const Text('Keep a reference to this message.'),
                 onTap: () => Navigator.pop(context, 'save'),
               ),
+              if (isMine)
+                ListTile(
+                  key: const Key('message-action-unsend'),
+                  leading: const Icon(Icons.delete_outline_rounded),
+                  title: const Text('Unsend message'),
+                  subtitle: const Text('Remove it for everyone.'),
+                  onTap: () => Navigator.pop(context, 'unsend'),
+                ),
               if (!isMine)
                 ListTile(
                   key: const Key('message-action-report'),
@@ -575,6 +623,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || action == null) return;
     if (action == 'save') {
       await _saveMessageAsMoment(messageId);
+    }
+    if (action == 'unsend') {
+      await _confirmUnsendMessage(messageId);
     }
     if (action == 'report') {
       await _report(messageId: messageId);
@@ -622,6 +673,59 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _endConnection() async {
+    if (_endingConnection) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('End connection with ${widget.otherDisplayName}?'),
+        content: const Text(
+          'This closes the conversation and ends the current connection. '
+          'Private media access between you will also be revoked. '
+          'Ending a connection does not block the person.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep connection'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('End connection'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _endingConnection = true;
+    });
+
+    try {
+      await _connections.endConnection(widget.otherUid);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not end this connection right now.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _endingConnection = false;
+        });
+      }
     }
   }
 
@@ -766,8 +870,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!isMine) {
           _queueMarkRead(doc.id, readBy, uid);
         }
-        final canLongPress =
-            !isDeleted && (FeatureFlags.sharedMomentsEnabled || !isMine);
+        final canLongPress = !isDeleted;
         return _MessageBubble(
           text: text,
           timestamp: _formatMessageTime(data['createdAt']),
@@ -821,14 +924,22 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: const Icon(Icons.event_outlined),
             ),
           PopupMenuButton<String>(
-            enabled: !_reporting,
+            enabled: !_reporting && !_endingConnection,
             tooltip: 'Conversation safety options',
             onSelected: (value) {
+              if (value == 'end') _endConnection();
               if (value == 'report') _report();
               if (value == 'block') _block();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'report', child: Text('Report person')),
+              PopupMenuItem(
+                value: 'end',
+                child: Text('End connection'),
+              ),
+              PopupMenuItem(
+                value: 'report',
+                child: Text('Report person'),
+              ),
               PopupMenuItem(value: 'block', child: Text('Block')),
             ],
           ),

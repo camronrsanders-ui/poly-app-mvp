@@ -97,6 +97,24 @@ class MessagingService {
     await batch.commit();
   }
 
+  Future<void> unsendMessage(String messageId) async {
+    _requireUid();
+
+    final normalizedMessageId = messageId.trim();
+    if (normalizedMessageId.isEmpty || normalizedMessageId.length > 128) {
+      throw ArgumentError('Invalid message.');
+    }
+
+    final callable = _functions.httpsCallable('unsendMessage');
+    final result = await callable.call<Map<String, dynamic>>({
+      'messageId': normalizedMessageId,
+    });
+
+    if (result.data['unsent'] != true) {
+      throw StateError('Message was not unsent.');
+    }
+  }
+
   Future<void> markRead(String messageId) async {
     final uid = _requireUid();
     await _firestore.collection('messages').doc(messageId).update({

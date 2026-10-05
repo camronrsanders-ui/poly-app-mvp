@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/connection_service.dart';
+import '../../services/safety_service.dart';
 import '../../theme/app_theme.dart';
 import 'chat_screen.dart';
 
@@ -13,6 +14,7 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   final _connections = ConnectionService();
+  final _safety = SafetyService();
   late Future<List<Map<String, dynamic>>> _future;
 
   @override
@@ -22,10 +24,26 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadConversations() async {
-    final connections = await _connections.loadConnections();
+    final results = await Future.wait<List<Map<String, dynamic>>>([
+      _connections.loadConnections(),
+      _safety.listBlockedUsers(),
+    ]);
+
+    final connections = results[0];
+    final blockedUids = results[1]
+        .map((item) => item['blockedUid']?.toString().trim() ?? '')
+        .where((uid) => uid.isNotEmpty)
+        .toSet();
+
     final conversations = connections.where((profile) {
-      final id = profile['conversationId']?.toString().trim() ?? '';
-      return id.isNotEmpty;
+      final otherUid = profile['uid']?.toString().trim() ?? '';
+      final conversationId = profile['conversationId']?.toString().trim() ?? '';
+
+      if (otherUid.isEmpty || blockedUids.contains(otherUid)) {
+        return false;
+      }
+
+      return conversationId.isNotEmpty;
     }).toList(growable: false);
 
     conversations.sort((a, b) {
@@ -38,7 +56,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Future<void> _refresh() async {
     final next = _loadConversations();
-    setState(() => _future = next);
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -166,15 +186,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 name: name,
                 preview: preview,
                 timestamp: timestamp,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => ChatScreen(
-                      conversationId: conversationId,
-                      otherUid: otherUid,
-                      otherDisplayName: name,
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ChatScreen(
+                        conversationId: conversationId,
+                        otherUid: otherUid,
+                        otherDisplayName: name,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+
+                  if (!mounted) return;
+                  await _refresh();
+                },
               );
             },
           ),

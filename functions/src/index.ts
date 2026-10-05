@@ -543,6 +543,84 @@ export const createConversation = onCall(
   },
 );
 
+export const unsendMessage = onCall(
+  {enforceAppCheck: true, maxInstances: 25},
+  async (request) => {
+    const uid = requireUid(request.auth);
+    await assertActive(uid);
+    const messageId = String(request.data?.messageId ?? '').trim();
+
+    if (!messageId || messageId.length > 128) {
+      throw new HttpsError('invalid-argument', 'Invalid message.');
+    }
+
+    await consumeRateLimit(uid, 'unsend_message', 120, 60 * 60_000);
+
+    const messageRef = db.collection('messages').doc(messageId);
+
+    const alreadyDeleted = await db.runTransaction(async (tx) => {
+      const message = await tx.get(messageRef);
+      if (!message.exists) {
+        throw new HttpsError('not-found', 'Message not found.');
+      }
+
+      if (String(message.get('senderUid') ?? '') !== uid) {
+        throw new HttpsError(
+          'permission-denied',
+          'You can only unsend your own messages.',
+        );
+      }
+
+      if (message.get('messageType') !== 'text') {
+        throw new HttpsError(
+          'failed-precondition',
+          'This message cannot be unsent here.',
+        );
+      }
+
+      const conversationId =
+        String(message.get('conversationId') ?? '').trim();
+      if (!conversationId || conversationId.length > 128) {
+        throw new HttpsError(
+          'internal',
+          'Message conversation integrity check failed.',
+        );
+      }
+
+      const conversationRef =
+        db.collection('conversations').doc(conversationId);
+      const conversation = await tx.get(conversationRef);
+      if (!conversation.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The conversation no longer exists.',
+        );
+      }
+
+      const participantUids = conversation.get('participantUids');
+      if (!Array.isArray(participantUids) || !participantUids.includes(uid)) {
+        throw new HttpsError(
+          'permission-denied',
+          'You do not have access to this conversation.',
+        );
+      }
+
+      if (message.get('isDeleted') === true) {
+        return true;
+      }
+
+      tx.update(messageRef, {
+        text: '',
+        isDeleted: true,
+      });
+
+      return false;
+    });
+
+    return {unsent: true, alreadyDeleted};
+  },
+);
+
 export const deleteMyAccount = onCall(
   {enforceAppCheck: true, maxInstances: 10},
   async (request) => {
