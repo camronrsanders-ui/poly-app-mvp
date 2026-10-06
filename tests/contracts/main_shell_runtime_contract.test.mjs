@@ -8,7 +8,15 @@ const shell = fs.readFileSync(path.join(root, 'lib/screens/main_shell.dart'), 'u
 
 test('main shell lazy-loads tabs instead of starting every network-backed screen at launch', () => {
   assert.match(shell, /late final List<Widget\?> _pages/);
-  assert.match(shell, /_pages\[0\] = const DiscoverScreen\(\)/);
+  assert.match(shell, /_pages\[0\] = _buildPage\(0\)/);
+  assert.match(
+    shell,
+    /0 => const DiscoverScreen\(\)/,
+  );
+  assert.match(
+    shell,
+    /final injectedBuilder = widget\.pageBuilder/,
+  );
   assert.match(shell, /_pages\[value\] \?\?= _buildPage\(value\)/);
   assert.doesNotMatch(
     shell,
