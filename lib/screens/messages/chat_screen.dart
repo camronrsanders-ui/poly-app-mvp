@@ -267,6 +267,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sending = false;
   bool _reporting = false;
   bool _endingConnection = false;
+  bool _blocking = false;
 
   @override
   void initState() {
@@ -730,6 +731,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _block() async {
+    if (_blocking) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -749,7 +752,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _blocking = true);
     try {
       await _safety.blockUser(widget.otherUid);
       if (mounted) Navigator.of(context).pop();
@@ -758,6 +763,10 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not block this user right now.')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _blocking = false);
       }
     }
   }
@@ -924,7 +933,7 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: const Icon(Icons.event_outlined),
             ),
           PopupMenuButton<String>(
-            enabled: !_reporting && !_endingConnection,
+            enabled: !_reporting && !_endingConnection && !_blocking,
             tooltip: 'Conversation safety options',
             onSelected: (value) {
               if (value == 'end') _endConnection();

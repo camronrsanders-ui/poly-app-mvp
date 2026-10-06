@@ -46,3 +46,17 @@ test('Moments and Plans remain hidden until their explicit client gates are enab
   );
   assert.doesNotMatch(header, /Shared Moments|Save (?:a )?moment|Make (?:a )?plan/i);
 });
+
+test('Conversation safety blocks duplicate in-flight block requests', () => {
+  assert.match(chat, /bool _blocking = false/);
+  assert.match(chat, /if \(_blocking\) return;/);
+  assert.match(chat, /setState\(\(\) => _blocking = true\)/);
+  assert.match(
+    chat,
+    /enabled:\s*!_reporting && !_endingConnection && !_blocking/,
+  );
+  assert.match(
+    chat,
+    /finally \{[\s\S]{0,140}setState\(\(\) => _blocking = false\)/,
+  );
+});
