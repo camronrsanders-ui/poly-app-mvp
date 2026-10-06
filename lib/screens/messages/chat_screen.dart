@@ -108,6 +108,13 @@ typedef ChatReportAction = Future<void> Function({
   String? conversationId,
 });
 
+typedef ChatSendAction = Future<void> Function({
+  required String conversationId,
+  required String text,
+});
+
+typedef ChatMemberAction = Future<void> Function(String otherUid);
+
 @visibleForTesting
 Future<void> showChatReportFlow({
   required BuildContext context,
@@ -229,11 +236,36 @@ class ChatScreen extends StatefulWidget {
     required this.conversationId,
     required this.otherUid,
     required this.otherDisplayName,
+  })  : currentUid = null,
+        disableMessageStream = false,
+        sendAction = null,
+        endConnectionAction = null,
+        blockAction = null,
+        reportAction = null;
+
+  @visibleForTesting
+  const ChatScreen.test({
+    super.key,
+    required this.conversationId,
+    required this.otherUid,
+    required this.otherDisplayName,
+    required this.currentUid,
+    required this.sendAction,
+    required this.endConnectionAction,
+    required this.blockAction,
+    required this.reportAction,
+    this.disableMessageStream = true,
   });
 
   final String conversationId;
   final String otherUid;
   final String otherDisplayName;
+  final String? currentUid;
+  final bool disableMessageStream;
+  final ChatSendAction? sendAction;
+  final ChatMemberAction? endConnectionAction;
+  final ChatMemberAction? blockAction;
+  final ChatReportAction? reportAction;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -246,10 +278,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
-  final _messages = MessagingService();
-  final _connections = ConnectionService();
-  final _safety = SafetyService();
-  final _sharedMoments = SharedMomentsService();
+  MessagingService? _messagesInstance;
+  ConnectionService? _connectionsInstance;
+  SafetyService? _safetyInstance;
+  SharedMomentsService? _sharedMomentsInstance;
+
+  MessagingService get _messages =>
+      _messagesInstance ??= MessagingService();
+  ConnectionService get _connections =>
+      _connectionsInstance ??= ConnectionService();
+  SafetyService get _safety => _safetyInstance ??= SafetyService();
+  SharedMomentsService get _sharedMoments =>
+      _sharedMomentsInstance ??= SharedMomentsService();
+
+  String? get _currentUid =>
+      widget.currentUid ?? FirebaseAuth.instance.currentUser?.uid;
   final Set<String> _readUpdatesInFlight = {};
   final Set<String> _momentSavesInFlight = {};
   final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>
@@ -273,8 +316,13 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    if (FirebaseAuth.instance.currentUser?.uid != null) {
-      _listenToMessages();
+    if (_currentUid != null) {
+      if (widget.disableMessageStream) {
+        _loadingLiveMessages = false;
+        _hasMoreHistory = false;
+      } else {
+        _listenToMessages();
+      }
     }
   }
 
@@ -639,10 +687,18 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _sending = true);
     _controller.clear();
     try {
-      await _messages.sendMessage(
-        conversationId: widget.conversationId,
-        text: text,
-      );
+      final injectedSend = widget.sendAction;
+      if (injectedSend != null) {
+        await injectedSend(
+          conversationId: widget.conversationId,
+          text: text,
+        );
+      } else {
+        await _messages.sendMessage(
+          conversationId: widget.conversationId,
+          text: text,
+        );
+      }
     } on UgcPolicyViolation catch (error) {
       // Keep rejected text editable so the member can remove the prohibited
       // content rather than losing their draft. Reports are a separate path and
@@ -709,7 +765,12 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      await _connections.endConnection(widget.otherUid);
+      final injectedEnd = widget.endConnectionAction;
+      if (injectedEnd != null) {
+        await injectedEnd(widget.otherUid);
+      } else {
+        await _connections.endConnection(widget.otherUid);
+      }
       if (mounted) {
         Navigator.of(context).pop();
       }
@@ -756,7 +817,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _blocking = true);
     try {
-      await _safety.blockUser(widget.otherUid);
+      final injectedBlock = widget.blockAction;
+      if (injectedBlock != null) {
+        await injectedBlock(widget.otherUid);
+      } else {
+        await _safety.blockUser(widget.otherUid);
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       if (mounted) {
@@ -790,6 +856,17 @@ class _ChatScreenState extends State<ChatScreen> {
           String? contentId,
           String? conversationId,
         }) {
+          final injectedReport = widget.reportAction;
+          if (injectedReport != null) {
+            return injectedReport(
+              reportedUid: reportedUid,
+              reason: reason,
+              details: details,
+              contentType: contentType,
+              contentId: contentId,
+              conversationId: conversationId,
+            );
+          }
           return _safety.reportUser(
             reportedUid: reportedUid,
             reason: reason,
@@ -899,7 +976,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _currentUid;
     if (uid == null) {
       return const Scaffold(
         body: _ChatStateView(
