@@ -3,9 +3,24 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 
+typedef LoginAction = Future<void> Function({
+  required String email,
+  required String password,
+});
+
+typedef PasswordResetAction = Future<void> Function(String email);
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onShowSignUp});
+  const LoginScreen({
+    super.key,
+    required this.onShowSignUp,
+    this.loginAction,
+    this.passwordResetAction,
+  });
+
   final VoidCallback onShowSignUp;
+  final LoginAction? loginAction;
+  final PasswordResetAction? passwordResetAction;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -15,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _auth = AuthService();
+  AuthService? _auth;
   bool _busy = false;
   String? _error;
 
@@ -33,7 +48,19 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await _auth.signIn(email: _email.text, password: _password.text);
+      final injectedLogin = widget.loginAction;
+      if (injectedLogin != null) {
+        await injectedLogin(
+          email: _email.text,
+          password: _password.text,
+        );
+      } else {
+        _auth ??= AuthService();
+        await _auth!.signIn(
+          email: _email.text,
+          password: _password.text,
+        );
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() => _error = e.message ?? 'Unable to sign in.');
@@ -56,7 +83,13 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     try {
-      await _auth.sendPasswordReset(_email.text);
+      final injectedReset = widget.passwordResetAction;
+      if (injectedReset != null) {
+        await injectedReset(_email.text);
+      } else {
+        _auth ??= AuthService();
+        await _auth!.sendPasswordReset(_email.text);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Password reset email sent.')),
