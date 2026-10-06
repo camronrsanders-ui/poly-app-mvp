@@ -30,24 +30,33 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  late final ConversationListLoader _loadConnections;
-  late final ConversationListLoader _loadBlockedUsers;
+  late final ConnectionService _connections;
+  late final SafetyService _safety;
   late Future<List<Map<String, dynamic>>> _future;
 
   @override
   void initState() {
     super.initState();
-    final connections = ConnectionService();
-    final safety = SafetyService();
-    _loadConnections = widget.loadConnections ?? connections.loadConnections;
-    _loadBlockedUsers = widget.loadBlockedUsers ?? safety.listBlockedUsers;
+    if (widget.loadConnections == null) {
+      _connections = ConnectionService();
+    }
+    if (widget.loadBlockedUsers == null) {
+      _safety = SafetyService();
+    }
     _future = _loadConversations();
   }
 
   Future<List<Map<String, dynamic>>> _loadConversations() async {
+    final connectionFuture = widget.loadConnections != null
+        ? widget.loadConnections!()
+        : _connections.loadConnections();
+    final blockedFuture = widget.loadBlockedUsers != null
+        ? widget.loadBlockedUsers!()
+        : _safety.listBlockedUsers();
+
     final results = await Future.wait<List<Map<String, dynamic>>>([
-      _loadConnections(),
-      _loadBlockedUsers(),
+      connectionFuture,
+      blockedFuture,
     ]);
 
     final connections = results[0];

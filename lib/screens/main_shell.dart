@@ -18,8 +18,7 @@ class MainShell extends StatefulWidget {
     super.key,
     required List<WidgetBuilder> pageBuilders,
     required WidgetBuilder safetyCenterBuilder,
-  })  : assert(pageBuilders.length == 5),
-        _pageBuilders = pageBuilders,
+  })  : _pageBuilders = pageBuilders,
         _safetyCenterBuilder = safetyCenterBuilder;
 
   final List<WidgetBuilder>? _pageBuilders;
