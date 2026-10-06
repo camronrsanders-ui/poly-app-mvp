@@ -5,28 +5,49 @@ import '../../services/safety_service.dart';
 import '../../theme/app_theme.dart';
 import 'chat_screen.dart';
 
+typedef ConversationListLoader = Future<List<Map<String, dynamic>>> Function();
+
+typedef OpenConversationAction = Future<void> Function({
+  required String conversationId,
+  required String otherUid,
+  required String otherDisplayName,
+});
+
 class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({super.key});
+  const MessagesScreen({
+    super.key,
+    this.loadConnections,
+    this.loadBlockedUsers,
+    this.openConversation,
+  });
+
+  final ConversationListLoader? loadConnections;
+  final ConversationListLoader? loadBlockedUsers;
+  final OpenConversationAction? openConversation;
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  final _connections = ConnectionService();
-  final _safety = SafetyService();
+  late final ConversationListLoader _loadConnections;
+  late final ConversationListLoader _loadBlockedUsers;
   late Future<List<Map<String, dynamic>>> _future;
 
   @override
   void initState() {
     super.initState();
+    final connections = ConnectionService();
+    final safety = SafetyService();
+    _loadConnections = widget.loadConnections ?? connections.loadConnections;
+    _loadBlockedUsers = widget.loadBlockedUsers ?? safety.listBlockedUsers;
     _future = _loadConversations();
   }
 
   Future<List<Map<String, dynamic>>> _loadConversations() async {
     final results = await Future.wait<List<Map<String, dynamic>>>([
-      _connections.loadConnections(),
-      _safety.listBlockedUsers(),
+      _loadConnections(),
+      _loadBlockedUsers(),
     ]);
 
     final connections = results[0];
@@ -187,15 +208,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 preview: preview,
                 timestamp: timestamp,
                 onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => ChatScreen(
-                        conversationId: conversationId,
-                        otherUid: otherUid,
-                        otherDisplayName: name,
+                  final injectedOpen = widget.openConversation;
+                  if (injectedOpen != null) {
+                    await injectedOpen(
+                      conversationId: conversationId,
+                      otherUid: otherUid,
+                      otherDisplayName: name,
+                    );
+                  } else {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ChatScreen(
+                          conversationId: conversationId,
+                          otherUid: otherUid,
+                          otherDisplayName: name,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
 
                   if (!mounted) return;
                   await _refresh();
