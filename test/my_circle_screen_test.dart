@@ -49,7 +49,7 @@ bool isSpatialOrbit(Widget widget) {
 
 Future<void> pumpCircle(
   WidgetTester tester, {
-  required MyCircleConnectionsLoader loadConnections,
+  required CircleConnectionsLoader loadConnections,
   MyCircleProfileLoader? loadProfile,
   MyCircleSnapshotLoader? loadSnapshot,
   MyCirclePhotosLoader? loadVisiblePhotos,
