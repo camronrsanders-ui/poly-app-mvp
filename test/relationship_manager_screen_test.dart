@@ -10,20 +10,19 @@ Map<String, dynamic> card({
   String connectionType = 'romantic_partner',
   String status = 'active',
   String visibility = 'matches_only',
-}) {
-  return <String, dynamic>{
-    'id': id,
-    'ownerUid': 'member-1',
-    'label': label,
-    'connectionType': connectionType,
-    'displayNameOptional': '',
-    'status': status,
-    'note': '',
-    'visibility': visibility,
-    'sortOrder': 0,
-    'isActive': true,
-  };
-}
+}) =>
+    <String, dynamic>{
+      'id': id,
+      'ownerUid': 'member-1',
+      'label': label,
+      'connectionType': connectionType,
+      'displayNameOptional': '',
+      'status': status,
+      'note': '',
+      'visibility': visibility,
+      'sortOrder': 0,
+      'isActive': true,
+    };
 
 Future<void> pumpManager(
   WidgetTester tester, {
@@ -152,9 +151,11 @@ void main() {
 
       expect(find.text('Edit relationship'), findsOneWidget);
 
-      final dropdowns = tester.widgetList<DropdownButtonFormField<String>>(
-        find.byType(DropdownButtonFormField<String>),
-      ).toList();
+      final dropdowns = tester
+          .widgetList<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .toList();
 
       expect(dropdowns[0].initialValue, 'romantic_partner');
       expect(dropdowns[1].initialValue, 'active');
