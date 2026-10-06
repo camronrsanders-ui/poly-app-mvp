@@ -10,19 +10,20 @@ Map<String, dynamic> card({
   String connectionType = 'romantic_partner',
   String status = 'active',
   String visibility = 'matches_only',
-}) =>
-    <String, dynamic>{
-      'id': id,
-      'ownerUid': 'member-1',
-      'label': label,
-      'connectionType': connectionType,
-      'displayNameOptional': '',
-      'status': status,
-      'note': '',
-      'visibility': visibility,
-      'sortOrder': 0,
-      'isActive': true,
-    };
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'ownerUid': 'member-1',
+    'label': label,
+    'connectionType': connectionType,
+    'displayNameOptional': '',
+    'status': status,
+    'note': '',
+    'visibility': visibility,
+    'sortOrder': 0,
+    'isActive': true,
+  };
+}
 
 Future<void> pumpManager(
   WidgetTester tester, {
