@@ -7,8 +7,22 @@ import 'messages/messages_screen.dart';
 import 'profile/self_profile_screen.dart';
 import 'safety/safety_center_screen.dart';
 
+typedef MainShellPageBuilder = Widget Function(
+  int index,
+  VoidCallback onFindPeople,
+);
+
+typedef MainShellSafetyAction = Future<void> Function();
+
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({
+    super.key,
+    this.pageBuilder,
+    this.openSafety,
+  });
+
+  final MainShellPageBuilder? pageBuilder;
+  final MainShellSafetyAction? openSafety;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -30,10 +44,18 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _pages = List<Widget?>.filled(_titles.length, null, growable: false);
-    _pages[0] = const DiscoverScreen();
+    _pages[0] = _buildPage(0);
   }
 
   Widget _buildPage(int index) {
+    final injectedBuilder = widget.pageBuilder;
+    if (injectedBuilder != null) {
+      return injectedBuilder(
+        index,
+        () => _selectTab(0),
+      );
+    }
+
     return switch (index) {
       0 => const DiscoverScreen(),
       1 => ConnectionsScreen(onFindPeople: () => _selectTab(0)),
@@ -70,6 +92,20 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  Future<void> _openSafety() async {
+    final injectedAction = widget.openSafety;
+    if (injectedAction != null) {
+      await injectedAction();
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SafetyCenterScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final discoverSelected = _index == 0;
@@ -85,11 +121,7 @@ class _MainShellState extends State<MainShell> {
                 IconButton(
                   tooltip: 'Safety center',
                   icon: const Icon(Icons.shield_outlined),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SafetyCenterScreen(),
-                    ),
-                  ),
+                  onPressed: _openSafety,
                 ),
               ],
             ),
