@@ -12,6 +12,11 @@ Future<void> pumpCompliance(
   PolicyAcceptanceRecorder? recordPolicyAcceptance,
   BirthDatePicker? birthDatePicker,
 }) async {
+  tester.view.physicalSize = const Size(1000, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
   await tester.pumpWidget(
     MaterialApp(
       home: ComplianceGateScreen(
@@ -188,7 +193,12 @@ void main() {
 
       await chooseBirthDate(tester);
       await acceptPolicies(tester);
-      await tapVisibleText(tester, 'Verify & continue');
+      await tapVisibleText(
+        tester,
+        'Verify & continue',
+        settle: false,
+      );
+      await tester.pump();
 
       expect(method, 'play_age_signals');
       expect(status, 'adult:adult_range');
@@ -234,7 +244,7 @@ void main() {
   );
 
   testWidgets(
-    'Busy acceptance disables verification until recording finishes',
+    'Successful acceptance stays guarded until the session gate advances',
     (tester) async {
       final gate = Completer<void>();
 
@@ -273,9 +283,13 @@ void main() {
       expect(checking.onPressed, isNull);
 
       gate.complete();
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
-      expect(find.text('Verify & continue'), findsOneWidget);
+      final stillChecking = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Checking…'),
+      );
+      expect(stillChecking.onPressed, isNull);
     },
   );
 }
