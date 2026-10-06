@@ -334,7 +334,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(attempts, 2);
-      expect(find.text('Add relationship'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Add to my circle'),
+        findsNothing,
+      );
+      expect(find.text('Add relationship'), findsOneWidget);
     },
   );
 
