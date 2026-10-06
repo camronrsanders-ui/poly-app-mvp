@@ -11,8 +11,41 @@ import 'profile_screen.dart';
 
 enum _PreviewAudience { member, connection }
 
+typedef SelfProfileUidProvider = String? Function();
+
+typedef SelfProfileLoader = Future<Map<String, dynamic>?> Function(String uid);
+
+typedef SelfProfilePhotosLoader = Future<List<ProfileMediaStatus>> Function();
+
+typedef SelfProfilePhotoAccessLoader = Future<Uri> Function(String photoId);
+
+typedef SelfProfileCircleLoader = Future<List<Map<String, dynamic>>> Function(
+  String uid,
+);
+
+typedef SelfProfileAction = Future<void> Function();
+
 class SelfProfileScreen extends StatefulWidget {
-  const SelfProfileScreen({super.key});
+  const SelfProfileScreen({
+    super.key,
+    this.uidProvider,
+    this.loadProfile,
+    this.loadPhotos,
+    this.getPhotoAccess,
+    this.loadCircle,
+    this.editProfileAction,
+    this.managePhotosAction,
+    this.signOutAction,
+  });
+
+  final SelfProfileUidProvider? uidProvider;
+  final SelfProfileLoader? loadProfile;
+  final SelfProfilePhotosLoader? loadPhotos;
+  final SelfProfilePhotoAccessLoader? getPhotoAccess;
+  final SelfProfileCircleLoader? loadCircle;
+  final SelfProfileAction? editProfileAction;
+  final SelfProfileAction? managePhotosAction;
+  final SelfProfileAction? signOutAction;
 
   @override
   State<SelfProfileScreen> createState() => _SelfProfileScreenState();
@@ -20,9 +53,9 @@ class SelfProfileScreen extends StatefulWidget {
 
 class _SelfProfileScreenState extends State<SelfProfileScreen>
     with WidgetsBindingObserver {
-  final _profiles = ProfileService();
-  final _media = ProfileMediaService();
-  final _circle = CircleViewService();
+  ProfileService? _profiles;
+  ProfileMediaService? _media;
+  CircleViewService? _circle;
 
   late Future<_SelfProfileData> _future;
   _PreviewAudience _audience = _PreviewAudience.member;
@@ -51,7 +84,12 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
   Future<Uri?> _loadPhotoAccessWithRetry(String photoId) async {
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
-        return await _media.getAccessUrl(photoId);
+        final injectedAccess = widget.getPhotoAccess;
+        if (injectedAccess != null) {
+          return await injectedAccess(photoId);
+        }
+        _media ??= ProfileMediaService();
+        return await _media!.getAccessUrl(photoId);
       } catch (_) {
         if (attempt == 2) return null;
         await Future<void>.delayed(
@@ -63,17 +101,35 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
   }
 
   Future<_SelfProfileData> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final injectedUidProvider = widget.uidProvider;
+    final uid = injectedUidProvider != null
+        ? injectedUidProvider()
+        : FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) {
       throw StateError('Sign in required.');
     }
 
+    final injectedProfileLoader = widget.loadProfile;
+    final Map<String, dynamic>? loadedProfile;
+    if (injectedProfileLoader != null) {
+      loadedProfile = await injectedProfileLoader(uid);
+    } else {
+      _profiles ??= ProfileService();
+      loadedProfile = await _profiles!.getProfile(uid);
+    }
     final profile = Map<String, dynamic>.from(
-      await _profiles.getProfile(uid) ?? <String, dynamic>{},
+      loadedProfile ?? <String, dynamic>{},
     );
     profile['uid'] = uid;
 
-    final statuses = await _media.listMyPhotos();
+    final injectedPhotosLoader = widget.loadPhotos;
+    final List<ProfileMediaStatus> statuses;
+    if (injectedPhotosLoader != null) {
+      statuses = await injectedPhotosLoader();
+    } else {
+      _media ??= ProfileMediaService();
+      statuses = await _media!.listMyPhotos();
+    }
     final active = statuses
         .where((photo) => photo.status == 'active')
         .toList(growable: false)
@@ -96,7 +152,13 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
 
     List<Map<String, dynamic>> circleCards = const [];
     try {
-      circleCards = await _circle.loadForProfile(uid);
+      final injectedCircleLoader = widget.loadCircle;
+      if (injectedCircleLoader != null) {
+        circleCards = await injectedCircleLoader(uid);
+      } else {
+        _circle ??= CircleViewService();
+        circleCards = await _circle!.loadForProfile(uid);
+      }
     } catch (_) {
       // The basic member-facing preview remains usable if Circle is unavailable.
     }
@@ -119,33 +181,52 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
           _future = next;
         });
       }
-      await next;
+      try {
+        await next;
+      } catch (_) {
+        // FutureBuilder owns the visible error state for this request.
+      }
     } finally {
       _reloadInFlight = false;
     }
   }
 
   Future<void> _editProfile() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Edit profile')),
-          body: const ProfileScreen(),
+    final injectedAction = widget.editProfileAction;
+    if (injectedAction != null) {
+      await injectedAction();
+    } else {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Edit profile')),
+            body: const ProfileScreen(),
+          ),
         ),
-      ),
-    );
+      );
+    }
     if (mounted) await _reload();
   }
 
   Future<void> _managePhotos() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ProfilePhotosScreen()),
-    );
+    final injectedAction = widget.managePhotosAction;
+    if (injectedAction != null) {
+      await injectedAction();
+    } else {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const ProfilePhotosScreen()),
+      );
+    }
     if (mounted) await _reload();
   }
 
   Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut();
+    final injectedAction = widget.signOutAction;
+    if (injectedAction != null) {
+      await injectedAction();
+    } else {
+      await FirebaseAuth.instance.signOut();
+    }
 
     if (!mounted) return;
 
