@@ -3,7 +3,7 @@ name: Polycircle Dependency Audit
 on:
   workflow_dispatch:
   push:
-    branches: ["restart-foundation", "main"]
+    branches: ["main"]
   pull_request:
 
 permissions:
