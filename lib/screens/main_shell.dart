@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'circle/my_circle_screen.dart';
@@ -8,7 +9,21 @@ import 'profile/self_profile_screen.dart';
 import 'safety/safety_center_screen.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({super.key})
+      : _pageBuilders = null,
+        _safetyCenterBuilder = null;
+
+  @visibleForTesting
+  const MainShell.test({
+    super.key,
+    required List<WidgetBuilder> pageBuilders,
+    required WidgetBuilder safetyCenterBuilder,
+  })  : assert(pageBuilders.length == 5),
+        _pageBuilders = pageBuilders,
+        _safetyCenterBuilder = safetyCenterBuilder;
+
+  final List<WidgetBuilder>? _pageBuilders;
+  final WidgetBuilder? _safetyCenterBuilder;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -30,10 +45,19 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _pages = List<Widget?>.filled(_titles.length, null, growable: false);
-    _pages[0] = const DiscoverScreen();
+    if (widget._pageBuilders == null) {
+      _pages[0] = const DiscoverScreen();
+    } else {
+      _pages[0] = _buildPage(0);
+    }
   }
 
   Widget _buildPage(int index) {
+    final injected = widget._pageBuilders;
+    if (injected != null) {
+      return injected[index](context);
+    }
+
     return switch (index) {
       0 => const DiscoverScreen(),
       1 => ConnectionsScreen(onFindPeople: () => _selectTab(0)),
@@ -87,7 +111,8 @@ class _MainShellState extends State<MainShell> {
                   icon: const Icon(Icons.shield_outlined),
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const SafetyCenterScreen(),
+                      builder: widget._safetyCenterBuilder ??
+                          (_) => const SafetyCenterScreen(),
                     ),
                   ),
                 ),
