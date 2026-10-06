@@ -5,9 +5,28 @@ import 'package:flutter/material.dart';
 import '../../config/discovery_options.dart';
 import '../../services/profile_service.dart';
 
+typedef OnboardingUidProvider = String? Function();
+
+typedef OnboardingSaveProfile = Future<void> Function(
+  String uid,
+  Map<String, dynamic> values,
+);
+
+typedef OnboardingCompleteProfile = Future<void> Function(String uid);
+
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.onComplete});
+  const OnboardingScreen({
+    super.key,
+    required this.onComplete,
+    this.uidProvider,
+    this.saveProfile,
+    this.completeOnboarding,
+  });
+
   final VoidCallback onComplete;
+  final OnboardingUidProvider? uidProvider;
+  final OnboardingSaveProfile? saveProfile;
+  final OnboardingCompleteProfile? completeOnboarding;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -15,7 +34,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
-  final _profileService = ProfileService();
+  ProfileService? _profileService;
   final _name = TextEditingController();
   final _age = TextEditingController();
   final _city = TextEditingController();
@@ -56,7 +75,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finish() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final injectedUidProvider = widget.uidProvider;
+    final uid = injectedUidProvider != null
+        ? injectedUidProvider()
+        : FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     final age = int.tryParse(_age.text.trim());
@@ -83,35 +105,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
 
+    final values = <String, dynamic>{
+      'displayName': _name.text.trim(),
+      'age': age,
+      'city': _city.text.trim(),
+      'region': _region.text.trim(),
+      'bio': _bio.text.trim(),
+      'headline': '',
+      'genderIdentity': _gender.text.trim(),
+      'pronouns': _pronouns.text.trim(),
+      'orientation': _orientation.text.trim(),
+      'customIdentityTags': <String>[],
+      'relationshipStructure': _structure,
+      'relationshipStatus': '',
+      'partnered': false,
+      'openToConnections': true,
+      'intentionTags': _intentions.toList(),
+      'interests': <String>[],
+      'lookingForNote': _lookingFor.text.trim(),
+      'ageMin': 18,
+      'ageMax': 99,
+      'distanceRadius': defaultDiscoverDistanceMiles,
+      'preferredStructures': <String>[],
+      'preferredIntentions': <String>[],
+      'profileVisibility': 'public',
+      'mapVisibility': 'matches_only',
+    };
+
     setState(() => _busy = true);
     try {
-      await _profileService.saveProfile(uid, {
-        'displayName': _name.text.trim(),
-        'age': age,
-        'city': _city.text.trim(),
-        'region': _region.text.trim(),
-        'bio': _bio.text.trim(),
-        'headline': '',
-        'genderIdentity': _gender.text.trim(),
-        'pronouns': _pronouns.text.trim(),
-        'orientation': _orientation.text.trim(),
-        'customIdentityTags': <String>[],
-        'relationshipStructure': _structure,
-        'relationshipStatus': '',
-        'partnered': false,
-        'openToConnections': true,
-        'intentionTags': _intentions.toList(),
-        'interests': <String>[],
-        'lookingForNote': _lookingFor.text.trim(),
-        'ageMin': 18,
-        'ageMax': 99,
-        'distanceRadius': defaultDiscoverDistanceMiles,
-        'preferredStructures': <String>[],
-        'preferredIntentions': <String>[],
-        'profileVisibility': 'public',
-        'mapVisibility': 'matches_only',
-      });
-      await _profileService.completeOnboarding(uid);
+      final injectedSaveProfile = widget.saveProfile;
+      if (injectedSaveProfile != null) {
+        await injectedSaveProfile(uid, values);
+      } else {
+        _profileService ??= ProfileService();
+        await _profileService!.saveProfile(uid, values);
+      }
+
+      final injectedCompleteOnboarding = widget.completeOnboarding;
+      if (injectedCompleteOnboarding != null) {
+        await injectedCompleteOnboarding(uid);
+      } else {
+        _profileService ??= ProfileService();
+        await _profileService!.completeOnboarding(uid);
+      }
       if (!mounted) return;
       widget.onComplete();
     } catch (error, stackTrace) {
