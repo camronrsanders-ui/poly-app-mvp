@@ -10,8 +10,8 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'profile_photos_screen.dart';
 
-typedef ProfileEditorLoader =
-    Future<Map<String, dynamic>?> Function(String uid);
+typedef ProfileEditorLoader = Future<Map<String, dynamic>?> Function(
+    String uid);
 typedef ProfileEditorSaver = Future<void> Function(
   String uid,
   Map<String, dynamic> values,
@@ -132,6 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profileService ??= ProfileService();
     return _profileService!.getProfile(uid);
   }
+
   final _name = TextEditingController();
   final _age = TextEditingController();
   final _city = TextEditingController();
