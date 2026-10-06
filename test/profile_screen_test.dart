@@ -110,8 +110,11 @@ void main() {
         find.widgetWithText(TextField, 'Display name'),
         '  Cam Updated  ',
       );
+      final interests =
+          find.widgetWithText(TextField, 'Interests (comma separated)');
+      await scrollTo(tester, interests);
       await tester.enterText(
-        find.widgetWithText(TextField, 'Interests (comma separated)'),
+        interests,
         'anime, kickball, anime, photography',
       );
 
