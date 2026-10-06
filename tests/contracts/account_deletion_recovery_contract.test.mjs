@@ -119,7 +119,7 @@ test('initial account deletion requires the two-step destructive confirmation ga
   );
   assert.match(
     profileScreen,
-    /Future<void> _deleteAccount\(\) async \{[\s\S]*if \(_deleting\) return;[\s\S]*final confirmed = await confirmPermanentAccountDeletion\(context\);[\s\S]*if \(!confirmed \|\| !mounted\) return;[\s\S]*await _accountService\.deleteMyAccount\(\);/,
+    /Future<void> _deleteAccount\(\) async \{[\s\S]*if \(_deleting\) return;[\s\S]*final confirmed = await confirmPermanentAccountDeletion\(context\);[\s\S]*if \(!confirmed \|\| !mounted\) return;[\s\S]*final injectedDelete = widget\.deleteAccountAction;[\s\S]*if \(injectedDelete != null\)[\s\S]*await injectedDelete\(\);[\s\S]*_accountService \?\?= AccountService\(\);[\s\S]*await _accountService!\.deleteMyAccount\(\);/,
   );
 });
 
