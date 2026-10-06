@@ -10,6 +10,13 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'profile_photos_screen.dart';
 
+typedef ProfileEditorLoader = Future<Map<String, dynamic>?> Function(String uid);
+typedef ProfileEditorSaver = Future<void> Function(
+  String uid,
+  Map<String, dynamic> values,
+);
+typedef ProfileEditorAction = Future<void> Function();
+
 @visibleForTesting
 Future<bool> confirmPermanentAccountDeletion(
   BuildContext context,
@@ -77,7 +84,31 @@ Future<bool> confirmPermanentAccountDeletion(
 }
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key})
+      : currentUid = null,
+        loadProfile = null,
+        saveProfile = null,
+        managePhotosAction = null,
+        signOutAction = null,
+        deleteAccountAction = null;
+
+  @visibleForTesting
+  const ProfileScreen.test({
+    super.key,
+    required this.currentUid,
+    required this.loadProfile,
+    required this.saveProfile,
+    required this.managePhotosAction,
+    required this.signOutAction,
+    required this.deleteAccountAction,
+  });
+
+  final String? currentUid;
+  final ProfileEditorLoader? loadProfile;
+  final ProfileEditorSaver? saveProfile;
+  final ProfileEditorAction? managePhotosAction;
+  final ProfileEditorAction? signOutAction;
+  final ProfileEditorAction? deleteAccountAction;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -87,9 +118,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const _profileVisibilityOptions = ['public', 'hidden', 'matches_only'];
   static const _mapVisibilityOptions = ['public', 'matches_only', 'private'];
 
-  final _profileService = ProfileService();
-  final _authService = AuthService();
-  final _accountService = AccountService();
+  ProfileService? _profileService;
+  AuthService? _authService;
+  AccountService? _accountService;
+
+  String? get _currentUid =>
+      widget.currentUid ?? FirebaseAuth.instance.currentUser?.uid;
+
+  Future<Map<String, dynamic>?> _loadProfileOnce(String uid) {
+    final injected = widget.loadProfile;
+    if (injected != null) return injected(uid);
+    _profileService ??= ProfileService();
+    return _profileService!.getProfile(uid);
+  }
   final _name = TextEditingController();
   final _age = TextEditingController();
   final _city = TextEditingController();
@@ -161,8 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<Map<String, dynamic>?> _loadProfileWithRetry(String uid) async {
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
-        return await _profileService
-            .getProfile(uid)
+        return await _loadProfileOnce(uid)
             .timeout(const Duration(seconds: 8));
       } catch (error) {
         debugPrint('Profile load attempt $attempt/3 failed: $error');
@@ -176,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _currentUid;
     if (uid == null) {
       if (mounted) setState(() => _loading = false);
       return;
@@ -251,7 +291,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       .toList(growable: false);
 
   Future<void> _save() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _currentUid;
     if (uid == null) return;
 
     final age = int.tryParse(_age.text.trim());
@@ -266,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _saving = true);
     try {
-      await _profileService.saveProfile(uid, {
+      final values = <String, dynamic>{
         'displayName': _name.text.trim(),
         'age': age,
         'city': _city.text.trim(),
@@ -290,7 +330,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'distanceRadius': _distanceRadius,
         'preferredStructures': _preferredStructures.toList(growable: false),
         'preferredIntentions': _preferredIntentions.toList(growable: false),
-      });
+      };
+      final injectedSave = widget.saveProfile;
+      if (injectedSave != null) {
+        await injectedSave(uid, values);
+      } else {
+        _profileService ??= ProfileService();
+        await _profileService!.saveProfile(uid, values);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated.')),
@@ -316,7 +363,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _deleting = true);
     try {
-      await _accountService.deleteMyAccount();
+      final injectedDelete = widget.deleteAccountAction;
+      if (injectedDelete != null) {
+        await injectedDelete();
+      } else {
+        _accountService ??= AccountService();
+        await _accountService!.deleteMyAccount();
+      }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
       final message = e.code == 'failed-precondition'
@@ -375,8 +428,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _managePhotos() async {
+    final injected = widget.managePhotosAction;
+    if (injected != null) {
+      await injected();
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ProfilePhotosScreen()),
+    );
+  }
+
   Future<void> _signOut() async {
-    await _authService.signOut();
+    final injected = widget.signOutAction;
+    if (injected != null) {
+      await injected();
+    } else {
+      _authService ??= AuthService();
+      await _authService!.signOut();
+    }
 
     if (!mounted) return;
 
@@ -420,9 +491,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Share enough to be understood without giving up more privacy than you want.'),
         const SizedBox(height: 14),
         OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ProfilePhotosScreen()),
-          ),
+          onPressed: _managePhotos,
           icon: const Icon(Icons.photo_library_outlined),
           label: const Text('Manage profile photos'),
         ),
