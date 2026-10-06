@@ -15,8 +15,47 @@ import '../profile/profile_detail_screen.dart';
 import '../safety/safety_center_screen.dart';
 import 'relationship_manager_screen.dart';
 
+typedef MyCircleUidProvider = String? Function();
+
+typedef MyCircleConnectionsLoader = Future<List<Map<String, dynamic>>> Function();
+
+typedef MyCircleProfileLoader = Future<Map<String, dynamic>?> Function(
+  String uid,
+);
+
+typedef MyCircleSnapshotLoader = Future<CircleMembershipSnapshot> Function();
+
+typedef MyCirclePhotosLoader = Future<List<VisibleProfilePhoto>> Function(
+  String uid,
+);
+
+typedef MyCircleAction = Future<void> Function();
+
+typedef MyCircleProfileOpenAction = Future<String?> Function(
+  Map<String, dynamic> person,
+);
+
 class MyCircleScreen extends StatefulWidget {
-  const MyCircleScreen({super.key});
+  const MyCircleScreen({
+    super.key,
+    this.uidProvider,
+    this.loadConnections,
+    this.loadProfile,
+    this.loadSnapshot,
+    this.loadVisiblePhotos,
+    this.openSafetyAction,
+    this.openManagerAction,
+    this.openProfileAction,
+  });
+
+  final MyCircleUidProvider? uidProvider;
+  final MyCircleConnectionsLoader? loadConnections;
+  final MyCircleProfileLoader? loadProfile;
+  final MyCircleSnapshotLoader? loadSnapshot;
+  final MyCirclePhotosLoader? loadVisiblePhotos;
+  final MyCircleAction? openSafetyAction;
+  final MyCircleAction? openManagerAction;
+  final MyCircleProfileOpenAction? openProfileAction;
 
   @override
   State<MyCircleScreen> createState() => _MyCircleScreenState();
@@ -24,10 +63,10 @@ class MyCircleScreen extends StatefulWidget {
 
 class _MyCircleScreenState extends State<MyCircleScreen>
     with SingleTickerProviderStateMixin {
-  final _connections = ConnectionService();
-  final _circleMembership = CircleMembershipService();
-  final _profiles = ProfileService();
-  final _media = ProfileMediaService();
+  ConnectionService? _connections;
+  CircleMembershipService? _circleMembership;
+  ProfileService? _profiles;
+  ProfileMediaService? _media;
 
   final _orbitController = PolycircleSpatialOrbitController();
 
@@ -179,16 +218,33 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   }
 
   Future<_UniverseModel> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final injectedUidProvider = widget.uidProvider;
+    final uid = injectedUidProvider != null
+        ? injectedUidProvider()
+        : FirebaseAuth.instance.currentUser?.uid;
 
     if (uid == null) {
       throw StateError('No signed-in user.');
     }
 
+    final injectedConnections = widget.loadConnections;
+    final injectedProfile = widget.loadProfile;
+    final injectedSnapshot = widget.loadSnapshot;
+
+    _connections ??= ConnectionService();
+    _profiles ??= ProfileService();
+    _circleMembership ??= CircleMembershipService();
+
     final results = await Future.wait<Object?>([
-      _connections.loadConnections(),
-      _profiles.getProfile(uid),
-      _circleMembership.listMyCircles(),
+      injectedConnections != null
+          ? injectedConnections()
+          : _connections!.loadConnections(),
+      injectedProfile != null
+          ? injectedProfile(uid)
+          : _profiles!.getProfile(uid),
+      injectedSnapshot != null
+          ? injectedSnapshot()
+          : _circleMembership!.listMyCircles(),
     ]);
 
     final circleSnapshot = results[2] as CircleMembershipSnapshot;
@@ -213,7 +269,14 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
     return _photoFutures.putIfAbsent(
       uid,
-      () => _media.listVisiblePhotos(uid),
+      () {
+        final injectedPhotos = widget.loadVisiblePhotos;
+        if (injectedPhotos != null) {
+          return injectedPhotos(uid);
+        }
+        _media ??= ProfileMediaService();
+        return _media!.listVisiblePhotos(uid);
+      },
     );
   }
 
@@ -245,7 +308,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      final created = await _circleMembership.createCircle(
+      _circleMembership ??= CircleMembershipService();
+      final created = await _circleMembership!.createCircle(
         name,
       );
 
@@ -325,7 +389,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      await _circleMembership.inviteMember(
+      _circleMembership ??= CircleMembershipService();
+      await _circleMembership!.inviteMember(
         circleId: circle.circleId,
         inviteeUid: inviteeUid,
       );
@@ -387,7 +452,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      final accepted = await _circleMembership.respondToInvite(
+      _circleMembership ??= CircleMembershipService();
+      final accepted = await _circleMembership!.respondToInvite(
         inviteId: invite.inviteId,
         accept: accept,
       );
@@ -470,6 +536,12 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   }
 
   Future<void> _openSafety() async {
+    final injectedAction = widget.openSafetyAction;
+    if (injectedAction != null) {
+      await injectedAction();
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const SafetyCenterScreen(),
@@ -478,6 +550,12 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   }
 
   Future<void> _openManager() async {
+    final injectedAction = widget.openManagerAction;
+    if (injectedAction != null) {
+      await injectedAction();
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
@@ -493,14 +571,20 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   Future<void> _openProfile(
     Map<String, dynamic> person,
   ) async {
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => ProfileDetailScreen(
-          profile: person,
-          showConnectAction: false,
+    final injectedAction = widget.openProfileAction;
+    final String? result;
+    if (injectedAction != null) {
+      result = await injectedAction(person);
+    } else {
+      result = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (_) => ProfileDetailScreen(
+            profile: person,
+            showConnectAction: false,
+          ),
         ),
-      ),
-    );
+      );
+    }
 
     if (!mounted) return;
 
