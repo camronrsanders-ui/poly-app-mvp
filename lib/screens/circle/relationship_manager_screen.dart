@@ -1,10 +1,24 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/relationship_card_service.dart';
 
 class RelationshipManagerScreen extends StatefulWidget {
-  const RelationshipManagerScreen({super.key});
+  const RelationshipManagerScreen({super.key})
+      : _testUid = null,
+        _testService = null;
+
+  @visibleForTesting
+  const RelationshipManagerScreen.test({
+    super.key,
+    required String uid,
+    required RelationshipCardService service,
+  })  : _testUid = uid,
+        _testService = service;
+
+  final String? _testUid;
+  final RelationshipCardService? _testService;
 
   @override
   State<RelationshipManagerScreen> createState() =>
@@ -33,7 +47,13 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
     'unnamed_public',
   ];
 
-  final _service = RelationshipCardService();
+  late final RelationshipCardService _service;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = widget._testService ?? RelationshipCardService();
+  }
 
   String _safeChoice(Object? raw, List<String> choices, String fallback) {
     final value = raw?.toString().trim() ?? '';
@@ -48,7 +68,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = widget._testUid ?? FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Center(child: Text('Sign in to manage your circle.'));
     }
