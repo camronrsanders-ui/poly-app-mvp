@@ -3,8 +3,54 @@ import 'package:flutter/material.dart';
 
 import '../../services/relationship_card_service.dart';
 
+typedef RelationshipUidProvider = String? Function();
+
+typedef RelationshipCardsWatcher = Stream<List<Map<String, dynamic>>> Function(
+  String ownerUid,
+);
+
+typedef CreateRelationshipCardAction = Future<void> Function({
+  required String ownerUid,
+  required String label,
+  required String connectionType,
+  required String status,
+  required String note,
+  required String visibility,
+  required String displayNameOptional,
+  required int sortOrder,
+});
+
+typedef UpdateRelationshipCardAction = Future<void> Function({
+  required String cardId,
+  required String ownerUid,
+  required Map<String, dynamic> values,
+});
+
+typedef RelationshipCardIdAction = Future<void> Function(String cardId);
+
+typedef ReorderRelationshipCardsAction = Future<void> Function(
+  List<Map<String, dynamic>> cards,
+);
+
 class RelationshipManagerScreen extends StatefulWidget {
-  const RelationshipManagerScreen({super.key});
+  const RelationshipManagerScreen({
+    super.key,
+    this.uidProvider,
+    this.watchCards,
+    this.createCard,
+    this.updateCard,
+    this.deactivateCard,
+    this.deleteCard,
+    this.reorderCards,
+  });
+
+  final RelationshipUidProvider? uidProvider;
+  final RelationshipCardsWatcher? watchCards;
+  final CreateRelationshipCardAction? createCard;
+  final UpdateRelationshipCardAction? updateCard;
+  final RelationshipCardIdAction? deactivateCard;
+  final RelationshipCardIdAction? deleteCard;
+  final ReorderRelationshipCardsAction? reorderCards;
 
   @override
   State<RelationshipManagerScreen> createState() =>
@@ -33,7 +79,91 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
     'unnamed_public',
   ];
 
-  final _service = RelationshipCardService();
+  RelationshipCardService? _service;
+
+  RelationshipCardService get _fallbackService =>
+      _service ??= RelationshipCardService();
+
+  Stream<List<Map<String, dynamic>>> _watchCards(String uid) {
+    final injected = widget.watchCards;
+    return injected != null ? injected(uid) : _fallbackService.watchCards(uid);
+  }
+
+  Future<void> _createCard({
+    required String ownerUid,
+    required String label,
+    required String connectionType,
+    required String status,
+    required String note,
+    required String visibility,
+    required String displayNameOptional,
+    required int sortOrder,
+  }) {
+    final injected = widget.createCard;
+    if (injected != null) {
+      return injected(
+        ownerUid: ownerUid,
+        label: label,
+        connectionType: connectionType,
+        status: status,
+        note: note,
+        visibility: visibility,
+        displayNameOptional: displayNameOptional,
+        sortOrder: sortOrder,
+      );
+    }
+    return _fallbackService.createCard(
+      ownerUid: ownerUid,
+      label: label,
+      connectionType: connectionType,
+      status: status,
+      note: note,
+      visibility: visibility,
+      displayNameOptional: displayNameOptional,
+      sortOrder: sortOrder,
+    );
+  }
+
+  Future<void> _updateCard({
+    required String cardId,
+    required String ownerUid,
+    required Map<String, dynamic> values,
+  }) {
+    final injected = widget.updateCard;
+    if (injected != null) {
+      return injected(
+        cardId: cardId,
+        ownerUid: ownerUid,
+        values: values,
+      );
+    }
+    return _fallbackService.updateCard(
+      cardId: cardId,
+      ownerUid: ownerUid,
+      values: values,
+    );
+  }
+
+  Future<void> _deactivateCard(String cardId) {
+    final injected = widget.deactivateCard;
+    return injected != null
+        ? injected(cardId)
+        : _fallbackService.deactivateCard(cardId);
+  }
+
+  Future<void> _deleteCard(String cardId) {
+    final injected = widget.deleteCard;
+    return injected != null
+        ? injected(cardId)
+        : _fallbackService.deleteCard(cardId);
+  }
+
+  Future<void> _reorderCards(List<Map<String, dynamic>> cards) {
+    final injected = widget.reorderCards;
+    return injected != null
+        ? injected(cards)
+        : _fallbackService.reorderCards(cards);
+  }
 
   String _safeChoice(Object? raw, List<String> choices, String fallback) {
     final value = raw?.toString().trim() ?? '';
@@ -48,13 +178,16 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final injectedUidProvider = widget.uidProvider;
+    final uid = injectedUidProvider != null
+        ? injectedUidProvider()
+        : FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Center(child: Text('Sign in to manage your circle.'));
     }
 
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _service.watchCards(uid),
+      stream: _watchCards(uid),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _StateMessage(
@@ -148,11 +281,11 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                                       existing: card,
                                       sortOrder: index);
                                 } else if (value == 'hide') {
-                                  await _service.deactivateCard(cardId);
+                                  await _deactivateCard(cardId);
                                 } else if (value == 'delete') {
                                   final confirmed = await _confirmDelete();
                                   if (confirmed == true) {
-                                    await _service.deleteCard(cardId);
+                                    await _deleteCard(cardId);
                                   }
                                 }
                               } catch (_) {
@@ -189,7 +322,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
       final reordered = [...cards];
       final item = reordered.removeAt(oldIndex);
       reordered.insert(newIndex, item);
-      await _service.reorderCards(reordered);
+      await _reorderCards(reordered);
     } catch (_) {
       _showError('Could not reorder your Circle right now.');
     }
@@ -314,7 +447,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                           setModalState(() => saving = true);
                           try {
                             if (existing == null) {
-                              await _service.createCard(
+                              await _createCard(
                                 ownerUid: uid,
                                 label: label,
                                 connectionType: type,
@@ -330,7 +463,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                                 throw StateError(
                                     'Missing relationship card ID.');
                               }
-                              await _service.updateCard(
+                              await _updateCard(
                                 cardId: cardId,
                                 ownerUid: uid,
                                 values: {
