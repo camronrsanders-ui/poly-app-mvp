@@ -31,6 +31,22 @@ CircleMembershipSnapshot snapshot({
   );
 }
 
+Future<Map<String, dynamic>?> defaultProfile(String uid) async {
+  return <String, dynamic>{
+    'displayName': 'Cam',
+  };
+}
+
+Future<CircleMembershipSnapshot> defaultSnapshot() async => snapshot();
+
+Future<List<VisibleProfilePhoto>> defaultPhotos(String uid) async {
+  return const <VisibleProfilePhoto>[];
+}
+
+bool isSpatialOrbit(Widget widget) {
+  return widget is PolycircleSpatialOrbit<Map<String, dynamic>>;
+}
+
 Future<void> pumpCircle(
   WidgetTester tester, {
   required MyCircleConnectionsLoader loadConnections,
@@ -52,13 +68,9 @@ Future<void> pumpCircle(
         body: MyCircleScreen(
           uidProvider: () => 'owner-1',
           loadConnections: loadConnections,
-          loadProfile: loadProfile ??
-              (uid) async => <String, dynamic>{
-                    'displayName': 'Cam',
-                  },
-          loadSnapshot: loadSnapshot ?? () async => snapshot(),
-          loadVisiblePhotos:
-              loadVisiblePhotos ?? (uid) async => const <VisibleProfilePhoto>[],
+          loadProfile: loadProfile ?? defaultProfile,
+          loadSnapshot: loadSnapshot ?? defaultSnapshot,
+          loadVisiblePhotos: loadVisiblePhotos ?? defaultPhotos,
           openSafetyAction: openSafetyAction,
           openManagerAction: openManagerAction,
           openProfileAction: openProfileAction,
@@ -141,10 +153,7 @@ void main() {
 
       expect(find.text('MY CIRCLE'), findsOneWidget);
       expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is PolycircleSpatialOrbit<Map<String, dynamic>>,
-        ),
+        find.byWidgetPredicate(isSpatialOrbit),
         findsOneWidget,
       );
       expect(find.text('Alex, 30'), findsOneWidget);

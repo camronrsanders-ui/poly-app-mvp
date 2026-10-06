@@ -17,7 +17,8 @@ import 'relationship_manager_screen.dart';
 
 typedef MyCircleUidProvider = String? Function();
 
-typedef MyCircleConnectionsLoader = Future<List<Map<String, dynamic>>> Function();
+typedef MyCircleConnectionsLoader =
+    Future<List<Map<String, dynamic>>> Function();
 
 typedef MyCircleProfileLoader = Future<Map<String, dynamic>?> Function(
   String uid,
