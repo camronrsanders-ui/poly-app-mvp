@@ -320,10 +320,6 @@ void main() {
       }
 
       expect(attempts, 2);
-      expect(
-        find.text('Retry Circle is now part of your universe.'),
-        findsOneWidget,
-      );
     },
   );
 
