@@ -77,9 +77,13 @@ Future<void> tapEnter(
   WidgetTester tester, {
   bool settle = true,
 }) async {
-  await tester.tap(
-    find.widgetWithText(FilledButton, 'Enter Polycircle'),
+  final button = find.widgetWithText(
+    FilledButton,
+    'Enter Polycircle',
   );
+  await tester.ensureVisible(button);
+  await tester.pump();
+  await tester.tap(button);
   if (settle) {
     await tester.pumpAndSettle();
   } else {

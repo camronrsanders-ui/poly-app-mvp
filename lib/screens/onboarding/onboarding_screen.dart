@@ -74,6 +74,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+      ),
+    );
+  }
+
   Future<void> _finish() async {
     final injectedUidProvider = widget.uidProvider;
     final uid = injectedUidProvider != null
@@ -86,22 +96,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         age == null ||
         _structure == null ||
         _intentions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Please complete your name, age, relationship structure, and at least one intention.'),
-      ));
+      _showMessage(
+        'Please complete your name, age, relationship structure, '
+        'and at least one intention.',
+      );
       return;
     }
     if (age < 18) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Polycircle is for adults age 18 and older.'),
-      ));
+      _showMessage('Polycircle is for adults age 18 and older.');
       return;
     }
     if (age > 120) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Please enter a valid age.'),
-      ));
+      _showMessage('Please enter a valid age.');
       return;
     }
 
@@ -157,10 +163,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         debugPrintStack(stackTrace: stackTrace);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'We could not finish setting up your profile. Your answers are still here—please try again.'),
-        ));
+        _showMessage(
+          'We could not finish setting up your profile. '
+          'Your answers are still here—please try again.',
+        );
       }
     } finally {
       if (mounted) {
