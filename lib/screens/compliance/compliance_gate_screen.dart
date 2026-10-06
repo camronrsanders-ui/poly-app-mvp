@@ -4,21 +4,39 @@ import '../../config/compliance_policy.dart';
 import '../../services/age_assurance_service.dart';
 import '../../services/compliance_service.dart';
 
+typedef AdultSignalRequester = Future<AgeAssuranceResult> Function();
+
+typedef PolicyAcceptanceRecorder = Future<void> Function({
+  required String ageAssuranceMethod,
+  required String ageSignalStatus,
+});
+
+typedef BirthDatePicker = Future<DateTime?> Function(
+  BuildContext context,
+  DateTime? currentBirthDate,
+);
+
 class ComplianceGateScreen extends StatefulWidget {
   const ComplianceGateScreen({
     super.key,
     required this.onSignOut,
+    this.requestAdultSignal,
+    this.recordPolicyAcceptance,
+    this.birthDatePicker,
   });
 
   final Future<void> Function() onSignOut;
+  final AdultSignalRequester? requestAdultSignal;
+  final PolicyAcceptanceRecorder? recordPolicyAcceptance;
+  final BirthDatePicker? birthDatePicker;
 
   @override
   State<ComplianceGateScreen> createState() => _ComplianceGateScreenState();
 }
 
 class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
-  final _ageAssurance = AgeAssuranceService();
-  final _compliance = ComplianceService();
+  AgeAssuranceService? _ageAssurance;
+  ComplianceService? _compliance;
 
   DateTime? _birthDate;
   bool _acceptTerms = false;
@@ -28,15 +46,21 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
   String? _message;
 
   Future<void> _chooseBirthDate() async {
-    final now = DateTime.now();
-    final initial = DateTime(now.year - 25, now.month, now.day);
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? initial,
-      firstDate: DateTime(now.year - 120, 1, 1),
-      lastDate: now,
-      helpText: 'Confirm your date of birth',
-    );
+    final injectedPicker = widget.birthDatePicker;
+    final DateTime? selected;
+    if (injectedPicker != null) {
+      selected = await injectedPicker(context, _birthDate);
+    } else {
+      final now = DateTime.now();
+      final initial = DateTime(now.year - 25, now.month, now.day);
+      selected = await showDatePicker(
+        context: context,
+        initialDate: _birthDate ?? initial,
+        firstDate: DateTime(now.year - 120, 1, 1),
+        lastDate: now,
+        helpText: 'Confirm your date of birth',
+      );
+    }
     if (selected != null && mounted) {
       setState(() {
         _birthDate = selected;
@@ -91,7 +115,14 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
     });
 
     try {
-      final signal = await _ageAssurance.requestAdultSignal();
+      final injectedSignal = widget.requestAdultSignal;
+      final AgeAssuranceResult signal;
+      if (injectedSignal != null) {
+        signal = await injectedSignal();
+      } else {
+        _ageAssurance ??= AgeAssuranceService();
+        signal = await _ageAssurance!.requestAdultSignal();
+      }
       if (!mounted) return;
 
       if (signal.confirmsMinor) {
@@ -127,10 +158,20 @@ class _ComplianceGateScreenState extends State<ComplianceGateScreen> {
       final method =
           signal.confirmsAdult ? signal.method : 'self_attested_dob_fallback';
 
-      await _compliance.recordAdultPolicyAcceptance(
-        ageAssuranceMethod: method,
-        ageSignalStatus: _recordableSignalStatus(signal),
-      );
+      final injectedRecorder = widget.recordPolicyAcceptance;
+      final status = _recordableSignalStatus(signal);
+      if (injectedRecorder != null) {
+        await injectedRecorder(
+          ageAssuranceMethod: method,
+          ageSignalStatus: status,
+        );
+      } else {
+        _compliance ??= ComplianceService();
+        await _compliance!.recordAdultPolicyAcceptance(
+          ageAssuranceMethod: method,
+          ageSignalStatus: status,
+        );
+      }
       // The parent session gate watches the account document. Once the trusted
       // callable records the policy fields it automatically advances to
       // onboarding/app shell.
