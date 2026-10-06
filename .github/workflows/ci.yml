@@ -3,7 +3,7 @@ name: Polycircle CI
 on:
   workflow_dispatch:
   push:
-    branches: ["restart-foundation", "main"]
+    branches: ["main"]
   pull_request:
 
 permissions:
@@ -278,7 +278,10 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>API_KEY</key>
-            <string>demo-not-a-real-api-key</string>
+                        <!-- CI-only fake key. Must stay 39 chars starting with "A":
+                 Firebase Installations validates the format at launch and
+                 crashes the app on a malformed key. -->
+            <string>AIzaSyDemoPolycircleCINotARealKey000000</string>
             <key>GCM_SENDER_ID</key>
             <string>000000000001</string>
             <key>PLIST_VERSION</key>
