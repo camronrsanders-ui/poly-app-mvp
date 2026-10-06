@@ -35,20 +35,35 @@ DateTime minorBirthDate() {
   return DateTime(now.year - 17, now.month, now.day);
 }
 
-Future<void> chooseBirthDate(WidgetTester tester) async {
-  await tester.tap(find.text('Date of birth'));
+Future<void> tapVisibleText(
+  WidgetTester tester,
+  String label, {
+  bool settle = true,
+}) async {
+  final finder = find.text(label);
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  await tester.tap(finder);
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
+}
+
+Future<void> chooseBirthDate(WidgetTester tester) async {
+  await tapVisibleText(tester, 'Date of birth');
 }
 
 Future<void> acceptPolicies(WidgetTester tester) async {
-  await tester.tap(
-    find.text('I am 18+ and accept the Terms of Use'),
+  await tapVisibleText(
+    tester,
+    'I am 18+ and accept the Terms of Use',
   );
-  await tester.pumpAndSettle();
-  await tester.tap(
-    find.text('I accept the Community Guidelines'),
+  await tapVisibleText(
+    tester,
+    'I accept the Community Guidelines',
   );
-  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -64,8 +79,7 @@ void main() {
         },
       );
 
-      await tester.tap(find.text('Sign out'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Sign out');
 
       expect(calls, 1);
     },
@@ -79,8 +93,7 @@ void main() {
         onSignOut: () async {},
       );
 
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Verify & continue');
 
       expect(
         find.text('Choose your date of birth to continue.'),
@@ -105,8 +118,7 @@ void main() {
       );
 
       await chooseBirthDate(tester);
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Verify & continue');
 
       expect(find.text('Adult-only access'), findsOneWidget);
       expect(
@@ -116,8 +128,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Return to sign in'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Return to sign in');
 
       expect(signOutCalls, 1);
     },
@@ -135,8 +146,7 @@ void main() {
       );
 
       await chooseBirthDate(tester);
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Verify & continue');
 
       expect(
         find.text(
@@ -178,8 +188,7 @@ void main() {
 
       await chooseBirthDate(tester);
       await acceptPolicies(tester);
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Verify & continue');
 
       expect(method, 'play_age_signals');
       expect(status, 'adult:adult_range');
@@ -214,8 +223,7 @@ void main() {
 
       await chooseBirthDate(tester);
       await acceptPolicies(tester);
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pumpAndSettle();
+      await tapVisibleText(tester, 'Verify & continue');
 
       expect(records, 0);
       expect(
@@ -253,8 +261,11 @@ void main() {
 
       await chooseBirthDate(tester);
       await acceptPolicies(tester);
-      await tester.tap(find.text('Verify & continue'));
-      await tester.pump();
+      await tapVisibleText(
+        tester,
+        'Verify & continue',
+        settle: false,
+      );
 
       final checking = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Checking…'),
