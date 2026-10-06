@@ -10,9 +10,8 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'profile_photos_screen.dart';
 
-typedef ProfileEditorLoader = Future<Map<String, dynamic>?> Function(
-  String uid,
-);
+typedef ProfileEditorLoader =
+    Future<Map<String, dynamic>?> Function(String uid);
 typedef ProfileEditorSaver = Future<void> Function(
   String uid,
   Map<String, dynamic> values,
@@ -204,8 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<Map<String, dynamic>?> _loadProfileWithRetry(String uid) async {
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
-        return await _loadProfileOnce(uid)
-            .timeout(const Duration(seconds: 8));
+        return await _loadProfileOnce(uid).timeout(const Duration(seconds: 8));
       } catch (error) {
         debugPrint('Profile load attempt $attempt/3 failed: $error');
         if (attempt == 3 || !_shouldRetryProfileLoad(error)) rethrow;
