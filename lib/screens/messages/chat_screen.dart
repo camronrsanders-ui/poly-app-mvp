@@ -236,7 +236,7 @@ class ChatScreen extends StatefulWidget {
     required this.conversationId,
     required this.otherUid,
     required this.otherDisplayName,
-  })  : currentUid = null,
+  }) : currentUid = null,
         disableMessageStream = false,
         sendAction = null,
         endConnectionAction = null,
@@ -283,8 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
   SafetyService? _safetyInstance;
   SharedMomentsService? _sharedMomentsInstance;
 
-  MessagingService get _messages =>
-      _messagesInstance ??= MessagingService();
+  MessagingService get _messages => _messagesInstance ??= MessagingService();
   ConnectionService get _connections =>
       _connectionsInstance ??= ConnectionService();
   SafetyService get _safety => _safetyInstance ??= SafetyService();
