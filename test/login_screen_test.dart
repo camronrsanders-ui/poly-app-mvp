@@ -23,24 +23,20 @@ Future<void> pumpLogin(
   await tester.pumpAndSettle();
 }
 
-Future<void> enterCredentials(
-  WidgetTester tester, {
-  String email = 'cam@example.com',
-  String password = 'password123',
-}) async {
+Future<void> enterCredentials(WidgetTester tester) async {
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Email'),
-    email,
+    'cam@example.com',
   );
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Password'),
-    password,
+    'password123',
   );
 }
 
 void main() {
   testWidgets(
-    'sign in validates required credentials before invoking action',
+    'Sign in validates required credentials before invoking action',
     (tester) async {
       var calls = 0;
 
@@ -60,30 +56,31 @@ void main() {
     },
   );
 
-  testWidgets('sign in sends exact entered credentials', (tester) async {
-    await pumpLogin(
-      tester,
-      loginAction: ({
-        required String email,
-        required String password,
-      }) async {
-        // Capture verbatim screen input. Trimming remains an AuthService
-        // concern.
-        expect(email, 'cam@example.com');
-        expect(password, 'password123');
-      },
-    );
+  testWidgets(
+    'Sign in sends exact entered credentials',
+    (tester) async {
+      String? receivedEmail;
+      String? receivedPassword;
 
-    await enterCredentials(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-    await tester.pumpAndSettle();
+      await pumpLogin(
+        tester,
+        loginAction: ({required email, required password}) async {
+          receivedEmail = email;
+          receivedPassword = password;
+        },
+      );
 
-    // Reaching here without an expectation failure proves the exact action ran.
-    expect(find.text('Something went wrong. Please try again.'), findsNothing);
-  });
+      await enterCredentials(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.pumpAndSettle();
+
+      expect(receivedEmail, 'cam@example.com');
+      expect(receivedPassword, 'password123');
+    },
+  );
 
   testWidgets(
-    'busy sign-in disables all competing auth actions',
+    'Busy sign-in disables competing auth actions',
     (tester) async {
       final gate = Completer<void>();
       var loginCalls = 0;
@@ -104,26 +101,19 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
       await tester.pump();
 
-      expect(find.text('Signing in…'), findsOneWidget);
-      expect(
-        tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Signing in…'),
-        ).onPressed,
-        isNull,
+      final signIn = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Signing in…'),
       );
-      expect(
-        tester.widget<TextButton>(
-          find.widgetWithText(TextButton, 'Forgot password?'),
-        ).onPressed,
-        isNull,
+      final forgot = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Forgot password?'),
       );
-      expect(
-        tester.widget<TextButton>(
-          find.widgetWithText(TextButton, 'New to Polycircle? Create account'),
-        ).onPressed,
-        isNull,
+      final create = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'New to Polycircle? Create account'),
       );
 
+      expect(signIn.onPressed, isNull);
+      expect(forgot.onPressed, isNull);
+      expect(create.onPressed, isNull);
       expect(loginCalls, 1);
       expect(signUpCalls, 0);
 
@@ -134,7 +124,7 @@ void main() {
   );
 
   testWidgets(
-    'forgot password requires email before invoking reset',
+    'Forgot password requires an email first',
     (tester) async {
       var resets = 0;
 
@@ -157,7 +147,7 @@ void main() {
   );
 
   testWidgets(
-    'forgot password uses entered email and confirms success',
+    'Forgot password uses entered email and confirms success',
     (tester) async {
       String? resetEmail;
 
@@ -203,7 +193,7 @@ void main() {
   );
 
   testWidgets(
-    'create-account link invokes its navigation action',
+    'Create-account link invokes its navigation action',
     (tester) async {
       var signUpCalls = 0;
 
