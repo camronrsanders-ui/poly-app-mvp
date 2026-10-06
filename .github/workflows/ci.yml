@@ -340,9 +340,9 @@ jobs:
         run: |
           set -euo pipefail
           DEVICE_ID="$IOS_ACCEPTANCE_DEVICE_ID"
-          DRIVE_RUNNER="$RUNNER_TEMP/polycircle_ios_drive.sh"
+          TEST_RUNNER="$RUNNER_TEMP/polycircle_ios_test.sh"
 
-          cat > "$DRIVE_RUNNER" <<'BASH'
+          cat > "$TEST_RUNNER" <<'BASH'
           #!/usr/bin/env bash
           set -euo pipefail
 
@@ -350,7 +350,7 @@ jobs:
           mkdir -p build/simulator_acceptance
 
           for attempt in 1 2; do
-            echo "Starting iOS flutter drive attempt $attempt/2."
+            echo "Starting iOS flutter test attempt $attempt/2."
 
             set +e
             python3 - "$DEVICE_ID" <<'PY'
@@ -360,16 +360,15 @@ jobs:
           device_id = sys.argv[1]
           command = [
               "flutter",
-              "drive",
-              "--driver=test_driver/integration_test.dart",
-              "--target=integration_test/simulator_acceptance_test.dart",
+              "test",
+              "integration_test/simulator_acceptance_test.dart",
               "-d",
               device_id,
               "--flavor",
               "staging",
               "--dart-define=USE_FIREBASE_EMULATORS=true",
               "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
-              "--no-dds",
+              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
               "--no-pub",
           ]
 
@@ -378,7 +377,7 @@ jobs:
               status = process.wait(timeout=900)
           except subprocess.TimeoutExpired:
               print(
-                  "flutter drive attempt exceeded 15 minutes; terminating it so CI can retry.",
+                  "flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
                   file=sys.stderr,
               )
               process.terminate()
@@ -402,19 +401,19 @@ jobs:
               exit "$STATUS"
             fi
 
-            echo "First iOS drive attempt stalled; capturing diagnostics before one retry."
+            echo "First iOS flutter test attempt stalled; capturing diagnostics before one retry."
             xcrun simctl io "$DEVICE_ID" screenshot \
-              "build/simulator_acceptance/98-drive-timeout-attempt-$attempt.png" || true
+              "build/simulator_acceptance/98-test-timeout-attempt-$attempt.png" || true
             xcrun simctl spawn "$DEVICE_ID" log show --last 10m --style compact 2>/dev/null \
-              | grep -Ei 'polycircle|Runner|Flutter|com\.polycircle\.app\.staging' \
+              | grep -Ei 'com\.polycircle\.app\.staging|PolycircleStaging|Flutter' \
               | tail -n 400 \
-              > "build/simulator_acceptance/98-drive-timeout-attempt-$attempt.log" || true
+              > "build/simulator_acceptance/98-test-timeout-attempt-$attempt.log" || true
             xcrun simctl terminate "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
             xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
             sleep 3
           done
           BASH
-          chmod +x "$DRIVE_RUNNER"
+          chmod +x "$TEST_RUNNER"
 
           (
             for attempt in {1..900}; do
@@ -435,7 +434,7 @@ jobs:
           firebase emulators:exec \
             --project polycircle-staging-82204f \
             --only auth,firestore,functions,storage \
-            "POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator && bash \"$DRIVE_RUNNER\" \"$DEVICE_ID\""
+            "POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator && bash \"$TEST_RUNNER\" \"$DEVICE_ID\""
           STATUS=$?
           set -e
 

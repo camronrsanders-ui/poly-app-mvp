@@ -3,6 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:polycircle/main.dart' as app;
 
+const bool _captureAcceptanceScreenshots = bool.fromEnvironment(
+  'POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS',
+  defaultValue: true,
+);
+
 Future<void> waitForFinder(
   WidgetTester tester,
   Finder finder, {
@@ -61,6 +66,8 @@ Future<void> takeAcceptanceScreenshot(
   String name,
 ) async {
   await tester.pump(const Duration(milliseconds: 300));
+  debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
+  if (!_captureAcceptanceScreenshots) return;
   await binding.takeScreenshot(name);
 }
 
