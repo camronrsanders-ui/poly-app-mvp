@@ -183,25 +183,25 @@ void main() {
   testWidgets(
     'Report person submits an account report through the trusted action',
     (tester) async {
-      String? reportedUid;
-      String? reason;
-      String? contentType;
-      String? conversationId;
+      String? capturedReportedUid;
+      String? capturedReason;
+      String? capturedContentType;
+      String? capturedConversationId;
 
       await pumpChat(
         tester,
         reportAction: ({
-          required String reportedUid: uid,
-          required String reason: selectedReason,
+          required String reportedUid,
+          required String reason,
           required String details,
-          required String contentType: selectedContentType,
+          required String contentType,
           String? contentId,
-          String? conversationId: selectedConversationId,
+          String? conversationId,
         }) async {
-          reportedUid = uid;
-          reason = selectedReason;
-          contentType = selectedContentType;
-          conversationId = selectedConversationId;
+          capturedReportedUid = reportedUid;
+          capturedReason = reason;
+          capturedContentType = contentType;
+          capturedConversationId = conversationId;
         },
       );
 
@@ -213,10 +213,10 @@ void main() {
       await tester.tap(find.text('Submit report'));
       await tester.pumpAndSettle();
 
-      expect(reportedUid, 'member-2');
-      expect(reason, 'harassment');
-      expect(contentType, 'account');
-      expect(conversationId, isNull);
+      expect(capturedReportedUid, 'member-2');
+      expect(capturedReason, 'harassment');
+      expect(capturedContentType, 'account');
+      expect(capturedConversationId, isNull);
       expect(
         find.text(
           'Report submitted. Thank you for helping protect the community.',
