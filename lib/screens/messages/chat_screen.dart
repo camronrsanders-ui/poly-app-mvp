@@ -236,7 +236,7 @@ class ChatScreen extends StatefulWidget {
     required this.conversationId,
     required this.otherUid,
     required this.otherDisplayName,
-  }) : currentUid = null,
+  })  : currentUid = null,
         disableMessageStream = false,
         sendAction = null,
         endConnectionAction = null,
