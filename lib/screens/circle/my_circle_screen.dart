@@ -231,20 +231,34 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     final injectedProfile = widget.loadProfile;
     final injectedSnapshot = widget.loadSnapshot;
 
-    _connections ??= ConnectionService();
-    _profiles ??= ProfileService();
-    _circleMembership ??= CircleMembershipService();
+    final Future<List<Map<String, dynamic>>> connectionsFuture;
+    if (injectedConnections != null) {
+      connectionsFuture = injectedConnections();
+    } else {
+      _connections ??= ConnectionService();
+      connectionsFuture = _connections!.loadConnections();
+    }
+
+    final Future<Map<String, dynamic>?> profileFuture;
+    if (injectedProfile != null) {
+      profileFuture = injectedProfile(uid);
+    } else {
+      _profiles ??= ProfileService();
+      profileFuture = _profiles!.getProfile(uid);
+    }
+
+    final Future<CircleMembershipSnapshot> snapshotFuture;
+    if (injectedSnapshot != null) {
+      snapshotFuture = injectedSnapshot();
+    } else {
+      _circleMembership ??= CircleMembershipService();
+      snapshotFuture = _circleMembership!.listMyCircles();
+    }
 
     final results = await Future.wait<Object?>([
-      injectedConnections != null
-          ? injectedConnections()
-          : _connections!.loadConnections(),
-      injectedProfile != null
-          ? injectedProfile(uid)
-          : _profiles!.getProfile(uid),
-      injectedSnapshot != null
-          ? injectedSnapshot()
-          : _circleMembership!.listMyCircles(),
+      connectionsFuture,
+      profileFuture,
+      snapshotFuture,
     ]);
 
     final circleSnapshot = results[2] as CircleMembershipSnapshot;
