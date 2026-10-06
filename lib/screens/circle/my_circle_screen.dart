@@ -35,6 +35,18 @@ typedef MyCircleProfileOpenAction = Future<String?> Function(
   Map<String, dynamic> person,
 );
 
+typedef MyCircleCreateAction = Future<CircleSummary> Function(String name);
+
+typedef MyCircleInviteAction = Future<void> Function({
+  required String circleId,
+  required String inviteeUid,
+});
+
+typedef MyCircleRespondAction = Future<bool> Function({
+  required String inviteId,
+  required bool accept,
+});
+
 class MyCircleScreen extends StatefulWidget {
   const MyCircleScreen({
     super.key,
@@ -46,6 +58,9 @@ class MyCircleScreen extends StatefulWidget {
     this.openSafetyAction,
     this.openManagerAction,
     this.openProfileAction,
+    this.createCircleAction,
+    this.inviteMemberAction,
+    this.respondToInviteAction,
   });
 
   final MyCircleUidProvider? uidProvider;
@@ -56,6 +71,9 @@ class MyCircleScreen extends StatefulWidget {
   final MyCircleAction? openSafetyAction;
   final MyCircleAction? openManagerAction;
   final MyCircleProfileOpenAction? openProfileAction;
+  final MyCircleCreateAction? createCircleAction;
+  final MyCircleInviteAction? inviteMemberAction;
+  final MyCircleRespondAction? respondToInviteAction;
 
   @override
   State<MyCircleScreen> createState() => _MyCircleScreenState();
@@ -322,10 +340,16 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      _circleMembership ??= CircleMembershipService();
-      final created = await _circleMembership!.createCircle(
-        name,
-      );
+      final injectedCreate = widget.createCircleAction;
+      final CircleSummary created;
+      if (injectedCreate != null) {
+        created = await injectedCreate(name);
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        created = await _circleMembership!.createCircle(
+          name,
+        );
+      }
 
       if (!mounted) return;
 
@@ -403,11 +427,19 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      _circleMembership ??= CircleMembershipService();
-      await _circleMembership!.inviteMember(
-        circleId: circle.circleId,
-        inviteeUid: inviteeUid,
-      );
+      final injectedInvite = widget.inviteMemberAction;
+      if (injectedInvite != null) {
+        await injectedInvite(
+          circleId: circle.circleId,
+          inviteeUid: inviteeUid,
+        );
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        await _circleMembership!.inviteMember(
+          circleId: circle.circleId,
+          inviteeUid: inviteeUid,
+        );
+      }
 
       if (!mounted) return;
 
@@ -466,11 +498,20 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     });
 
     try {
-      _circleMembership ??= CircleMembershipService();
-      final accepted = await _circleMembership!.respondToInvite(
-        inviteId: invite.inviteId,
-        accept: accept,
-      );
+      final injectedRespond = widget.respondToInviteAction;
+      final bool accepted;
+      if (injectedRespond != null) {
+        accepted = await injectedRespond(
+          inviteId: invite.inviteId,
+          accept: accept,
+        );
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        accepted = await _circleMembership!.respondToInvite(
+          inviteId: invite.inviteId,
+          accept: accept,
+        );
+      }
 
       if (!mounted) return;
 
