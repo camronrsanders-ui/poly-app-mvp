@@ -65,8 +65,7 @@ Future<void> takeAcceptanceScreenshot(
 }
 
 void main() {
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
-      as IntegrationTestWidgetsFlutterBinding;
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
     'seeded iPhone simulator completes the pre-billing core journey',
