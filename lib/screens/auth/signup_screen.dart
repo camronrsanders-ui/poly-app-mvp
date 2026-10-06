@@ -3,9 +3,20 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 
+typedef SignUpAction = Future<void> Function({
+  required String email,
+  required String password,
+});
+
 class SignUpScreen extends StatefulWidget {
-  const SignUpScreen({super.key, required this.onShowLogin});
+  const SignUpScreen({
+    super.key,
+    required this.onShowLogin,
+    this.signUpAction,
+  });
+
   final VoidCallback onShowLogin;
+  final SignUpAction? signUpAction;
 
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();
@@ -16,7 +27,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  final _auth = AuthService();
+  AuthService? _auth;
   bool _busy = false;
   String? _error;
 
@@ -35,7 +46,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _error = null;
     });
     try {
-      await _auth.signUp(email: _email.text, password: _password.text);
+      final injectedSignUp = widget.signUpAction;
+      if (injectedSignUp != null) {
+        await injectedSignUp(
+          email: _email.text,
+          password: _password.text,
+        );
+      } else {
+        _auth ??= AuthService();
+        await _auth!.signUp(
+          email: _email.text,
+          password: _password.text,
+        );
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() => _error = e.message ?? 'Unable to create account.');
