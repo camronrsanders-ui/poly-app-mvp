@@ -195,7 +195,7 @@ void main() {
     'Circle world selection switches the active spatial universe',
     (tester) async {
       final alex = connection('alex', 'Alex');
-      final circle = CircleSummary(
+      final circle = const CircleSummary(
         circleId: 'friends-1',
         name: 'Friends',
         ownerUid: 'owner-1',
