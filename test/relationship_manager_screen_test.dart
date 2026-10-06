@@ -322,7 +322,10 @@ void main() {
         find.textContaining('Could not save this relationship'),
         findsOneWidget,
       );
-      expect(find.text('Add relationship'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Add to my circle'),
+        findsOneWidget,
+      );
 
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
