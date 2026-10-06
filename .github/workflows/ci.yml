@@ -229,3 +229,35 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run Firestore and Storage rules tests
         run: firebase emulators:exec --project demo-polycircle --only firestore,storage "npm --prefix tests/security test"
+
+  integration-lock-probe:
+    name: Integration test lock probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Resolve integration_test SDK dependency
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("pubspec.yaml")
+          text = path.read_text()
+          anchor = "dev_dependencies:\n"
+          addition = "dev_dependencies:\n  integration_test:\n    sdk: flutter\n"
+          if "  integration_test:\n    sdk: flutter\n" not in text:
+              text = text.replace(anchor, addition, 1)
+          path.write_text(text)
+          PY
+          flutter pub get
+          echo "INTEGRATION_LOCK_BEGIN"
+          cat pubspec.lock
+          echo "INTEGRATION_LOCK_END"
+
