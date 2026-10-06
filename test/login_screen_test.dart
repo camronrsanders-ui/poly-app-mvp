@@ -67,7 +67,8 @@ void main() {
         required String email,
         required String password,
       }) async {
-        // Capture verbatim screen input. Trimming remains an AuthService\n        // concern.
+        // Capture verbatim screen input. Trimming remains an AuthService
+        // concern.
         expect(email, 'cam@example.com');
         expect(password, 'password123');
       },
