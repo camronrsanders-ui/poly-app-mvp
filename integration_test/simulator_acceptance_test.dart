@@ -120,13 +120,29 @@ void main() {
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
 
-        final terms = find.text('I am 18+ and accept the Terms of Use');
-        await tester.ensureVisible(terms);
-        await tester.tap(terms);
+        final termsTile = find.widgetWithText(
+          CheckboxListTile,
+          'I am 18+ and accept the Terms of Use',
+        );
+        await tester.scrollUntilVisible(
+          termsTile,
+          120,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(termsTile);
+        await tester.pumpAndSettle();
 
-        final guidelines = find.text('I accept the Community Guidelines');
-        await tester.ensureVisible(guidelines);
-        await tester.tap(guidelines);
+        final guidelinesTile = find.widgetWithText(
+          CheckboxListTile,
+          'I accept the Community Guidelines',
+        );
+        await tester.scrollUntilVisible(
+          guidelinesTile,
+          120,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(guidelinesTile);
+        await tester.pumpAndSettle();
 
         final verifyLabel = find.text('Verify & continue');
         await tester.scrollUntilVisible(
