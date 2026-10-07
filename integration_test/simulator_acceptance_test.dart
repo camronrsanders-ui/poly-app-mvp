@@ -120,6 +120,8 @@ void main() {
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
 
+        final complianceScroll = find.byType(Scrollable).first;
+
         final termsTile = find.widgetWithText(
           CheckboxListTile,
           'I am 18+ and accept the Terms of Use',
@@ -127,10 +129,17 @@ void main() {
         await tester.scrollUntilVisible(
           termsTile,
           120,
-          scrollable: find.byType(Scrollable).first,
+          scrollable: complianceScroll,
         );
-        await tester.tap(termsTile);
+        await tester.ensureVisible(termsTile);
         await tester.pumpAndSettle();
+        final termsCheckbox = find.descendant(
+          of: termsTile,
+          matching: find.byType(Checkbox),
+        );
+        await tester.tap(termsCheckbox);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(termsCheckbox).value, isTrue);
 
         final guidelinesTile = find.widgetWithText(
           CheckboxListTile,
@@ -139,10 +148,17 @@ void main() {
         await tester.scrollUntilVisible(
           guidelinesTile,
           120,
-          scrollable: find.byType(Scrollable).first,
+          scrollable: complianceScroll,
         );
-        await tester.tap(guidelinesTile);
+        await tester.ensureVisible(guidelinesTile);
         await tester.pumpAndSettle();
+        final guidelinesCheckbox = find.descendant(
+          of: guidelinesTile,
+          matching: find.byType(Checkbox),
+        );
+        await tester.tap(guidelinesCheckbox);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(guidelinesCheckbox).value, isTrue);
 
         final verifyLabel = find.text('Verify & continue');
         await tester.scrollUntilVisible(
