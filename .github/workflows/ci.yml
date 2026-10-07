@@ -532,7 +532,6 @@ jobs:
 
           REQUIRED_DIRS=(
             "$SDK_ROOT/platform-tools"
-            "$SDK_ROOT/emulator"
             "$SDK_ROOT/cmdline-tools/latest/bin"
           )
 
@@ -545,19 +544,18 @@ jobs:
           done
 
           test -x "$SDK_ROOT/platform-tools/adb"
-          test -x "$SDK_ROOT/emulator/emulator"
           test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
 
-          echo "✓ Android SDK tools exposed from $SDK_ROOT"
+          echo "✓ Android SDK command-line tools exposed from $SDK_ROOT"
       - name: Boot isolated Android emulator
         shell: bash
         run: |
           set -euo pipefail
 
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           SDKMANAGER="$(command -v sdkmanager)"
           AVDMANAGER="$(command -v avdmanager)"
-          EMULATOR="$(command -v emulator)"
           IMAGE="system-images;android-35;google_apis;x86_64"
           AVD_NAME="polycircle_ci"
 
@@ -567,6 +565,14 @@ jobs:
 
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" "platform-tools" "emulator" "$IMAGE"
+
+          EMULATOR="$SDK_ROOT/emulator/emulator"
+          if [[ ! -x "$EMULATOR" ]]; then
+            echo "Android emulator binary was not installed at $EMULATOR." >&2
+            exit 1
+          fi
+
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
           echo "no" | "$AVDMANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE"
 
           nohup "$EMULATOR"             -avd "$AVD_NAME"             -no-window             -no-audio             -no-boot-anim             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > "$RUNNER_TEMP/polycircle-android-emulator.log" 2>&1 &
@@ -713,9 +719,18 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p build/android_acceptance
-          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" exec-out screencap -p             > build/android_acceptance/99-final-emulator.png || true
-          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" logcat -d -t 1200             > build/android_acceptance/99-final-logcat.txt || true
+
+          if [[ -z "${ANDROID_ACCEPTANCE_DEVICE_ID:-}" ]] || ! command -v adb >/dev/null 2>&1; then
+            echo "Android emulator was not available; skipping device evidence capture."
+            exit 0
+          fi
+
+          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" exec-out screencap -p \
+            > build/android_acceptance/99-final-emulator.png || true
+          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" logcat -d -t 1200 \
+            > build/android_acceptance/99-final-logcat.txt || true
       - name: Upload Android emulator acceptance evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
