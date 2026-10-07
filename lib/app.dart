@@ -139,8 +139,9 @@ class _SessionGateState extends State<_SessionGate> {
               return _AccountUnavailableScreen(onSignOut: _auth.signOut);
             }
             if (!accountHasCurrentCompliance(account)) {
-              final useAcceptanceAdultSignal =
-                  kDebugMode && useFirebaseEmulators && _acceptanceAdultSignalEnabled;
+              final useAcceptanceAdultSignal = kDebugMode &&
+                  useFirebaseEmulators &&
+                  _acceptanceAdultSignalEnabled;
               return ComplianceGateScreen(
                 onSignOut: _auth.signOut,
                 requestAdultSignal: useAcceptanceAdultSignal
