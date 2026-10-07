@@ -210,9 +210,15 @@ void main() {
       await openNavTab(tester, 'Profile');
       await waitForFinder(
         tester,
-        find.text('Cam, 29'),
-        description: 'self profile preview',
+        find.text('View my profile'),
+        description: 'self profile screen',
         maxPumps: 160,
+      );
+      final selfProfileName = find.text('Cam, 29');
+      await tester.scrollUntilVisible(
+        selfProfileName,
+        220,
+        scrollable: find.byType(Scrollable).first,
       );
       await takeAcceptanceScreenshot(binding, tester, '08-profile');
 
