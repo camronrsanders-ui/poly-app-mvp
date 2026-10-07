@@ -383,6 +383,7 @@ jobs:
               "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
               "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
               "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
               "--no-pub",
           ]
 
@@ -672,6 +673,7 @@ jobs:
               "--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2",
               "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
               "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
               "--no-pub",
           ]
 

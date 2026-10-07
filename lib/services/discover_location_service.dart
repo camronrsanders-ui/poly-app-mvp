@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../config/firebase_runtime.dart';
 
 enum DiscoverLocationStatus {
   ready,
@@ -92,9 +95,24 @@ class PlatformDiscoverLocationProvider implements DiscoverLocationProvider {
 
   static const _channel = MethodChannel('com.polycircle.app/discover_location');
   static const _timeout = Duration(seconds: 18);
+  static const _acceptanceLocationEnabled = bool.fromEnvironment(
+    'POLYCIRCLE_ACCEPTANCE_LOCATION',
+    defaultValue: false,
+  );
 
   @override
   Future<DiscoverLocationOutcome> requestCurrentLocation() async {
+    if (kDebugMode && useFirebaseEmulators && _acceptanceLocationEnabled) {
+      return DiscoverLocationOutcome(
+        DiscoverLocationStatus.ready,
+        sample: DiscoverLocationSample(
+          latitude: 12.3456,
+          longitude: -45.6789,
+          accuracyMeters: 5,
+          observedAt: DateTime.now(),
+        ),
+      );
+    }
     try {
       final value = await _channel
           .invokeMethod<Object?>('requestCurrentLocation')
