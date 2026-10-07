@@ -11,10 +11,30 @@ import 'screens/main_shell.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/account_service.dart';
 import 'services/auth_service.dart';
+import 'services/age_assurance_service.dart';
 import 'services/profile_service.dart';
 import 'theme/app_theme.dart';
 
 typedef DeleteAccountAction = Future<void> Function();
+
+const bool _acceptanceAdultSignalEnabled = bool.fromEnvironment(
+  'POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL',
+  defaultValue: false,
+);
+
+Future<AgeAssuranceResult> _requestAcceptanceAdultSignal() async {
+  final method = defaultTargetPlatform == TargetPlatform.android
+      ? 'play_age_signals'
+      : 'apple_declared_age_range';
+  return AgeAssuranceResult(
+    decision: AgeAssuranceDecision.adult,
+    method: method,
+    lowerBound: polycircleMinimumAge,
+    platformStatus: 'shared',
+    platformSource: 'local_emulator',
+    regulatedRegion: false,
+  );
+}
 
 class PolycircleApp extends StatelessWidget {
   const PolycircleApp({super.key});
@@ -119,7 +139,16 @@ class _SessionGateState extends State<_SessionGate> {
               return _AccountUnavailableScreen(onSignOut: _auth.signOut);
             }
             if (!accountHasCurrentCompliance(account)) {
-              return ComplianceGateScreen(onSignOut: _auth.signOut);
+              final useAcceptanceAdultSignal =
+                  kDebugMode &&
+                  useFirebaseEmulators &&
+                  _acceptanceAdultSignalEnabled;
+              return ComplianceGateScreen(
+                onSignOut: _auth.signOut,
+                requestAdultSignal: useAcceptanceAdultSignal
+                    ? _requestAcceptanceAdultSignal
+                    : null,
+              );
             }
             if (account['onboardingComplete'] != true) {
               return const OnboardingScreen(onComplete: _noop);

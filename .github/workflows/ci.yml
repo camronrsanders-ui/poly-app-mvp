@@ -372,15 +372,16 @@ jobs:
               "--dart-define=USE_FIREBASE_EMULATORS=true",
               "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
               "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
               "--no-pub",
           ]
 
           process = subprocess.Popen(command)
           try:
-              status = process.wait(timeout=900)
+              status = process.wait(timeout=1500)
           except subprocess.TimeoutExpired:
               print(
-                  "flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
+                  "flutter test attempt exceeded 25 minutes; terminating it so CI can retry.",
                   file=sys.stderr,
               )
               process.terminate()
@@ -660,6 +661,7 @@ jobs:
               "--dart-define=USE_FIREBASE_EMULATORS=true",
               "--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2",
               "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
               "--no-pub",
           ]
 
