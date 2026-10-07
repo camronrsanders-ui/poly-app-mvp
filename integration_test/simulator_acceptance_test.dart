@@ -75,7 +75,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'seeded iPhone simulator completes the pre-billing core journey',
+    'seeded device emulator completes the pre-billing core journey',
     (tester) async {
       await app.main();
 
