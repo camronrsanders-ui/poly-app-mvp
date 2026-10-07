@@ -661,11 +661,16 @@ jobs:
             echo "Starting Android flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" <<'PY'
+            python3 - "$DEVICE_ID" "$attempt" <<'PY'
+          import pathlib
           import subprocess
           import sys
 
           device_id = sys.argv[1]
+          attempt = sys.argv[2]
+          log_path = pathlib.Path(
+              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
+          )
           command = [
               "flutter",
               "test",
