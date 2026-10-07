@@ -524,6 +524,32 @@ jobs:
             "configuration_version": "1"
           }
           JSON
+      - name: Expose Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+
+          REQUIRED_DIRS=(
+            "$SDK_ROOT/platform-tools"
+            "$SDK_ROOT/emulator"
+            "$SDK_ROOT/cmdline-tools/latest/bin"
+          )
+
+          for dir in "${REQUIRED_DIRS[@]}"; do
+            if [[ ! -d "$dir" ]]; then
+              echo "Required Android SDK directory is missing: $dir" >&2
+              exit 1
+            fi
+            echo "$dir" >> "$GITHUB_PATH"
+          done
+
+          test -x "$SDK_ROOT/platform-tools/adb"
+          test -x "$SDK_ROOT/emulator/emulator"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+
+          echo "✓ Android SDK tools exposed from $SDK_ROOT"
       - name: Boot isolated Android emulator
         shell: bash
         run: |
