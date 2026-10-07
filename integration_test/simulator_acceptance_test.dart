@@ -128,12 +128,13 @@ void main() {
         await tester.ensureVisible(guidelines);
         await tester.tap(guidelines);
 
-        final verify = find.widgetWithText(
-          FilledButton,
-          'Verify & continue',
+        final verifyLabel = find.text('Verify & continue');
+        await tester.scrollUntilVisible(
+          verifyLabel,
+          200,
+          scrollable: find.byType(Scrollable).first,
         );
-        await tester.ensureVisible(verify);
-        await tester.tap(verify);
+        await tester.tap(verifyLabel);
       }
 
       await waitForFinder(
