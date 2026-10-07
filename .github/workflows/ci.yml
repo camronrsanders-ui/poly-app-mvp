@@ -558,6 +558,11 @@ jobs:
           AVDMANAGER="$(command -v avdmanager)"
           IMAGE="system-images;android-35;google_apis;x86_64"
           AVD_NAME="polycircle_ci"
+          AVD_HOME="$RUNNER_TEMP/android-avd"
+
+          mkdir -p "$AVD_HOME"
+          export ANDROID_AVD_HOME="$AVD_HOME"
+          echo "ANDROID_AVD_HOME=$AVD_HOME" >> "$GITHUB_ENV"
 
           if [[ -e /dev/kvm ]]; then
             sudo chmod 666 /dev/kvm || true
@@ -573,8 +578,16 @@ jobs:
           fi
 
           echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
-          echo "no" | "$AVDMANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE"
+          printf 'no\n' | "$AVDMANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE"
 
+          if ! "$EMULATOR" -list-avds | grep -Fxq "$AVD_NAME"; then
+            echo "Android AVD '$AVD_NAME' was not created in $ANDROID_AVD_HOME." >&2
+            "$AVDMANAGER" list avd >&2 || true
+            find "$ANDROID_AVD_HOME" -maxdepth 2 -type f -print >&2 || true
+            exit 1
+          fi
+
+          echo "✓ Android AVD created: $AVD_NAME"
           nohup "$EMULATOR"             -avd "$AVD_NAME"             -no-window             -no-audio             -no-boot-anim             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > "$RUNNER_TEMP/polycircle-android-emulator.log" 2>&1 &
 
           DEVICE_ID=""
