@@ -366,11 +366,16 @@ jobs:
             echo "Starting iOS flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" <<'PY'
+            python3 - "$DEVICE_ID" "$attempt" <<'PY'
+          import pathlib
           import subprocess
           import sys
 
           device_id = sys.argv[1]
+          attempt = sys.argv[2]
+          log_path = pathlib.Path(
+              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
+          )
           command = [
               "flutter",
               "test",
@@ -677,21 +682,32 @@ jobs:
               "--no-pub",
           ]
 
-          process = subprocess.Popen(command)
-          try:
-              status = process.wait(timeout=900)
-          except subprocess.TimeoutExpired:
-              print(
-                  "Android flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
-                  file=sys.stderr,
+          with log_path.open("w", encoding="utf-8") as log_file:
+              process = subprocess.Popen(
+                  command,
+                  stdout=log_file,
+                  stderr=subprocess.STDOUT,
+                  text=True,
               )
-              process.terminate()
               try:
-                  process.wait(timeout=10)
+                  status = process.wait(timeout=900)
               except subprocess.TimeoutExpired:
-                  process.kill()
-                  process.wait()
-              sys.exit(124)
+                  print(
+                      "Android flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
+                      file=sys.stderr,
+                  )
+                  process.terminate()
+                  try:
+                      process.wait(timeout=10)
+                  except subprocess.TimeoutExpired:
+                      process.kill()
+                      process.wait()
+                  status = 124
+
+          try:
+              sys.stdout.write(log_path.read_text(encoding="utf-8"))
+          except OSError as error:
+              print(f"Could not read Android flutter-test log: {error}", file=sys.stderr)
 
           sys.exit(status)
           PY
@@ -707,10 +723,10 @@ jobs:
             fi
 
             echo "First Android flutter test attempt stalled; capturing diagnostics before one retry."
-            adb -s "$DEVICE_ID" exec-out screencap -p               > "build/android_acceptance/98-test-timeout-attempt-$attempt.png" || true
-            adb -s "$DEVICE_ID" logcat -d -t 1000               > "build/android_acceptance/98-test-timeout-attempt-$attempt.log" || true
-            adb -s "$DEVICE_ID" shell am force-stop com.polycircle.app.staging || true
-            adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456
+            timeout 20s adb -s "$DEVICE_ID" exec-out screencap -p               > "build/android_acceptance/98-test-timeout-attempt-$attempt.png" || true
+            timeout 20s adb -s "$DEVICE_ID" logcat -d -t 1000               > "build/android_acceptance/98-test-timeout-attempt-$attempt.log" || true
+            timeout 10s adb -s "$DEVICE_ID" shell am force-stop               com.polycircle.app.staging || true
+            timeout 10s adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456 || true
             sleep 3
           done
           BASH
@@ -754,9 +770,9 @@ jobs:
             exit 0
           fi
 
-          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" exec-out screencap -p \
+          timeout 20s adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" exec-out screencap -p \
             > build/android_acceptance/99-final-emulator.png || true
-          adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" logcat -d -t 1200 \
+          timeout 20s adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" logcat -d -t 1200 \
             > build/android_acceptance/99-final-logcat.txt || true
       - name: Upload Android emulator acceptance evidence
         if: always()
