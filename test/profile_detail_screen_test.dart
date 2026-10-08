@@ -89,6 +89,53 @@ void main() {
   );
 
   testWidgets(
+    'Profile report reason fits a phone viewport and Cancel has no effect',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var reportCalls = 0;
+      await pumpProfile(
+        tester,
+        ({
+          required String reportedUid,
+          required String reason,
+          required String details,
+          required String contentType,
+          String? contentId,
+          String? conversationId,
+        }) async {
+          reportCalls += 1;
+        },
+      );
+
+      await openReport(tester);
+      expect(tester.takeException(), isNull);
+
+      final reasonSelector = find.byType(DropdownButtonFormField<String>);
+      expect(reasonSelector, findsOneWidget);
+      expect(
+        tester.widget<DropdownButtonFormField<String>>(reasonSelector).isExpanded,
+        isTrue,
+      );
+
+      await tester.tap(find.text('Harassment'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Child safety / underage concern'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(reportCalls, 0);
+    },
+  );
+
+  testWidgets(
     'Profile report requires explicit submission',
     (tester) async {
       var reportCalls = 0;

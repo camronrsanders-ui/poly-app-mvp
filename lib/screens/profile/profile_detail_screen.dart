@@ -213,12 +213,17 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             children: [
               DropdownButtonFormField<String>(
                 initialValue: reason,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Reason'),
                 items: reasons.entries
                     .map(
                       (entry) => DropdownMenuItem(
                         value: entry.key,
-                        child: Text(entry.value),
+                        child: Text(
+                          entry.value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(growable: false),
