@@ -127,8 +127,10 @@ The following remain release blockers and must not be marked complete based only
 
 Closing an issue, having backend scaffolding, or making the UI visible is never sufficient to enable Private Vault.
 
-## Merge policy
-`restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests. Keep PR #4 in draft while staging/payment-dependent, legal, and operational gates remain outstanding.
+## Merge policy and post-merge release boundary
+PR #4 (`restart-foundation`) was merged into protected `main` as merge commit `fd239f169e230a029e1dc7f39faf4a88fc0cfa9b`, after exact-head CI #1657 and Dependency Audit #1005 passed. This completed a **source-code foundation merge**, not the staged, operational, physical-device, external-beta, billing, or public-launch gates.
+
+Subsequent security-sensitive changes should land through reviewed pull requests with the relevant checks green. Maintain the release blockers and feature gates elsewhere in this document. Manual visual/button-by-button acceptance is tracked in `docs/prebilling-ui-control-acceptance.md`. Do not provision paid Firebase resources, deploy protected backend services, distribute release builds, or enable feature flags solely because PR #4 merged.
 
 ## Native environment separation
 
