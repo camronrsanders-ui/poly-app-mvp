@@ -1,0 +1,790 @@
+name: Polycircle CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: polycircle-ci-v2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter analyze and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Install locked Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Check Dart formatting
+        shell: bash
+        run: |
+          set +e
+          dart format --output=none --set-exit-if-changed lib test integration_test test_driver
+          STATUS=$?
+          set -e
+          if [[ "$STATUS" -ne 0 ]]; then
+            dart format lib test integration_test test_driver
+            git diff -- lib test integration_test test_driver
+          fi
+          exit "$STATUS"
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+      - name: Build Android production and staging debug APKs
+        shell: bash
+        run: |
+          PRODUCTION_CONFIG="android/app/src/production/google-services.json"
+          STAGING_CONFIG="android/app/src/staging/google-services.json"
+
+          if [[ -e android/app/google-services.json || -e "$PRODUCTION_CONFIG" || -e "$STAGING_CONFIG" ]]; then
+            echo "Refusing to overwrite an existing Android Firebase config in CI." >&2
+            exit 1
+          fi
+
+          mkdir -p android/app/src/production android/app/src/staging
+          trap 'rm -f "$PRODUCTION_CONFIG" "$STAGING_CONFIG"' EXIT
+
+          cat > "$PRODUCTION_CONFIG" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "demo-polycircle",
+              "storage_bucket": "demo-polycircle.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                "android_client_info": {
+                  "package_name": "com.polycircle.app"
+                }
+              },
+              "api_key": [{
+                "current_key": "demo-not-a-real-api-key"
+              }]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+          cat > "$STAGING_CONFIG" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000001",
+              "project_id": "demo-polycircle-staging",
+              "storage_bucket": "demo-polycircle-staging.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000001:android:0000000000000000000001",
+                "android_client_info": {
+                  "package_name": "com.polycircle.app.staging"
+                }
+              },
+              "api_key": [{
+                "current_key": "demo-not-a-real-api-key"
+              }]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+          flutter build apk --flavor production --debug --no-pub
+          flutter build apk --flavor staging --debug --no-pub
+
+
+  ios-regression:
+    name: iOS simulator build regression
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Install locked Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Normalize and validate iOS native host
+        run: bash tool/ensure_ios_runtime.sh
+      - name: Build iOS production and staging simulator apps
+        shell: bash
+        run: |
+          PRODUCTION_PLIST="ios/Runner/Firebase/production/GoogleService-Info.plist"
+          STAGING_PLIST="ios/Runner/Firebase/staging/GoogleService-Info.plist"
+
+          if [[ -e ios/Runner/GoogleService-Info.plist || -e "$PRODUCTION_PLIST" || -e "$STAGING_PLIST" ]]; then
+            echo "Refusing to overwrite an existing iOS Firebase config in CI." >&2
+            exit 1
+          fi
+
+          mkdir -p ios/Runner/Firebase/production ios/Runner/Firebase/staging
+          trap 'rm -f "$PRODUCTION_PLIST" "$STAGING_PLIST"' EXIT
+
+          cat > "$PRODUCTION_PLIST" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>PROJECT_ID</key>
+            <string>poly-circle-j5v6dy</string>
+            <key>BUNDLE_ID</key>
+            <string>com.polycircle.app</string>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000000:ios:0000000000000000000000</string>
+          </dict>
+          </plist>
+          PLIST
+
+          cat > "$STAGING_PLIST" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>PROJECT_ID</key>
+            <string>polycircle-staging-82204f</string>
+            <key>BUNDLE_ID</key>
+            <string>com.polycircle.app.staging</string>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000001:ios:0000000000000000000001</string>
+          </dict>
+          </plist>
+          PLIST
+
+          flutter build ios --flavor production --simulator --debug --no-pub
+          flutter build ios --flavor staging --simulator --debug --no-pub
+
+  functions:
+    name: Functions build, test and load
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - name: Install locked dependencies without package scripts
+        run: npm ci --ignore-scripts
+      - name: TypeScript build
+        run: npm run build
+      - name: Check local emulator seed script
+        run: npm run check:seed
+      - name: Run pure backend behavior tests
+        run: npm test
+      - name: Load compiled Functions module
+        env:
+          GCLOUD_PROJECT: demo-polycircle
+          FIREBASE_CONFIG: '{"projectId":"demo-polycircle","storageBucket":"demo-polycircle.appspot.com"}'
+        run: node -e "require('./lib/entry.js'); console.log('Functions module loaded successfully')"
+
+  contracts:
+    name: Client/backend security contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - name: Check development shell scripts
+        run: bash -n tool/*.sh
+      - name: Scan repository for committed secrets and unsafe client paths
+        run: bash tool/security_static_scan.sh
+      - name: Run static contract tests
+        run: node --test tests/contracts/*.test.mjs
+
+  security-rules:
+    name: Firebase security rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install pinned Firebase CLI without package scripts
+        run: npm install -g --ignore-scripts firebase-tools@15.28.1
+      - name: Install locked security test dependencies without package scripts
+        working-directory: tests/security
+        run: npm ci --ignore-scripts
+      - name: Run Firestore and Storage rules tests
+        run: firebase emulators:exec --project demo-polycircle --only firestore,storage "npm --prefix tests/security test"
+
+
+  ios-live-acceptance:
+    name: iOS live simulator acceptance
+    needs: [flutter, ios-regression, functions, contracts, security-rules]
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Install locked Functions dependencies without package scripts
+        run: npm --prefix functions ci --ignore-scripts
+      - name: Build local Functions
+        run: npm --prefix functions run build
+      - name: Install pinned Firebase CLI without package scripts
+        run: npm install -g --ignore-scripts firebase-tools@15.28.1
+      - name: Normalize and validate iOS native host
+        run: bash tool/ensure_ios_runtime.sh
+      - name: Prepare isolated staging Firebase config
+        shell: bash
+        run: |
+          STAGING_PLIST="ios/Runner/Firebase/staging/GoogleService-Info.plist"
+          if [[ -e ios/Runner/GoogleService-Info.plist || -e "$STAGING_PLIST" ]]; then
+            echo "Refusing to overwrite an existing iOS Firebase config in CI." >&2
+            exit 1
+          fi
+
+          mkdir -p ios/Runner/Firebase/staging
+          cat > "$STAGING_PLIST" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>API_KEY</key>
+                        <!-- CI-only fake key. Must stay 39 chars starting with "A":
+                 Firebase Installations validates the format at launch and
+                 crashes the app on a malformed key. -->
+            <string>AIzaSyDemoPolycircleCINotARealKey000000</string>
+            <key>GCM_SENDER_ID</key>
+            <string>000000000001</string>
+            <key>PLIST_VERSION</key>
+            <string>1</string>
+            <key>BUNDLE_ID</key>
+            <string>com.polycircle.app.staging</string>
+            <key>PROJECT_ID</key>
+            <string>polycircle-staging-82204f</string>
+            <key>STORAGE_BUCKET</key>
+            <string>polycircle-staging-82204f.appspot.com</string>
+            <key>IS_ADS_ENABLED</key>
+            <false/>
+            <key>IS_ANALYTICS_ENABLED</key>
+            <false/>
+            <key>IS_APPINVITE_ENABLED</key>
+            <false/>
+            <key>IS_GCM_ENABLED</key>
+            <true/>
+            <key>IS_SIGNIN_ENABLED</key>
+            <true/>
+            <key>GOOGLE_APP_ID</key>
+            <string>1:000000000001:ios:0000000000000000000001</string>
+          </dict>
+          </plist>
+          PLIST
+      - name: Boot isolated iPhone simulator
+        shell: bash
+        run: |
+          DEVICE_ID="$(python3 - <<'PY'
+          import json
+          import subprocess
+
+          payload = json.loads(
+              subprocess.check_output(
+                  ["xcrun", "simctl", "list", "devices", "available", "-j"],
+                  text=True,
+              )
+          )
+          candidates = []
+          for runtime, devices in payload.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  if device.get("isAvailable") and str(device.get("name", "")).startswith("iPhone"):
+                      candidates.append((runtime, device["name"], device["udid"]))
+          if not candidates:
+              raise SystemExit("No available iPhone simulator found.")
+          candidates.sort(reverse=True)
+          print(candidates[0][2])
+          PY
+          )"
+
+          echo "IOS_ACCEPTANCE_DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+      - name: Run local-emulator simulator journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_ID="$IOS_ACCEPTANCE_DEVICE_ID"
+          TEST_RUNNER="$RUNNER_TEMP/polycircle_ios_test.sh"
+
+          cat > "$TEST_RUNNER" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          DEVICE_ID="$1"
+          mkdir -p build/simulator_acceptance
+
+          for attempt in 1 2; do
+            echo "Starting iOS flutter test attempt $attempt/2."
+
+            set +e
+            python3 - "$DEVICE_ID" "$attempt" <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          device_id = sys.argv[1]
+          attempt = sys.argv[2]
+          log_path = pathlib.Path(
+              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
+          )
+          command = [
+              "flutter",
+              "test",
+              "integration_test/simulator_acceptance_test.dart",
+              "-d",
+              device_id,
+              "--flavor",
+              "staging",
+              "--dart-define=USE_FIREBASE_EMULATORS=true",
+              "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
+              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
+              "--no-pub",
+          ]
+
+          process = subprocess.Popen(command)
+          try:
+              status = process.wait(timeout=1500)
+          except subprocess.TimeoutExpired:
+              print(
+                  "flutter test attempt exceeded 25 minutes; terminating it so CI can retry.",
+                  file=sys.stderr,
+              )
+              process.terminate()
+              try:
+                  process.wait(timeout=10)
+              except subprocess.TimeoutExpired:
+                  process.kill()
+                  process.wait()
+              sys.exit(124)
+
+          sys.exit(status)
+          PY
+            STATUS=$?
+            set -e
+
+            if [[ "$STATUS" -eq 0 ]]; then
+              exit 0
+            fi
+
+            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+              exit "$STATUS"
+            fi
+
+            echo "First iOS flutter test attempt stalled; capturing diagnostics before one retry."
+            xcrun simctl io "$DEVICE_ID" screenshot \
+              "build/simulator_acceptance/98-test-timeout-attempt-$attempt.png" || true
+            xcrun simctl spawn "$DEVICE_ID" log show --last 10m --style compact 2>/dev/null \
+              | grep -Ei 'com\.polycircle\.app\.staging|PolycircleStaging|Flutter' \
+              | tail -n 400 \
+              > "build/simulator_acceptance/98-test-timeout-attempt-$attempt.log" || true
+            xcrun simctl terminate "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
+            xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+            sleep 3
+          done
+          BASH
+          chmod +x "$TEST_RUNNER"
+
+          (
+            for attempt in {1..900}; do
+              if xcrun simctl get_app_container "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1; then
+                xcrun simctl privacy "$DEVICE_ID" grant location com.polycircle.app.staging || true
+                xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+                echo "✓ Granted simulator-only location access."
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Simulator app was not installed in time for location permission." >&2
+            exit 1
+          ) &
+          LOCATION_GRANT_PID=$!
+
+          set +e
+          firebase emulators:exec \
+            --project polycircle-staging-82204f \
+            --only auth,firestore,functions,storage \
+            "POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator && bash \"$TEST_RUNNER\" \"$DEVICE_ID\""
+          STATUS=$?
+          set -e
+
+          if kill -0 "$LOCATION_GRANT_PID" >/dev/null 2>&1; then
+            kill "$LOCATION_GRANT_PID" >/dev/null 2>&1 || true
+          fi
+          wait "$LOCATION_GRANT_PID" || true
+          exit "$STATUS"
+      - name: Capture final simulator frame
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p build/simulator_acceptance
+          xcrun simctl io "$IOS_ACCEPTANCE_DEVICE_ID" screenshot \
+            build/simulator_acceptance/99-final-simulator.png || true
+      - name: Upload simulator acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-simulator-acceptance-${{ github.sha }}
+          path: build/simulator_acceptance
+          if-no-files-found: warn
+          retention-days: 7
+
+  android-live-acceptance:
+    name: Android live emulator acceptance
+    needs: [flutter, functions, contracts, security-rules]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Install locked Functions dependencies without package scripts
+        run: npm --prefix functions ci --ignore-scripts
+      - name: Build local Functions
+        run: npm --prefix functions run build
+      - name: Install pinned Firebase CLI without package scripts
+        run: npm install -g --ignore-scripts firebase-tools@15.28.1
+      - name: Prepare isolated Android staging Firebase config
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGING_CONFIG="android/app/src/staging/google-services.json"
+
+          if [[ -e android/app/google-services.json || -e "$STAGING_CONFIG" ]]; then
+            echo "Refusing to overwrite an existing Android Firebase config in CI." >&2
+            exit 1
+          fi
+
+          mkdir -p android/app/src/staging
+          cat > "$STAGING_CONFIG" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000001",
+              "project_id": "polycircle-staging-82204f",
+              "storage_bucket": "polycircle-staging-82204f.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000001:android:0000000000000000000001",
+                "android_client_info": {
+                  "package_name": "com.polycircle.app.staging"
+                }
+              },
+              "api_key": [{
+                "current_key": "AIzaSyDemoPolycircleCINotARealKey000000"
+              }]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+      - name: Expose Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+
+          REQUIRED_DIRS=(
+            "$SDK_ROOT/platform-tools"
+            "$SDK_ROOT/cmdline-tools/latest/bin"
+          )
+
+          for dir in "${REQUIRED_DIRS[@]}"; do
+            if [[ ! -d "$dir" ]]; then
+              echo "Required Android SDK directory is missing: $dir" >&2
+              exit 1
+            fi
+            echo "$dir" >> "$GITHUB_PATH"
+          done
+
+          test -x "$SDK_ROOT/platform-tools/adb"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+
+          echo "✓ Android SDK command-line tools exposed from $SDK_ROOT"
+      - name: Boot isolated Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(command -v sdkmanager)"
+          AVDMANAGER="$(command -v avdmanager)"
+          IMAGE="system-images;android-35;google_apis;x86_64"
+          AVD_NAME="polycircle_ci"
+          AVD_HOME="$RUNNER_TEMP/android-avd"
+
+          mkdir -p "$AVD_HOME"
+          export ANDROID_AVD_HOME="$AVD_HOME"
+          echo "ANDROID_AVD_HOME=$AVD_HOME" >> "$GITHUB_ENV"
+
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm || true
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "emulator" "$IMAGE"
+
+          EMULATOR="$SDK_ROOT/emulator/emulator"
+          if [[ ! -x "$EMULATOR" ]]; then
+            echo "Android emulator binary was not installed at $EMULATOR." >&2
+            exit 1
+          fi
+
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+          printf 'no\n' | "$AVDMANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE"
+
+          if ! "$EMULATOR" -list-avds | grep -Fxq "$AVD_NAME"; then
+            echo "Android AVD '$AVD_NAME' was not created in $ANDROID_AVD_HOME." >&2
+            "$AVDMANAGER" list avd >&2 || true
+            find "$ANDROID_AVD_HOME" -maxdepth 2 -type f -print >&2 || true
+            exit 1
+          fi
+
+          echo "✓ Android AVD created: $AVD_NAME"
+          nohup "$EMULATOR"             -avd "$AVD_NAME"             -no-window             -no-audio             -no-boot-anim             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > "$RUNNER_TEMP/polycircle-android-emulator.log" 2>&1 &
+
+          DEVICE_ID=""
+          for attempt in {1..180}; do
+            DEVICE_ID="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+            if [[ -n "$DEVICE_ID" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$DEVICE_ID" ]]; then
+            echo "Android emulator did not appear in adb." >&2
+            cat "$RUNNER_TEMP/polycircle-android-emulator.log" >&2 || true
+            exit 1
+          fi
+
+          adb -s "$DEVICE_ID" wait-for-device
+          for attempt in {1..180}; do
+            if [[ "$(adb -s "$DEVICE_ID" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+              break
+            fi
+            if [[ "$attempt" -eq 180 ]]; then
+              echo "Android emulator did not finish booting." >&2
+              cat "$RUNNER_TEMP/polycircle-android-emulator.log" >&2 || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          adb -s "$DEVICE_ID" shell input keyevent 82 || true
+          adb -s "$DEVICE_ID" shell settings put global window_animation_scale 0
+          adb -s "$DEVICE_ID" shell settings put global transition_animation_scale 0
+          adb -s "$DEVICE_ID" shell settings put global animator_duration_scale 0
+          adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456
+
+          echo "ANDROID_ACCEPTANCE_DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+          echo "✓ Android acceptance emulator ready: $DEVICE_ID"
+      - name: Run local-emulator Android journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_ID="$ANDROID_ACCEPTANCE_DEVICE_ID"
+          TEST_RUNNER="$RUNNER_TEMP/polycircle_android_test.sh"
+
+          cat > "$TEST_RUNNER" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          DEVICE_ID="$1"
+          mkdir -p build/android_acceptance
+
+          for attempt in 1 2; do
+            echo "Starting Android flutter test attempt $attempt/2."
+
+            set +e
+            python3 - "$DEVICE_ID" "$attempt" <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          device_id = sys.argv[1]
+          attempt = sys.argv[2]
+          log_path = pathlib.Path(
+              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
+          )
+          command = [
+              "flutter",
+              "test",
+              "integration_test/simulator_acceptance_test.dart",
+              "-d",
+              device_id,
+              "--flavor",
+              "staging",
+              "--dart-define=USE_FIREBASE_EMULATORS=true",
+              "--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2",
+              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
+              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
+              "--no-pub",
+          ]
+
+          with log_path.open("w", encoding="utf-8") as log_file:
+              process = subprocess.Popen(
+                  command,
+                  stdout=log_file,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+              )
+              try:
+                  status = process.wait(timeout=900)
+              except subprocess.TimeoutExpired:
+                  print(
+                      "Android flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
+                      file=sys.stderr,
+                  )
+                  process.terminate()
+                  try:
+                      process.wait(timeout=10)
+                  except subprocess.TimeoutExpired:
+                      process.kill()
+                      process.wait()
+                  status = 124
+
+          try:
+              sys.stdout.write(log_path.read_text(encoding="utf-8"))
+          except OSError as error:
+              print(f"Could not read Android flutter-test log: {error}", file=sys.stderr)
+
+          sys.exit(status)
+          PY
+            STATUS=$?
+            set -e
+
+            if [[ "$STATUS" -eq 0 ]]; then
+              exit 0
+            fi
+
+            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+              exit "$STATUS"
+            fi
+
+            echo "First Android flutter test attempt stalled; capturing diagnostics before one retry."
+            timeout 20s adb -s "$DEVICE_ID" exec-out screencap -p               > "build/android_acceptance/98-test-timeout-attempt-$attempt.png" || true
+            timeout 20s adb -s "$DEVICE_ID" logcat -d -t 1000               > "build/android_acceptance/98-test-timeout-attempt-$attempt.log" || true
+            timeout 10s adb -s "$DEVICE_ID" shell am force-stop               com.polycircle.app.staging || true
+            timeout 10s adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456 || true
+            sleep 3
+          done
+          BASH
+          chmod +x "$TEST_RUNNER"
+
+          (
+            for attempt in {1..900}; do
+              if adb -s "$DEVICE_ID" shell pm path com.polycircle.app.staging 2>/dev/null | grep -q '^package:'; then
+                adb -s "$DEVICE_ID" shell pm grant                   com.polycircle.app.staging android.permission.ACCESS_COARSE_LOCATION || true
+                adb -s "$DEVICE_ID" shell pm grant                   com.polycircle.app.staging android.permission.ACCESS_FINE_LOCATION || true
+                adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456
+                echo "✓ Granted Android emulator-only location access."
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Android staging app was not installed in time for location permission." >&2
+            exit 1
+          ) &
+          LOCATION_GRANT_PID=$!
+
+          set +e
+          firebase emulators:exec             --project polycircle-staging-82204f             --only auth,firestore,functions,storage             "POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator && bash \"$TEST_RUNNER\" \"$DEVICE_ID\""
+          STATUS=$?
+          set -e
+
+          if kill -0 "$LOCATION_GRANT_PID" >/dev/null 2>&1; then
+            kill "$LOCATION_GRANT_PID" >/dev/null 2>&1 || true
+          fi
+          wait "$LOCATION_GRANT_PID" || true
+          exit "$STATUS"
+      - name: Capture final Android emulator evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/android_acceptance
+
+          if [[ -z "${ANDROID_ACCEPTANCE_DEVICE_ID:-}" ]] || ! command -v adb >/dev/null 2>&1; then
+            echo "Android emulator was not available; skipping device evidence capture."
+            exit 0
+          fi
+
+          timeout 20s adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" exec-out screencap -p \
+            > build/android_acceptance/99-final-emulator.png || true
+          timeout 20s adb -s "$ANDROID_ACCEPTANCE_DEVICE_ID" logcat -d -t 1200 \
+            > build/android_acceptance/99-final-logcat.txt || true
+      - name: Upload Android emulator acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-emulator-acceptance-${{ github.sha }}
+          path: build/android_acceptance
+          if-no-files-found: warn
+          retention-days: 7
+

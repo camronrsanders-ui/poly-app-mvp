@@ -1,0 +1,69 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+
+# IDE
+.idea/
+.vscode/*.log
+*.iml
+
+# iOS / macOS generated
+Pods/
+.symlinks/
+DerivedData/
+
+# Android generated
+.gradle/
+local.properties
+
+# Node / Firebase Functions
+functions/node_modules/
+functions/lib/
+tests/security/node_modules/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.jks
+*.keystore
+service-account*.json
+serviceAccount*.json
+*service-account-key*.json
+secrets/
+
+# Environment-specific Firebase client configuration. These identifiers are not
+# treated as server secrets, but keeping real project files local prevents an
+# accidental production/staging project binding from being committed during
+# development. Release CI should inject the intended environment explicitly.
+ios/Runner/GoogleService-Info.plist
+ios/Runner/Firebase/*/GoogleService-Info.plist
+android/app/google-services.json
+android/app/src/*/google-services.json
+lib/firebase_options.dart
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Firebase configuration
+.firebaserc
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Local Firebase emulator data
+.local/
