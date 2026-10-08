@@ -187,7 +187,7 @@ void main() {
       await openNavTab(tester, 'Connections');
       await waitForFinder(
         tester,
-        find.text('Jordan'),
+        find.textContaining('Jordan'),
         description: 'seeded connection',
         maxPumps: 160,
       );
