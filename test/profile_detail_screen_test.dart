@@ -116,10 +116,12 @@ void main() {
 
       final reasonSelector = find.byType(DropdownButtonFormField<String>);
       expect(reasonSelector, findsOneWidget);
-      expect(
-        tester.widget<DropdownButtonFormField<String>>(reasonSelector).isExpanded,
-        isTrue,
+      final dropdown = find.descendant(
+        of: reasonSelector,
+        matching: find.byType(DropdownButton<String>),
       );
+      expect(dropdown, findsOneWidget);
+      expect(tester.widget<DropdownButton<String>>(dropdown).isExpanded, isTrue);
 
       await tester.tap(find.text('Harassment'));
       await tester.pumpAndSettle();
