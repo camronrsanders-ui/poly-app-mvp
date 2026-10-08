@@ -100,7 +100,8 @@ test('one-command iOS runner exposes only reviewed local Discover fixture counts
 });
 
 test('one-command iOS runner detects common local setup collisions before Firebase starts', () => {
-  assert.match(iosRunner, /restart-foundation/);
+  assert.match(iosRunner, /BRANCH" != "main"/);
+  assert.doesNotMatch(iosRunner, /active development is on 'restart-foundation'/);
   assert.match(iosRunner, /lsof/);
   for (const port of ['4000', '5001', '8080', '9099', '9199']) {
     assert.match(iosRunner, new RegExp(port));
@@ -169,7 +170,8 @@ test('one-command Android runner refuses incomplete native configuration and kee
 });
 
 test('one-command Android runner performs the same local collision and branch safety checks as iOS', () => {
-  assert.match(androidRunner, /restart-foundation/);
+  assert.match(androidRunner, /BRANCH" != "main"/);
+  assert.doesNotMatch(androidRunner, /active development is on 'restart-foundation'/);
   assert.match(androidRunner, /install_branding\.sh --if-present/);
   assert.match(androidRunner, /dev_preflight\.sh/);
   assert.match(androidRunner, /lsof/);
@@ -177,4 +179,22 @@ test('one-command Android runner performs the same local collision and branch sa
     assert.match(androidRunner, new RegExp(port));
   }
   assert.match(androidRunner, /Close the old emulator\/process first/);
+});
+
+test('explicit local acceptance fixtures remain off by default and simulator-only', () => {
+  for (const runner of [iosRunner, androidRunner]) {
+    assert.match(runner, /POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES:-false/);
+    assert.match(runner, /LOCAL_QA_FIXTURES" == "true"/);
+    assert.match(runner, /--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true/);
+    assert.match(runner, /--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true/);
+    assert.match(runner, /--dart-define=USE_FIREBASE_EMULATORS=true/);
+    assert.match(runner, /QA_DART_DEFINES/);
+    assert.doesNotMatch(runner, /POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES:-true/);
+  }
+  assert.match(iosRunner, /simctl list devices booted/);
+  assert.match(androidRunner, /getprop ro\.kernel\.qemu/);
+  assert.match(androidRunner, /QA_EMULATOR_FLAG" != "1"/);
+  assert.match(androidRunner, /ANDROID_HOST" != "10\.0\.2\.2"/);
+  assert.doesNotMatch(androidRunner, /firebase deploy/);
+  assert.doesNotMatch(iosRunner, /firebase deploy/);
 });

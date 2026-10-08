@@ -11,6 +11,19 @@ Record each check with: exact commit SHA; platform and OS/simulator; device dime
 
 For every **visible enabled** control, confirm a meaningful navigation, mutation, dialog, feedback or accessible disclosure; no inert tap target. Confirm disabled/busy states are visually and semantically disabled, destructive actions require confirmation, retry paths work, duplicate actions are prevented, and navigation/back leaves the app consistent. Avoid real-member data in screenshots.
 
+## Explicit local QA fixture mode (simulators only)
+
+The regular staging-local scripts use real platform age/location integrations by default, even with local Firebase emulators. On some Android emulators, Google Play Age Signals is unavailable or the platform location feed is unreliable. For **manual UI acceptance only**, the local runner can opt in to exactly the same **debug + local Firebase emulator + explicit Dart define** fixtures used by the already-approved CI journey:
+
+```bash
+POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES=true bash tool/run_ios_local.sh "iPhone 17"
+POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES=true bash tool/run_android_local.sh
+```
+
+The toggle defaults to **false**; only the literal value `true` enables the synthetic adult age signal and fictional Discover coordinates (`12.3456,-45.6789`). The iOS launcher requires a booted **iOS Simulator**; the Android launcher requires a verified Android **Emulator** via `adb`, with the standard emulator-only `10.0.2.2` host. Both remain on local Auth/Firestore/Functions/Storage emulators. The app itself additionally requires `kDebugMode && useFirebaseEmulators` before it can use either fixture. A physical device, release build, real platform age assurance, production data, App Check, or real location permission flow is **not validated** by this mode.
+
+Run each platform again **without the fixture toggle** for the real age/location negative and permission-state checks (e.g., unavailable native age signal must fail closed). Do not interpret synthetic fixture success as regulatory assurance, physical-device acceptance, or permission to enable paid services.
+
 ## Acceptance matrix
 
 All manual statuses are **NOT RUN** until verified independently on both platforms.
