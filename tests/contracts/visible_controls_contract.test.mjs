@@ -10,7 +10,7 @@ const screensRoot = path.join(root, 'lib', 'screens');
 // A conditional null callback is valid for disabled/busy controls.
 const callbacks = String.raw`\b(?:onPressed|onTap|onLongPress|onDoubleTap|onSelected|onChanged|onSubmitted|onEditingComplete|onReorder|onDismissed|onAccept)`;
 const directEmpty = new RegExp(
-  callbacks + String.raw`\s*:\s*(?:\([^{};]*\)|[A-Za-z_$][\w$]*)\s*(?:async\s*)?\{\s*\}`,
+  callbacks + String.raw`\s*:\s*(?:\([^(){};]*\)|[A-Za-z_$][\w$]*)\s*(?:async\s*)?\{\s*\}`,
   'gm',
 );
 const meaninglessArrow = new RegExp(
@@ -47,6 +47,7 @@ test('control guard catches literal empty and placeholder handlers', () => {
     'onPressed: submitting ? null : save,',
     'onTap: () => openProfile(),',
     'onChanged: (value) { persist(value); },',
+    'onChanged: (_) => setState(() {}),', // Rebuilds derived controller state.
     'onPressed: null,',
   ]) {
     assert.equal(inertHandlers(example).length, 0, `False positive: ${example}`);
