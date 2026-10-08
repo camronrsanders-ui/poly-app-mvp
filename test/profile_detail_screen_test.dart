@@ -121,7 +121,8 @@ void main() {
         matching: find.byType(DropdownButton<String>),
       );
       expect(dropdown, findsOneWidget);
-      expect(tester.widget<DropdownButton<String>>(dropdown).isExpanded, isTrue);
+      expect(
+          tester.widget<DropdownButton<String>>(dropdown).isExpanded, isTrue);
 
       await tester.tap(find.text('Harassment'));
       await tester.pumpAndSettle();
