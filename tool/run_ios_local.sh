@@ -12,6 +12,12 @@ source "$ROOT_DIR/tool/ensure_java21.sh"
 
 DEVICE="${1:-iPhone 17}"
 FIREBASE_PROJECT_ID="polycircle-staging-82204f"
+LOCAL_QA_FIXTURES="${POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES:-false}"
+if [[ "$LOCAL_QA_FIXTURES" != "true" && "$LOCAL_QA_FIXTURES" != "false" ]]; then
+  printf "POLYCIRCLE_LOCAL_ACCEPTANCE_FIXTURES must be exactly true or false.\n" >&2
+  exit 1
+fi
+QA_DART_DEFINES=""
 DISCOVER_FIXTURE_COUNT="${POLYCIRCLE_DISCOVER_FIXTURE_COUNT:-2}"
 DISCOVER_FIXTURE_RADIUS="${POLYCIRCLE_DISCOVER_FIXTURE_RADIUS:-20}"
 EMULATOR_STATE_DIR="$ROOT_DIR/.local/firebase-emulator-data/$FIREBASE_PROJECT_ID"
@@ -40,8 +46,8 @@ fi
 
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   BRANCH="$(git branch --show-current 2>/dev/null || true)"
-  if [[ -n "$BRANCH" && "$BRANCH" != "restart-foundation" ]]; then
-    printf "⚠ Current branch is '%s'; Polycircle active development is on 'restart-foundation'.\n" "$BRANCH" >&2
+  if [[ -n "$BRANCH" && "$BRANCH" != "main" ]]; then
+    printf "⚠ Testing branch '%s'; compare results with the reviewed main commit before signoff.\n" "$BRANCH" >&2
   fi
 fi
 
@@ -93,6 +99,15 @@ fi
 
 printf '✓ Resolved launch target: %s (%s)\n' "$DEVICE" "$DEVICE_ID"
 
+if [[ "$LOCAL_QA_FIXTURES" == "true" ]]; then
+  if ! xcrun simctl list devices booted | grep -F "$DEVICE_ID" >/dev/null; then
+    printf "Acceptance fixtures require a booted iOS Simulator; '%s' is not a booted simulator.\n" "$DEVICE_ID" >&2
+    exit 1
+  fi
+  QA_DART_DEFINES=" --dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true --dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true"
+  printf '⚠ Acceptance-only age/location fixtures enabled for this local iOS Simulator and Firebase emulators.\n'
+fi
+
 # Match the guarded emulator fixture's fictional North Atlantic origin. This
 # configures only the selected simulator; it does not read or use Mac location.
 xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
@@ -111,7 +126,7 @@ else
   printf "⚠ lsof is unavailable; emulator port pre-check skipped.\n" >&2
 fi
 
-RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run --flavor staging -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1"
+RUN_COMMAND="FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=$DISCOVER_FIXTURE_COUNT POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=$DISCOVER_FIXTURE_RADIUS GCLOUD_PROJECT=$FIREBASE_PROJECT_ID npm --prefix functions run seed:emulator && flutter run --flavor staging -d \"$DEVICE_ID\" --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1$QA_DART_DEFINES"
 
 firebase emulators:exec \
   --project "$FIREBASE_PROJECT_ID" \

@@ -237,6 +237,45 @@ void main() {
   );
 
   testWidgets(
+    'Create Circle enables only for a nonblank name and updates as text changes',
+    (tester) async {
+      var creates = 0;
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[
+          connection('alex', 'Alex'),
+        ],
+        createCircleAction: (name) async {
+          creates += 1;
+          throw StateError('submit should remain disabled');
+        },
+      );
+
+      await tester.tap(find.text('New'));
+      await tester.pumpAndSettle();
+
+      final createButton = find.widgetWithText(FilledButton, 'Create Circle');
+      final nameField = find.widgetWithText(TextField, 'Circle name');
+
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+
+      await tester.enterText(nameField, '   ');
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+
+      await tester.enterText(nameField, ' Boston Crew ');
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNotNull);
+
+      await tester.enterText(nameField, ' ');
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+      expect(creates, 0);
+    },
+  );
+
+  testWidgets(
     'Create Circle sends the trimmed name and reports success',
     (tester) async {
       String? createdName;

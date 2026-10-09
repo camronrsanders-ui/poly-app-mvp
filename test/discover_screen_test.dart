@@ -390,6 +390,53 @@ void main() {
   });
 
   for (final action in ['Pass', 'Connect']) {
+    testWidgets('$action updates remaining orbit count without a refresh',
+        (tester) async {
+      final repository = _FakeDiscoverRepository();
+      final location = _FakeLocationProvider(_readyLocation());
+      final actedOn = <String>[];
+      await tester.pumpWidget(
+        _app(
+          repository,
+          location,
+          passUser: (uid) async {
+            actedOn.add(uid);
+          },
+          likeUser: (uid) async {
+            actedOn.add(uid);
+            return false;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 / 2'), findsOneWidget);
+      await _nextProfiles(tester, 1);
+      expect(find.text('2 / 2'), findsOneWidget);
+
+      final actionKey = action == 'Pass'
+          ? const ValueKey('discovery-pass')
+          : const ValueKey('discovery-connect');
+      await tester.drag(
+        find.byKey(const ValueKey('discover-world-scroll-view')),
+        const Offset(0, -500),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(actionKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(actionKey));
+      await tester.pumpAndSettle();
+
+      expect(actedOn, ['profile-1']);
+      expect(find.text('Profile 0, 25'), findsOneWidget);
+      expect(find.text('Profile 1, 26'), findsNothing);
+      expect(find.text('1 / 1'), findsOneWidget);
+      expect(find.text('1 / 2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final action in ['Pass', 'Connect']) {
     testWidgets('$action at the first batch edge keeps the next profile stable',
         (tester) async {
       final repository = _FakeDiscoverRepository(
@@ -427,6 +474,7 @@ void main() {
 
       expect(actedOn, ['profile-14']);
       expect(find.text('Profile 15, 40'), findsOneWidget);
+      expect(find.text('15 / 29'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
