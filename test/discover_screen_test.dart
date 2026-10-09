@@ -417,7 +417,13 @@ void main() {
       final actionKey = action == 'Pass'
           ? const ValueKey('discovery-pass')
           : const ValueKey('discovery-connect');
+      await tester.drag(
+        find.byKey(const ValueKey('discover-world-scroll-view')),
+        const Offset(0, -500),
+      );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(actionKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(actionKey));
       await tester.pumpAndSettle();
 
