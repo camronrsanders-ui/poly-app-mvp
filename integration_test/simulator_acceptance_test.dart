@@ -66,6 +66,13 @@ Future<void> takeAcceptanceScreenshot(
   String name,
 ) async {
   await tester.pump(const Duration(milliseconds: 300));
+  final widgetException = tester.takeException();
+  if (widgetException != null) {
+    throw TestFailure(
+      'Unexpected widget/layout error at acceptance checkpoint $name: '
+      '$widgetException',
+    );
+  }
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
   if (!_captureAcceptanceScreenshots) return;
   await binding.takeScreenshot(name);
