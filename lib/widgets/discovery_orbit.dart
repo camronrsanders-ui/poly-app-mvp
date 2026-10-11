@@ -1059,12 +1059,18 @@ class _DiscoveryOrbitState extends State<DiscoveryOrbit>
                               acting ? Colors.white24 : const Color(0xFF836B90),
                         ),
                         minimumSize: const Size.fromHeight(48),
+                        // Preserve the 48px tap target while leaving room
+                        // for the four-letter label on 320px devices.
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       icon: const Icon(Icons.close_rounded, size: 19),
-                      label: const Text('Pass'),
+                      label: const Text('Pass', softWrap: false),
                     ),
                   ),
                   const SizedBox(width: 9),

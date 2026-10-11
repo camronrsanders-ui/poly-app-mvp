@@ -854,38 +854,51 @@ class _DiscoverPagingMessage extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: semantic.border),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: AppTheme.accentBlue),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 20, color: AppTheme.accentBlue),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: semantic.textSecondary,
+                          height: 1.35,
+                        ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: semantic.textSecondary,
-                      height: 1.35,
-                    ),
-              ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xxs,
+              children: [
+                TextButton(onPressed: onAction, child: Text(actionLabel)),
+                if (secondaryLabel != null && onSecondary != null)
+                  TextButton(
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.xs),
-            TextButton(onPressed: onAction, child: Text(actionLabel)),
-            if (secondaryLabel != null && onSecondary != null)
-              TextButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel!),
-              ),
           ],
         ),
       ),

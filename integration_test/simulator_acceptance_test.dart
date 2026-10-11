@@ -66,6 +66,13 @@ Future<void> takeAcceptanceScreenshot(
   String name,
 ) async {
   await tester.pump(const Duration(milliseconds: 300));
+  final widgetException = tester.takeException();
+  if (widgetException != null) {
+    throw TestFailure(
+      'Unexpected widget/layout error at acceptance checkpoint $name: '
+      '$widgetException',
+    );
+  }
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
   if (!_captureAcceptanceScreenshots) return;
   await binding.takeScreenshot(name);
@@ -183,6 +190,42 @@ void main() {
       );
       expect(find.text('Pass'), findsOneWidget);
       await takeAcceptanceScreenshot(binding, tester, '03-discover');
+
+      // Live iOS/Android regression for the two-person Discover fixture:
+      // moving to Riley then passing must update the count immediately.
+      await waitForFinder(
+        tester,
+        find.text('1 / 2'),
+        description: 'initial two-person Discover counter',
+      );
+      await tester.tap(
+        find.byKey(const Key('discovery-next-profile')),
+      );
+      await waitForFinder(
+        tester,
+        find.text('2 / 2'),
+        description: 'second Discover profile counter',
+      );
+
+      final passAction = find.byKey(const Key('discovery-pass'));
+      await tester.drag(
+        find.byKey(const Key('discover-world-scroll-view')),
+        const Offset(0, -500),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.ensureVisible(passAction);
+      await tester.tap(passAction);
+      await waitForFinder(
+        tester,
+        find.text('1 / 1'),
+        description: 'updated Discover counter immediately after Pass',
+      );
+      expect(find.text('2 / 2'), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '03a-discover-pass-counter',
+      );
 
       await openNavTab(tester, 'Connections');
       await waitForFinder(
