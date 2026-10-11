@@ -251,6 +251,14 @@ void main() {
         description: 'My Circle universe',
         maxPumps: 160,
       );
+      // The Universe heading is available even when FutureBuilder is still
+      // showing its spinner. Do not accept a loading view as Circle evidence.
+      await waitForFinder(
+        tester,
+        find.byKey(const ValueKey('mine')),
+        description: 'rendered My Circle orbit rather than loading state',
+        maxPumps: 160,
+      );
       await takeAcceptanceScreenshot(binding, tester, '05-circle');
 
       await openNavTab(tester, 'Messages');
