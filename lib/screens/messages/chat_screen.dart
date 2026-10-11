@@ -1300,18 +1300,32 @@ class _MessageComposer extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
-            SizedBox.square(
-              dimension: AppTheme.minimumTapTarget,
-              child: IconButton.filled(
-                onPressed: sending ? null : onSend,
-                icon: sending
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_rounded),
-                tooltip: 'Send message',
-              ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                final canSend = !sending && value.text.trim().isNotEmpty;
+                return SizedBox.square(
+                  dimension: AppTheme.minimumTapTarget,
+                  child: IconButton.filled(
+                    onPressed: canSend ? onSend : null,
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      disabledBackgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      disabledForegroundColor:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    icon: sending
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                    tooltip: 'Send message',
+                  ),
+                );
+              },
             ),
           ],
         ),

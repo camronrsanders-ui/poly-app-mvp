@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/messages/chat_screen.dart';
@@ -60,6 +62,78 @@ Future<void> openSafetyMenu(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'Send is disabled for blank or whitespace-only drafts and after send',
+    (tester) async {
+      var sends = 0;
+      await pumpChat(
+        tester,
+        sendAction: ({required conversationId, required text}) async {
+          sends += 1;
+        },
+      );
+
+      final composer =
+          find.byKey(const Key('conversation-message-composer'));
+      final send = find.byTooltip('Send message');
+      final sendButton = find.ancestor(
+        of: send,
+        matching: find.byType(IconButton),
+      );
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+
+      await tester.enterText(composer, '   ');
+      await tester.pump();
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+      expect(sends, 0);
+
+      await tester.enterText(composer, ' Hello ');
+      await tester.pump();
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNotNull);
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(sends, 1);
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Send becomes disabled during an in-flight message submission',
+    (tester) async {
+      final pending = Completer<void>();
+      var sends = 0;
+      await pumpChat(
+        tester,
+        sendAction: ({required conversationId, required text}) async {
+          sends += 1;
+          await pending.future;
+        },
+      );
+
+      final composer =
+          find.byKey(const Key('conversation-message-composer'));
+      final send = find.byTooltip('Send message');
+      final sendButton = find.ancestor(
+        of: send,
+        matching: find.byType(IconButton),
+      );
+      await tester.enterText(composer, 'Hello');
+      await tester.pump();
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNotNull);
+      await tester.tap(send);
+      await tester.pump();
+      expect(sends, 1);
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(sends, 1);
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'Send message trims text and invokes the trusted send action',
     (tester) async {
