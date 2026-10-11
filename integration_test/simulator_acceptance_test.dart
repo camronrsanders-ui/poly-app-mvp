@@ -40,6 +40,32 @@ Future<Finder> waitForAny(
   throw TestFailure('Timed out waiting for any expected route.');
 }
 
+/// A successful send is not usable if the new bubble sits underneath
+/// the composer. Wait for the app's own follow-to-latest behavior; do not
+/// scroll on behalf of the app and hide a real chat UX defect.
+Future<void> waitForMessageAboveComposer(
+  WidgetTester tester, {
+  required Finder message,
+  required Finder composer,
+  int maxPumps = 48,
+}) async {
+  double? lastMessageBottom;
+  double? lastComposerTop;
+  for (var attempt = 0; attempt < maxPumps; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 250));
+    if (message.evaluate().length != 1 || composer.evaluate().length != 1) {
+      continue;
+    }
+    lastMessageBottom = tester.getRect(message).bottom;
+    lastComposerTop = tester.getRect(composer).top;
+    if (lastMessageBottom < lastComposerTop - 8) return;
+  }
+  throw TestFailure(
+    'Latest chat message is not fully visible above its composer: '
+    'message bottom=$lastMessageBottom, composer top=$lastComposerTop.',
+  );
+}
+
 Finder navLabel(String label) {
   return find.descendant(
     of: find.byType(NavigationBar),
@@ -332,6 +358,11 @@ void main() {
         find.text(acceptanceMessage),
         description: 'sent simulator message',
         maxPumps: 160,
+      );
+      await waitForMessageAboveComposer(
+        tester,
+        message: find.text(acceptanceMessage),
+        composer: composer,
       );
       await takeAcceptanceScreenshot(binding, tester, '07-chat');
 
