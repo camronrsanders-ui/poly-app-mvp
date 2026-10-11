@@ -683,12 +683,16 @@ jobs:
           device_id = sys.argv[1]
           attempt = sys.argv[2]
           log_path = pathlib.Path(
-              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
+              f"build/android_acceptance/flutter-drive-attempt-{attempt}.log"
           )
+          # Flutter drive uses integrationDriver's stable request_data
+          # transport; Flutter test's VM service repeatedly vanished on CI
+          # after the Discover stage despite passing security and widget tests.
           command = [
               "flutter",
-              "test",
-              "integration_test/simulator_acceptance_test.dart",
+              "drive",
+              "--driver=test_driver/integration_test.dart",
+              "--target=integration_test/simulator_acceptance_test.dart",
               "-d",
               device_id,
               "--flavor",
