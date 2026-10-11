@@ -244,68 +244,94 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                       ? '?'
                       : label.characters.first.toUpperCase();
                   final cardId = card['id']?.toString() ?? '';
-                  return Card(
-                    key: ValueKey(cardId),
-                    child: ListTile(
-                      leading: CircleAvatar(child: Text(initial)),
-                      title: Text(label.isEmpty ? 'Relationship' : label),
-                      subtitle: Text(_subtitle(card)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Move up',
-                            onPressed: index == 0
-                                ? null
-                                : () => _moveCard(cards, index, index - 1),
-                            icon: const Icon(Icons.arrow_upward),
-                          ),
-                          IconButton(
-                            tooltip: 'Move down',
-                            onPressed: index == cards.length - 1
-                                ? null
-                                : () => _moveCard(cards, index, index + 1),
-                            icon: const Icon(Icons.arrow_downward),
-                          ),
-                          PopupMenuButton<String>(
-                            onSelected: (value) async {
-                              if (cardId.isEmpty) {
-                                _showError(
-                                    'This relationship card could not be changed. Please refresh and try again.');
-                                return;
+                  final actions = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Move up',
+                        onPressed: index == 0
+                            ? null
+                            : () => _moveCard(cards, index, index - 1),
+                        icon: const Icon(Icons.arrow_upward),
+                      ),
+                      IconButton(
+                        tooltip: 'Move down',
+                        onPressed: index == cards.length - 1
+                            ? null
+                            : () => _moveCard(cards, index, index + 1),
+                        icon: const Icon(Icons.arrow_downward),
+                      ),
+                      PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (cardId.isEmpty) {
+                            _showError(
+                                'This relationship card could not be changed. Please refresh and try again.');
+                            return;
+                          }
+                          try {
+                            if (value == 'edit') {
+                              await _openEditor(
+                                  uid: uid,
+                                  existing: card,
+                                  sortOrder: index);
+                            } else if (value == 'hide') {
+                              await _deactivateCard(cardId);
+                            } else if (value == 'delete') {
+                              final confirmed = await _confirmDelete();
+                              if (confirmed == true) {
+                                await _deleteCard(cardId);
                               }
-                              try {
-                                if (value == 'edit') {
-                                  await _openEditor(
-                                      uid: uid,
-                                      existing: card,
-                                      sortOrder: index);
-                                } else if (value == 'hide') {
-                                  await _deactivateCard(cardId);
-                                } else if (value == 'delete') {
-                                  final confirmed = await _confirmDelete();
-                                  if (confirmed == true) {
-                                    await _deleteCard(cardId);
-                                  }
-                                }
-                              } catch (_) {
-                                _showError(
-                                    'That Circle change could not be saved. Please try again.');
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(
-                                  value: 'hide', child: Text('Deactivate')),
-                              PopupMenuItem(
-                                  value: 'delete', child: Text('Delete')),
-                            ],
-                          ),
+                            }
+                          } catch (_) {
+                            _showError(
+                                'That Circle change could not be saved. Please try again.');
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          PopupMenuItem(
+                              value: 'hide', child: Text('Deactivate')),
+                          PopupMenuItem(
+                              value: 'delete', child: Text('Delete')),
                         ],
                       ),
-                      onTap: () => _openEditor(
-                          uid: uid, existing: card, sortOrder: index),
-                    ),
+                    ],
+                  );
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      // On small phones the three trailing controls consumed
+                      // almost all of ListTile's label space.
+                      final compact = constraints.maxWidth < 420;
+                      return Card(
+                        key: ValueKey(cardId),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              leading: CircleAvatar(child: Text(initial)),
+                              title: Text(
+                                label.isEmpty ? 'Relationship' : label,
+                              ),
+                              subtitle: Text(_subtitle(card)),
+                              trailing: compact ? null : actions,
+                              onTap: () => _openEditor(
+                                  uid: uid, existing: card, sortOrder: index),
+                            ),
+                            if (compact)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 4,
+                                  bottom: 4,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: actions,
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 },
               ),
