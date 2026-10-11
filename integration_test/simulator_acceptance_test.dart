@@ -7,6 +7,10 @@ const bool _captureAcceptanceScreenshots = bool.fromEnvironment(
   'POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS',
   defaultValue: true,
 );
+const bool _captureHostFrames = bool.fromEnvironment(
+  'POLYCIRCLE_CAPTURE_HOST_FRAMES',
+  defaultValue: false,
+);
 
 Future<void> waitForFinder(
   WidgetTester tester,
@@ -67,6 +71,12 @@ Future<void> takeAcceptanceScreenshot(
 ) async {
   await tester.pump(const Duration(milliseconds: 300));
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
+  // Only the CI host-frame test waits for real wall-clock capture time.
+  if (_captureHostFrames) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(seconds: 3));
+    });
+  }
   if (!_captureAcceptanceScreenshots) return;
   await binding.takeScreenshot(name);
 }
