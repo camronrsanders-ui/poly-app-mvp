@@ -10,9 +10,9 @@ Future<void> main() async {
       List<int> screenshotBytes, [
       Map<String, Object?>? args,
     ]) async {
-      final directory = Platform.environment[
-              'POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY'] ??
-          'build/simulator_acceptance';
+      final directory =
+          Platform.environment['POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY'] ??
+              'build/simulator_acceptance';
       final file = await File(
         '$directory/$screenshotName.png',
       ).create(recursive: true);
