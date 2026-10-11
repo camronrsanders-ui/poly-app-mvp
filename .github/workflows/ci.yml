@@ -366,50 +366,7 @@ jobs:
             echo "Starting iOS flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" "$attempt" <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-
-          device_id = sys.argv[1]
-          attempt = sys.argv[2]
-          log_path = pathlib.Path(
-              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
-          )
-          command = [
-              "flutter",
-              "test",
-              "integration_test/simulator_acceptance_test.dart",
-              "-d",
-              device_id,
-              "--flavor",
-              "staging",
-              "--dart-define=USE_FIREBASE_EMULATORS=true",
-              "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
-              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
-              "--no-pub",
-          ]
-
-          process = subprocess.Popen(command)
-          try:
-              status = process.wait(timeout=1500)
-          except subprocess.TimeoutExpired:
-              print(
-                  "flutter test attempt exceeded 25 minutes; terminating it so CI can retry.",
-                  file=sys.stderr,
-              )
-              process.terminate()
-              try:
-                  process.wait(timeout=10)
-              except subprocess.TimeoutExpired:
-                  process.kill()
-                  process.wait()
-              sys.exit(124)
-
-          sys.exit(status)
-          PY
+            python3 tool/capture_acceptance_frames.py --platform ios --device "$DEVICE_ID" --attempt "$attempt"
             STATUS=$?
             set -e
 
@@ -661,61 +618,7 @@ jobs:
             echo "Starting Android flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" "$attempt" <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-
-          device_id = sys.argv[1]
-          attempt = sys.argv[2]
-          log_path = pathlib.Path(
-              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
-          )
-          command = [
-              "flutter",
-              "test",
-              "integration_test/simulator_acceptance_test.dart",
-              "-d",
-              device_id,
-              "--flavor",
-              "staging",
-              "--dart-define=USE_FIREBASE_EMULATORS=true",
-              "--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2",
-              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
-              "--no-pub",
-          ]
-
-          with log_path.open("w", encoding="utf-8") as log_file:
-              process = subprocess.Popen(
-                  command,
-                  stdout=log_file,
-                  stderr=subprocess.STDOUT,
-                  text=True,
-              )
-              try:
-                  status = process.wait(timeout=900)
-              except subprocess.TimeoutExpired:
-                  print(
-                      "Android flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
-                      file=sys.stderr,
-                  )
-                  process.terminate()
-                  try:
-                      process.wait(timeout=10)
-                  except subprocess.TimeoutExpired:
-                      process.kill()
-                      process.wait()
-                  status = 124
-
-          try:
-              sys.stdout.write(log_path.read_text(encoding="utf-8"))
-          except OSError as error:
-              print(f"Could not read Android flutter-test log: {error}", file=sys.stderr)
-
-          sys.exit(status)
-          PY
+            python3 tool/capture_acceptance_frames.py --platform android --device "$DEVICE_ID" --attempt "$attempt"
             STATUS=$?
             set -e
 
