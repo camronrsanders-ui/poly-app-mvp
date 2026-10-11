@@ -77,6 +77,10 @@ class _MainShellState extends State<MainShell> {
       return;
     }
 
+    // A Discover Pass/Connect snackbar belongs to the section that created
+    // it. Never carry it over a Circle, Connections or Messages tap target.
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+
     setState(() {
       _index = value;
 
