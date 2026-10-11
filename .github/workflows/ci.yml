@@ -531,7 +531,7 @@ jobs:
           flutter build apk --debug --flavor staging --no-pub \
             --dart-define=USE_FIREBASE_EMULATORS=true \
             --dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2 \
-            --dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false \
+            --dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=true \
             --dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true \
             --dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true
           test -s build/app/outputs/flutter-apk/app-staging-debug.apk
