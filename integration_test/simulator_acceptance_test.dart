@@ -192,8 +192,8 @@ void main() {
       );
       await waitForFinder(
         tester,
-        find.text('Connect'),
-        description: 'Discover profile action',
+        find.byKey(const Key('discovery-connect')),
+        description: 'Discover profile action by unique key',
         maxPumps: 240,
       );
       expect(find.text('Pass'), findsOneWidget);
@@ -235,13 +235,16 @@ void main() {
         '03a-discover-pass-counter',
       );
 
-      await openNavTab(tester, 'Connections');
+      await openNavTab(tester, 'Connect');
       await waitForFinder(
         tester,
         find.textContaining('Jordan'),
         description: 'seeded connection',
         maxPumps: 160,
       );
+      // A Discover Pass confirmation must not obstruct another tab.
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('Passed'), findsNothing);
       await takeAcceptanceScreenshot(binding, tester, '04-connections');
 
       await openNavTab(tester, 'Circle');
@@ -283,6 +286,8 @@ void main() {
 
       const acceptanceMessage = 'Simulator acceptance message';
       await tester.enterText(composer, acceptanceMessage);
+      // Send is disabled for blank drafts until the next rendered frame.
+      await tester.pump();
       await tester.tap(find.byTooltip('Send message'));
       await waitForFinder(
         tester,
