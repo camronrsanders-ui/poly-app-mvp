@@ -271,9 +271,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                           try {
                             if (value == 'edit') {
                               await _openEditor(
-                                  uid: uid,
-                                  existing: card,
-                                  sortOrder: index);
+                                  uid: uid, existing: card, sortOrder: index);
                             } else if (value == 'hide') {
                               await _deactivateCard(cardId);
                             } else if (value == 'delete') {
@@ -291,8 +289,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                           PopupMenuItem(value: 'edit', child: Text('Edit')),
                           PopupMenuItem(
                               value: 'hide', child: Text('Deactivate')),
-                          PopupMenuItem(
-                              value: 'delete', child: Text('Delete')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete')),
                         ],
                       ),
                     ],
