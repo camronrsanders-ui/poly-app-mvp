@@ -410,6 +410,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.ensureVisible(pass);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.text('Pass')).height, lessThan(30));
     await tester.tap(pass);
     await tester.pumpAndSettle();
 
