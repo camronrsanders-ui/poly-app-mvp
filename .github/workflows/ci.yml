@@ -522,6 +522,20 @@ jobs:
           test -x "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
 
           echo "✓ Android SDK command-line tools exposed from $SDK_ROOT"
+      - name: Prebuild local Android staging APK before emulator startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Initialize Gradle and the native SDK before the resource-intensive
+          # emulator starts. Only the isolated CI staging Firebase config is used.
+          flutter build apk --debug --flavor staging --no-pub \
+            --dart-define=USE_FIREBASE_EMULATORS=true \
+            --dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2 \
+            --dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false \
+            --dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true \
+            --dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true
+          test -s build/app/outputs/flutter-apk/app-staging-debug.apk
+          echo "✓ Staging APK built before Android emulator boot"
       - name: Boot isolated Android emulator
         shell: bash
         run: |
