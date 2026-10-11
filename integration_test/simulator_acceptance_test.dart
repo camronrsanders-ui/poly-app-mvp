@@ -197,15 +197,21 @@ void main() {
         maxPumps: 240,
       );
       expect(find.text('Pass'), findsOneWidget);
+      // The Connect action may be laid out while a new candidate page is
+      // loading. An image of the spinner is not acceptable Discover evidence.
+      await waitForFinder(
+        tester,
+        find.text('1 / 2'),
+        description: 'loaded two-person Discover counter before screenshot',
+        maxPumps: 240,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Finding nearby worlds…'), findsNothing);
+      expect(find.text('1 / 2'), findsOneWidget);
       await takeAcceptanceScreenshot(binding, tester, '03-discover');
 
       // Live iOS/Android regression for the two-person Discover fixture:
       // moving to Riley then passing must update the count immediately.
-      await waitForFinder(
-        tester,
-        find.text('1 / 2'),
-        description: 'initial two-person Discover counter',
-      );
       await tester.tap(
         find.byKey(const Key('discovery-next-profile')),
       );
