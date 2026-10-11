@@ -7,8 +7,10 @@ CI host. Screenshot artifacts contain only fictional emulator test accounts.
 No host-side simctl/adb screen scraping is used for stage evidence.
 """
 import argparse
+import hashlib
 import os
 import pathlib
+import struct
 import subprocess
 import sys
 
@@ -71,14 +73,31 @@ def run():
         sys.stderr.write("Missing real Flutter screen evidence: "
                          + ", ".join(sorted(missing)) + "\n")
         return 18
-    # Every required PNG must have a PNG magic header; home-screen snapshots
-    # from the previous simctl implementation are not used as proof.
-    for name in required:
+    # Reject a home-screen frame copied under every route name, and check
+    # dimensions before accepting a PNG as readable simulator evidence.
+    # Pixel-level visual approval remains a human signoff, NOT this test.
+    hashes = {}
+    for name in sorted(required):
         file = output / f"{name}.png"
-        with file.open("rb") as image:
-            if image.read(8) != b"\x89PNG\r\n\x1a\n":
-                sys.stderr.write(f"Invalid PNG evidence: {file}\n")
-                return 18
+        contents = file.read_bytes()
+        if len(contents) < 40 or contents[:8] != b"\x89PNG\r\n\x1a\n":
+            sys.stderr.write(f"Invalid PNG evidence: {file}\n")
+            return 18
+        width, height = struct.unpack(">II", contents[16:24])
+        if width < 300 or height < 500:
+            sys.stderr.write(
+                f"Screenshot has implausible dimensions at {name}: "
+                f"{width}x{height}\n"
+            )
+            return 18
+        digest = hashlib.sha256(contents).hexdigest()
+        if digest in hashes:
+            sys.stderr.write(
+                f"Duplicated device screenshot for {name} and "
+                f"{hashes[digest]} (possible stale launcher capture).\n"
+            )
+            return 18
+        hashes[digest] = name
     print(f"POLYCIRCLE_VISUAL_EVIDENCE:{len(required)} Flutter screenshots saved", flush=True)
     return 0
 
