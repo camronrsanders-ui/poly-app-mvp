@@ -340,6 +340,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialScrollScheduled = false;
   bool _didInitialScroll = false;
   bool _awaitingOwnSentMessage = false;
+  int _ownSentViewportFollowEpoch = 0;
   bool _sending = false;
   bool _reporting = false;
   bool _endingConnection = false;
@@ -375,6 +376,33 @@ class _ChatScreenState extends State<ChatScreen> {
               onError: _onLiveError,
               cancelOnError: true,
             );
+  }
+
+  void _followOwnSentMessageThroughViewportChanges() {
+    final epoch = ++_ownSentViewportFollowEpoch;
+    // On Android the IME/keyboard can keep resizing the chat viewport after
+    // the Firestore snapshot and its first post-frame scroll. Follow only
+    // the user's own just-sent message through that short transition.
+    for (final delay in <Duration>[
+      Duration.zero,
+      const Duration(milliseconds: 120),
+      const Duration(milliseconds: 350),
+      const Duration(milliseconds: 700),
+    ]) {
+      unawaited(Future<void>.delayed(delay, () {
+        if (!mounted || epoch != _ownSentViewportFollowEpoch) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              epoch != _ownSentViewportFollowEpoch ||
+              !_scrollController.hasClients) {
+            return;
+          }
+          _scrollController.jumpTo(
+            _scrollController.position.maxScrollExtent,
+          );
+        });
+      }));
+    }
   }
 
   void _onLiveSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
@@ -418,7 +446,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _liveMessagesError = null;
     });
 
-    if (followLatest) {
+    if (followOwnSend) {
+      _followOwnSentMessageThroughViewportChanges();
+    } else if (followLatest) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_scrollController.hasClients) return;
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -1109,7 +1139,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     top: BorderSide(color: semantic.border),
                   ),
                 ),
-                child: _buildMessageContent(uid),
+                child: NotificationListener<ScrollStartNotification>(
+                  onNotification: (notification) {
+                    // A deliberate user drag cancels any remaining
+                    // keyboard-resize follow callbacks. Programmatic jumps
+                    // do not carry dragDetails and must not cancel themselves.
+                    if (notification.dragDetails != null) {
+                      _ownSentViewportFollowEpoch += 1;
+                    }
+                    return false;
+                  },
+                  child: _buildMessageContent(uid),
+                ),
               ),
             ),
             _MessageComposer(
