@@ -99,6 +99,21 @@ List<T> chatDocsEvictedFromLiveWindow<T>({
       .toList(growable: false);
 }
 
+/// Keep the newest message in view only when the member was already
+/// following the live tail; never jump away from deliberately read history.
+@visibleForTesting
+bool chatShouldFollowLatest({
+  required bool didInitialScroll,
+  required bool wasNearBottom,
+  required String? previousLastId,
+  required String? latestLastId,
+}) {
+  return didInitialScroll &&
+      wasNearBottom &&
+      latestLastId != null &&
+      latestLastId != previousLastId;
+}
+
 typedef ChatReportAction = Future<void> Function({
   required String reportedUid,
   required String reason,
@@ -346,7 +361,18 @@ class _ChatScreenState extends State<ChatScreen> {
   void _onLiveSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
     if (!mounted) return;
 
+    final previousLastId = _liveDocs.isEmpty ? null : _liveDocs.last.id;
+    final wasNearBottom = _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent -
+                _scrollController.position.pixels <=
+            80;
     final newLiveDocs = snapshot.docs.toList(growable: false);
+    final followLatest = chatShouldFollowLatest(
+      didInitialScroll: _didInitialScroll,
+      wasNearBottom: wasNearBottom,
+      previousLastId: previousLastId,
+      latestLastId: newLiveDocs.isEmpty ? null : newLiveDocs.last.id,
+    );
     final evictedDocs = chatDocsEvictedFromLiveWindow(
       previousLive: _liveDocs,
       newLive: newLiveDocs,
@@ -362,6 +388,13 @@ class _ChatScreenState extends State<ChatScreen> {
       _loadingLiveMessages = false;
       _liveMessagesError = null;
     });
+
+    if (followLatest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      });
+    }
 
     if (!_didInitialScroll &&
         !_initialScrollScheduled &&
