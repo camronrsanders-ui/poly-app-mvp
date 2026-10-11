@@ -114,6 +114,24 @@ bool chatShouldFollowLatest({
       latestLastId != previousLastId;
 }
 
+/// A newly delivered message from the signed-in sender should be brought
+/// into view after Send, even if the keyboard changed the scroll extent.
+@visibleForTesting
+bool chatShouldFollowOwnSentMessage({
+  required bool awaitingOwnSend,
+  required String? currentUid,
+  required String? previousLastId,
+  required String? latestLastId,
+  required String? latestSenderUid,
+}) {
+  return awaitingOwnSend &&
+      currentUid != null &&
+      currentUid.isNotEmpty &&
+      latestSenderUid == currentUid &&
+      latestLastId != null &&
+      latestLastId != previousLastId;
+}
+
 typedef ChatReportAction = Future<void> Function({
   required String reportedUid,
   required String reason,
@@ -321,6 +339,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _historyError = false;
   bool _initialScrollScheduled = false;
   bool _didInitialScroll = false;
+  bool _awaitingOwnSentMessage = false;
   bool _sending = false;
   bool _reporting = false;
   bool _endingConnection = false;
@@ -367,12 +386,22 @@ class _ChatScreenState extends State<ChatScreen> {
                 _scrollController.position.pixels <=
             80;
     final newLiveDocs = snapshot.docs.toList(growable: false);
-    final followLatest = chatShouldFollowLatest(
-      didInitialScroll: _didInitialScroll,
-      wasNearBottom: wasNearBottom,
+    final latest = newLiveDocs.isEmpty ? null : newLiveDocs.last;
+    final followOwnSend = chatShouldFollowOwnSentMessage(
+      awaitingOwnSend: _awaitingOwnSentMessage,
+      currentUid: _currentUid,
       previousLastId: previousLastId,
-      latestLastId: newLiveDocs.isEmpty ? null : newLiveDocs.last.id,
+      latestLastId: latest?.id,
+      latestSenderUid: latest?.data()['senderUid'] as String?,
     );
+    if (followOwnSend) _awaitingOwnSentMessage = false;
+    final followLatest = followOwnSend ||
+        chatShouldFollowLatest(
+          didInitialScroll: _didInitialScroll,
+          wasNearBottom: wasNearBottom,
+          previousLastId: previousLastId,
+          latestLastId: latest?.id,
+        );
     final evictedDocs = chatDocsEvictedFromLiveWindow(
       previousLive: _liveDocs,
       newLive: newLiveDocs,
@@ -717,6 +746,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
+    // Set this before awaiting the backend; Firestore may deliver our
+    // message before sendMessage() resolves.
+    _awaitingOwnSentMessage = true;
     _controller.clear();
     try {
       final injectedSend = widget.sendAction;
@@ -732,6 +764,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     } on UgcPolicyViolation catch (error) {
+      _awaitingOwnSentMessage = false;
       // Keep rejected text editable so the member can remove the prohibited
       // content rather than losing their draft. Reports are a separate path and
       // are intentionally not passed through this posting filter.
@@ -744,6 +777,7 @@ class _ChatScreenState extends State<ChatScreen> {
             .showSnackBar(SnackBar(content: Text(error.userMessage)));
       }
     } catch (_) {
+      _awaitingOwnSentMessage = false;
       // Do not make a transient network/backend error eat the user's draft.
       // If they already started typing a new message while this request was in
       // flight, leave that newer text alone instead of overwriting it.
