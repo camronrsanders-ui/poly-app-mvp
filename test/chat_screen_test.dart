@@ -198,6 +198,7 @@ void main() {
         const Key('conversation-message-composer'),
       );
       await tester.enterText(composer, '  Hello Alex  ');
+      await tester.pump();
       await tester.tap(find.byTooltip('Send message'));
       await tester.pumpAndSettle();
 
@@ -222,6 +223,7 @@ void main() {
         const Key('conversation-message-composer'),
       );
       await tester.enterText(composer, 'Please retry');
+      await tester.pump();
       await tester.tap(find.byTooltip('Send message'));
       await tester.pumpAndSettle();
 
