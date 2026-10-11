@@ -73,8 +73,7 @@ void main() {
         },
       );
 
-      final composer =
-          find.byKey(const Key('conversation-message-composer'));
+      final composer = find.byKey(const Key('conversation-message-composer'));
       final send = find.byTooltip('Send message');
       final sendButton = find.ancestor(
         of: send,
@@ -111,8 +110,7 @@ void main() {
         },
       );
 
-      final composer =
-          find.byKey(const Key('conversation-message-composer'));
+      final composer = find.byKey(const Key('conversation-message-composer'));
       final send = find.byTooltip('Send message');
       final sendButton = find.ancestor(
         of: send,
