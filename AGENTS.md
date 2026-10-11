@@ -20,9 +20,10 @@ Build a production-minded Flutter MVP of Polycircle from the repository specific
 Preserve accessibility, privacy, consent boundaries, and a runnable app throughout development. Do not make product-policy decisions silently. Safe code, test, and documentation hardening may be done autonomously. Ask before enabling paid infrastructure, changing unresolved policy decisions, performing destructive operations, deploying production or staging infrastructure, or weakening protections.
 
 ## Branch and Git safety
-- The primary development branch is `restart-foundation`.
-- Never modify `main`.
-- Never merge PR #4 unless the founder explicitly changes this rule. PR #4 must remain draft unless explicitly instructed otherwise.
+- Protected `main` contains the rebuilt Flutter/Firebase foundation merged via PR #4 on 2026-10-08 (commit `fd239f169e230a029e1dc7f39faf4a88fc0cfa9b`).
+- Never commit directly to protected `main`; use small review branches and pull requests. Never merge a PR without explicit founder authorization, even if CI is green.
+- Before resuming work, verify the current protected `main`, target PR head, and working-tree state; do not assume an older checkpoint is current.
+- PR #21 is the separate draft pre-billing UI acceptance work; security/topology changes need their own reviewed branches.
 - Inspect `git status` before meaningful work.
 - Never force-push.
 - Never use `git reset --hard` on founder work.
@@ -32,7 +33,7 @@ Preserve accessibility, privacy, consent boundaries, and a runnable app througho
 
 ## Android / iOS parity
 - Polycircle is one Flutter product; do not treat Android and iOS as separate feature implementations.
-- `restart-foundation` is the source of truth for both platforms.
+- The shared code merged into protected `main` is the baseline for both platforms. Unmerged branches are review checkpoints, not separate iOS/Android sources of truth.
 - Shared behavior belongs in Flutter unless a native OS API genuinely requires platform-specific host code.
 - Whenever Android- or iOS-specific behavior changes, inspect the corresponding implementation on the other platform before calling the work complete.
 - Keep Flutter-facing native channel names, payload shapes, security boundaries, app identity, Firebase expectations, permissions, and user-visible behavior compatible across both platforms unless a deliberate documented OS difference requires otherwise.

@@ -128,7 +128,9 @@ The following remain release blockers and must not be marked complete based only
 Closing an issue, having backend scaffolding, or making the UI visible is never sufficient to enable Private Vault.
 
 ## Merge policy
-`restart-foundation` should not be merged to `main` until Gate 0 passes and the remaining release blockers are explicitly reviewed. Security-sensitive changes should land through reviewed pull requests. Keep PR #4 in draft while staging/payment-dependent, legal, and operational gates remain outstanding.
+The rebuilt `restart-foundation` foundation **already merged to protected `main`** through PR #4 on 2026-10-08 after its exact-head Gate 0 automated checks. This was a code-baseline merge, **not** approval for staging, billing, beta access, or launch. Gates 1–3 and the pre-billing manual iOS/Android acceptance review remain open.
+
+Use isolated review branches for future security, QA, documentation, and product-topology changes. Keep new PRs in draft until their exact-head checks and review are complete; do not merge any PR without the founder's explicit authorization. No deployment or paid infrastructure is authorized by green CI.
 
 ## Native environment separation
 
