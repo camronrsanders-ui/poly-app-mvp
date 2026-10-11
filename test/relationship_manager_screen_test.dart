@@ -101,6 +101,7 @@ void main() {
         reordered?.map((item) => item['id']).toList(),
         <String>['compact-b', 'compact-a'],
       );
+      expect(tester.takeException(), isNull);
       await tapMenuAction(tester, 'Edit');
       expect(find.text('Edit relationship'), findsOneWidget);
       expect(tester.takeException(), isNull);
