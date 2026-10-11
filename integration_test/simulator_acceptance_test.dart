@@ -45,24 +45,40 @@ Future<Finder> waitForAny(
 /// scroll on behalf of the app and hide a real chat UX defect.
 Future<void> waitForMessageAboveComposer(
   WidgetTester tester, {
-  required Finder message,
+  required String messageText,
   required Finder composer,
   int maxPumps = 48,
 }) async {
-  double? lastMessageBottom;
+  // Checking only the Text rect misses a cropped message bubble: its Sent
+  // receipt can be hidden under the composer while all text remains visible.
+  // The _MessageBubble Semantics node encloses the text, timestamp and receipt.
+  final completeBubble = find.byWidgetPredicate(
+    (widget) =>
+        widget is Semantics &&
+        (widget.properties.label ?? '').contains('You, $messageText'),
+    description: 'complete sent-message bubble and delivery receipt',
+  );
+  final busySend = find.descendant(
+    of: find.byTooltip('Send message'),
+    matching: find.byType(CircularProgressIndicator),
+  );
+  double? lastBubbleBottom;
   double? lastComposerTop;
   for (var attempt = 0; attempt < maxPumps; attempt += 1) {
     await tester.pump(const Duration(milliseconds: 250));
-    if (message.evaluate().length != 1 || composer.evaluate().length != 1) {
+    if (completeBubble.evaluate().length != 1 ||
+        composer.evaluate().length != 1 ||
+        busySend.evaluate().isNotEmpty) {
       continue;
     }
-    lastMessageBottom = tester.getRect(message).bottom;
+    lastBubbleBottom = tester.getRect(completeBubble).bottom;
     lastComposerTop = tester.getRect(composer).top;
-    if (lastMessageBottom < lastComposerTop - 8) return;
+    if (lastBubbleBottom < lastComposerTop - 8) return;
   }
   throw TestFailure(
-    'Latest chat message is not fully visible above its composer: '
-    'message bottom=$lastMessageBottom, composer top=$lastComposerTop.',
+    'Entire sent-message bubble (including receipt) must appear above the '
+    'composer with Send idle: bubble bottom=$lastBubbleBottom, '
+    'composer top=$lastComposerTop, busy=${busySend.evaluate().isNotEmpty}.',
   );
 }
 
@@ -388,7 +404,7 @@ void main() {
       );
       await waitForMessageAboveComposer(
         tester,
-        message: find.text(acceptanceMessage),
+        messageText: acceptanceMessage,
         composer: composer,
       );
       await takeAcceptanceScreenshot(binding, tester, '07-chat');
