@@ -161,10 +161,13 @@ class _MainNavigation extends StatelessWidget {
         selectedIcon: Icon(Icons.explore),
         label: 'Discover',
       ),
+      // Preserve the full destination name in its tooltip and page header,
+      // but avoid wrapping a 11-character tab label on compact phones.
       NavigationDestination(
         icon: Icon(Icons.people_alt_outlined),
         selectedIcon: Icon(Icons.people_alt),
-        label: 'Connections',
+        label: 'Connect',
+        tooltip: 'Connections',
       ),
       NavigationDestination(
         icon: Icon(Icons.hub_outlined),

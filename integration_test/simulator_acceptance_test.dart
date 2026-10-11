@@ -184,7 +184,7 @@ void main() {
       expect(find.text('Pass'), findsOneWidget);
       await takeAcceptanceScreenshot(binding, tester, '03-discover');
 
-      await openNavTab(tester, 'Connections');
+      await openNavTab(tester, 'Connect');
       await waitForFinder(
         tester,
         find.textContaining('Jordan'),
