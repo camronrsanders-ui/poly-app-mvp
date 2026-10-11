@@ -77,6 +77,10 @@ class _MainShellState extends State<MainShell> {
       return;
     }
 
+    // A Discover Pass/Connect snackbar belongs to the section that created
+    // it. Never carry it over a Circle, Connections or Messages tap target.
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+
     setState(() {
       _index = value;
 
@@ -161,10 +165,13 @@ class _MainNavigation extends StatelessWidget {
         selectedIcon: Icon(Icons.explore),
         label: 'Discover',
       ),
+      // Preserve the full destination name in its tooltip and page header,
+      // but avoid wrapping a 11-character tab label on compact phones.
       NavigationDestination(
         icon: Icon(Icons.people_alt_outlined),
         selectedIcon: Icon(Icons.people_alt),
-        label: 'Connections',
+        label: 'Connect',
+        tooltip: 'Connections',
       ),
       NavigationDestination(
         icon: Icon(Icons.hub_outlined),

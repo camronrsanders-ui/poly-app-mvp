@@ -15,8 +15,9 @@ Future<void> pumpConnections(
   WidgetTester tester, {
   required ConnectionsLoader loadConnections,
   required EndConnectionAction endConnection,
+  Size physicalSize = const Size(1200, 1600),
 }) async {
-  tester.view.physicalSize = const Size(1200, 1600);
+  tester.view.physicalSize = physicalSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -50,6 +51,23 @@ Future<void> openEndConnectionDialog(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('320px Connections heading stays one line with both actions',
+      (tester) async {
+    await pumpConnections(
+      tester,
+      physicalSize: const Size(320, 640),
+      loadConnections: () async => [alexConnection],
+      endConnection: (_) async {},
+    );
+
+    final title = tester.widget<Text>(find.text('Connections'));
+    expect(title.maxLines, 1);
+    expect(title.softWrap, isFalse);
+    expect(find.byTooltip('Safety center'), findsOneWidget);
+    expect(find.byTooltip('Find people'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'End connection requires explicit confirmation',
     (tester) async {
