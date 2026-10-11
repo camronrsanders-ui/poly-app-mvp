@@ -430,6 +430,43 @@ void main() {
       );
       await takeAcceptanceScreenshot(binding, tester, '08-profile');
 
+      // UI-12: the owner must be able to open profile editing and safely
+      // return without unintentionally mutating any personal information.
+      final editProfile = find.text('Edit profile');
+      await tester.ensureVisible(editProfile);
+      await tester.tap(editProfile);
+      await waitForFinder(
+        tester,
+        find.text('Manage profile photos'),
+        description: 'loaded editable profile settings',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Edit profile'),
+        description: 'Edit profile settings',
+      );
+      final nameField = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Display name',
+        description: 'owner display-name editor',
+      );
+      expect(nameField, findsOneWidget);
+      expect(find.text('Save profile'), findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08a-profile-settings',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile after abandoning profile edit',
+        maxPumps: 160,
+      );
+
       await tester.tap(find.byTooltip('Safety center'));
       await waitForFinder(
         tester,
