@@ -39,6 +39,11 @@ def run():
         "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
         "--no-pub",
     ]
+    if args.platform == "android":
+        # Diagnostic A/B only: on Linux x86_64 software GPU stacks Flutter
+        # Impeller can terminate the entire emulator without a Dart crash.
+        # Do not change production Android manifests or iOS rendering.
+        command.append("--no-enable-impeller")
     environment = dict(os.environ)
     environment["POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY"] = str(output)
     timeout = 1500 if args.platform == "ios" else 900
