@@ -191,6 +191,25 @@ void main() {
     },
   );
   testWidgets(
+    'switching tabs removes feedback from the previous destination',
+    (tester) async {
+      await pumpShell(tester, buildCounts: <int, int>{});
+      final context = tester.element(find.byType(MainShell));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Discover feedback')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Discover feedback'), findsOneWidget);
+
+      await selectTab(tester, 'Connect');
+
+      expect(find.text('Test page 1'), findsOneWidget);
+      expect(find.text('Discover feedback'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'compact navigation does not wrap Connections on 320px phones',
     (tester) async {
       tester.view.physicalSize = const Size(320, 640);
