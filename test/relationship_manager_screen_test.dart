@@ -32,8 +32,9 @@ Future<void> pumpManager(
   RelationshipCardIdAction? deactivateCard,
   RelationshipCardIdAction? deleteCard,
   ReorderRelationshipCardsAction? reorderCards,
+  Size physicalSize = const Size(1000, 1600),
 }) async {
-  tester.view.physicalSize = const Size(1000, 1600);
+  tester.view.physicalSize = physicalSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -69,6 +70,43 @@ Future<void> tapMenuAction(
 }
 
 void main() {
+  testWidgets(
+    '320px relationship cards keep labels readable and all actions work',
+    (tester) async {
+      List<Map<String, dynamic>>? reordered;
+      final cards = <Map<String, dynamic>>[
+        card(id: 'compact-a', label: 'Long-term partner'),
+        card(id: 'compact-b', label: 'Chosen family'),
+      ];
+      await pumpManager(
+        tester,
+        physicalSize: const Size(320, 640),
+        watchCards: (uid) => Stream.value(cards),
+        reorderCards: (next) async => reordered = next,
+      );
+
+      final title = find.text('Long-term partner');
+      expect(title, findsOneWidget);
+      // Before this fix, the 3-button trailing row squeezed the title into
+      // a single-character-wide column at this Android viewport width.
+      expect(tester.getSize(title).width, greaterThan(130));
+      expect(find.byTooltip('Move up'), findsNWidgets(2));
+      expect(find.byTooltip('Move down'), findsNWidgets(2));
+      expect(find.byType(PopupMenuButton<String>), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byTooltip('Move down').first);
+      await tester.pump();
+      expect(
+        reordered?.map((item) => item['id']).toList(),
+        <String>['compact-b', 'compact-a'],
+      );
+      await tapMenuAction(tester, 'Edit');
+      expect(find.text('Edit relationship'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'Empty state Add relationship creates an exact trimmed card',
     (tester) async {
