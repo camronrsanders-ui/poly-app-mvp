@@ -10,8 +10,11 @@ Future<void> main() async {
       List<int> screenshotBytes, [
       Map<String, Object?>? args,
     ]) async {
+      final directory = Platform.environment[
+              'POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY'] ??
+          'build/simulator_acceptance';
       final file = await File(
-        'build/simulator_acceptance/$screenshotName.png',
+        '$directory/$screenshotName.png',
       ).create(recursive: true);
       await file.writeAsBytes(screenshotBytes, flush: true);
       return true;

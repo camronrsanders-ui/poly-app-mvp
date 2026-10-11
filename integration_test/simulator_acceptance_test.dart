@@ -7,10 +7,6 @@ const bool _captureAcceptanceScreenshots = bool.fromEnvironment(
   'POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS',
   defaultValue: true,
 );
-const bool _captureHostFrames = bool.fromEnvironment(
-  'POLYCIRCLE_CAPTURE_HOST_FRAMES',
-  defaultValue: false,
-);
 
 Future<void> waitForFinder(
   WidgetTester tester,
@@ -71,12 +67,6 @@ Future<void> takeAcceptanceScreenshot(
 ) async {
   await tester.pump(const Duration(milliseconds: 300));
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
-  // Only the CI host-frame test waits for real wall-clock capture time.
-  if (_captureHostFrames) {
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(seconds: 3));
-    });
-  }
   if (!_captureAcceptanceScreenshots) return;
   await binding.takeScreenshot(name);
 }
@@ -88,6 +78,13 @@ void main() {
     'seeded device emulator completes the pre-billing core journey',
     (tester) async {
       await app.main();
+
+      if (_captureAcceptanceScreenshots &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        // Android integration_test screenshots require a Flutter image-backed
+        // surface. This is debug-test-only and never changes production UI.
+        await binding.convertFlutterSurfaceToImage();
+      }
 
       await waitForFinder(
         tester,
