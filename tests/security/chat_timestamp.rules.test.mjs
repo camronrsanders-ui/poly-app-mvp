@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -18,8 +19,8 @@ async function seedActiveConversation() {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await Promise.all([
-      setDoc(doc(db, 'users', 'alice'), {uid: 'alice', accountStatus: 'active'}),
-      setDoc(doc(db, 'users', 'bob'), {uid: 'bob', accountStatus: 'active'}),
+      setDoc(doc(db, 'users', 'alice'), approvedAccount('alice')),
+      setDoc(doc(db, 'users', 'bob'), approvedAccount('bob')),
       setDoc(doc(db, 'conversations', 'alice_bob'), {
         conversationId: 'alice_bob',
         participantUids: ['alice', 'bob'],

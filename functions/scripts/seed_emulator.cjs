@@ -332,6 +332,15 @@ async function seedPerson(person) {
     onboardingComplete: true,
     lastActiveAt: FieldValue.serverTimestamp(),
     accountStatus: 'active',
+    // Emulator-only fake accounts deliberately use complete approved fixtures.
+    // Never copy this synthetic approval into a real-user migration.
+    adultAccessApproved: true,
+    termsAcceptedVersion: '2026-08-alpha-v1',
+    communityGuidelinesAcceptedVersion: '2026-08-v1',
+    ageAssuranceMethod: 'emulator_fixture',
+    ageSignalStatus: 'adult:emulator_fixture',
+    ageAssuranceCheckedAt: FieldValue.serverTimestamp(),
+    ugcPolicyAcceptedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
 
   // Auth-only fields such as email and staff claims must never be copied into

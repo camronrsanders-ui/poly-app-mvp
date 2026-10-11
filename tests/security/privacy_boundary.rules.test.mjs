@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -37,7 +38,7 @@ async function seed(entries) {
   });
 }
 
-const activeUser = (uid) => ({uid, accountStatus: 'active'});
+const activeUser = (uid) => approvedAccount(uid);
 
 const profile = (uid) => ({
   uid,

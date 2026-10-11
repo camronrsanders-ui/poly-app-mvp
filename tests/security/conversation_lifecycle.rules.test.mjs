@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -28,8 +29,8 @@ after(async () => env.cleanup());
 
 test('participant may read a known active conversation but cannot list the conversation collection', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -50,9 +51,9 @@ test('participant may read a known active conversation but cannot list the conve
 
 test('active participant can query messages for one known conversation while a nonparticipant cannot', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
-    ['users', 'carol', {uid: 'carol', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
+    ['users', 'carol', approvedAccount('carol')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -99,8 +100,8 @@ test('active participant can query messages for one known conversation while a n
 
 test('blocked participant cannot query existing chat history', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -133,8 +134,8 @@ test('blocked participant cannot query existing chat history', async () => {
 
 test('participant cannot reactivate an inactive conversation', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -152,8 +153,8 @@ test('participant cannot reactivate an inactive conversation', async () => {
 
 test('participant cannot send a new message to an inactive conversation', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -176,8 +177,8 @@ test('participant cannot send a new message to an inactive conversation', async 
 
 test('participant cannot read conversation metadata after the connection ends', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
@@ -193,8 +194,8 @@ test('participant cannot read conversation metadata after the connection ends', 
 
 test('participant cannot read old messages after the connection ends', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       conversationId: 'alice_bob',
       participantUids: ['alice', 'bob'],
