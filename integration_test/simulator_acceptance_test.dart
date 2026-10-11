@@ -264,6 +264,38 @@ void main() {
       );
       await takeAcceptanceScreenshot(binding, tester, '05-circle');
 
+      // Verify that an actual Circle options button opens Relationship Manager,
+      // that its Firestore-backed view resolves, and that Back returns to the
+      // existing orbit without creating or changing any relationship card.
+      await tester.tap(find.byTooltip('Circle options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manage relationships'));
+      await waitForFinder(
+        tester,
+        find.text('Manage My Circle'),
+        description: 'Relationship Manager screen title',
+      );
+      await waitForAny(
+        tester,
+        <Finder>[
+          find.text('Build your circle'),
+          find.textContaining('Your relationship cards can be public'),
+        ],
+        maxPumps: 160,
+      );
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '05a-relationship-manager',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.byKey(const ValueKey('mine')),
+        description: 'My Circle orbit after exiting Relationship Manager',
+        maxPumps: 160,
+      );
+
       await openNavTab(tester, 'Messages');
       await waitForFinder(
         tester,
