@@ -409,6 +409,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: type,
                   decoration:
                       const InputDecoration(labelText: 'Connection type'),
@@ -422,6 +423,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: status,
                   decoration: const InputDecoration(labelText: 'Status'),
                   items: _statuses
@@ -433,6 +435,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: visibility,
                   decoration:
                       const InputDecoration(labelText: 'Who can see this?'),
