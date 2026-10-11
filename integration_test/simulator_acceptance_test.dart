@@ -430,6 +430,72 @@ void main() {
       );
       await takeAcceptanceScreenshot(binding, tester, '08-profile');
 
+      // UI-12: the owner must be able to open profile editing and safely
+      // return without unintentionally mutating any personal information.
+      final editProfile = find.text('Edit profile');
+      await tester.ensureVisible(editProfile);
+      await tester.tap(editProfile);
+      await waitForFinder(
+        tester,
+        find.text('Manage profile photos'),
+        description: 'loaded editable profile settings',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Edit profile'),
+        description: 'Edit profile settings',
+      );
+      final nameField = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Display name',
+        description: 'owner display-name editor',
+      );
+      expect(nameField, findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08a-profile-settings',
+      );
+      // The settings page is a lazy ListView. Prove that the bottom Save and
+      // account controls are actually reachable rather than asserting on an
+      // offscreen/unbuilt widget.
+      final saveProfile = find.text('Save profile');
+      await tester.scrollUntilVisible(
+        saveProfile,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(saveProfile, findsOneWidget);
+      final logout = find.text('Log out');
+      await tester.scrollUntilVisible(
+        logout,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(logout, findsOneWidget);
+      final deleteAccount = find.text('Delete my account');
+      await tester.scrollUntilVisible(
+        deleteAccount,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(deleteAccount, findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08b-profile-settings-actions',
+      );
+      // Do not submit, sign out or initiate account deletion.
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile after abandoning profile edit',
+        maxPumps: 160,
+      );
+
       await tester.tap(find.byTooltip('Safety center'));
       await waitForFinder(
         tester,
