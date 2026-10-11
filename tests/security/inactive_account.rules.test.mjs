@@ -29,6 +29,9 @@ async function seed(accountStatus) {
       onboardingComplete: true,
       lastActiveAt: new Date(),
       accountStatus,
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
       ...(accountStatus === 'paused' ? {deletionRequestedAt: new Date()} : {}),
     });
     await setDoc(doc(db, 'users', 'bob'), {
@@ -38,6 +41,9 @@ async function seed(accountStatus) {
       onboardingComplete: true,
       lastActiveAt: new Date(),
       accountStatus: 'active',
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
     });
     await setDoc(doc(db, 'profiles', 'alice'), {
       uid: 'alice', displayName: 'Alice', age: 30, city: '', region: '', bio: '', headline: '',
