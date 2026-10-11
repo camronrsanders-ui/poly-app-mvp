@@ -206,4 +206,5 @@ void main() {
       expect(find.text('Test page 1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
-  );}
+  );
+}
