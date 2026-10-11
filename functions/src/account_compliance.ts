@@ -21,12 +21,9 @@ export async function assertActiveAccount(
 }
 
 /**
- * Temporary migration-aware member eligibility check.
- *
- * New Polycircle accounts always include adultAccessApproved, so any account
- * with that field must have completed the current adult + policy gate. Older
- * local/test accounts may temporarily omit the field while fixtures are
- * migrated; that compatibility branch must be removed before public release.
+ * Member eligibility is fail-closed. Legacy records without explicit adult
+ * approval and current policy acceptance cannot access member features.
+ * Self account access for compliance/recovery is handled separately.
  */
 export function isActiveCompliantMember(
   user: FirebaseFirestore.DocumentSnapshot,
@@ -34,10 +31,6 @@ export function isActiveCompliantMember(
   if (!isActiveAccount(user)) return false;
 
   const data = user.data() ?? {};
-  if (!Object.prototype.hasOwnProperty.call(data, 'adultAccessApproved')) {
-    return true;
-  }
-
   return data.adultAccessApproved === true
     && data.termsAcceptedVersion === CURRENT_TERMS_VERSION
     && data.communityGuidelinesAcceptedVersion === CURRENT_COMMUNITY_GUIDELINES_VERSION;
