@@ -52,6 +52,10 @@ A complete MVP allows a user to:
 The `Circle` area begins with relationship cards and is intentionally designed to evolve into an interactive polycule relationship map in a later release.
 
 ## Development Status
-The `restart-foundation` branch contains the active rebuilt foundation. Automated CI covers Flutter analysis/tests, Functions TypeScript builds, contract checks, and Firebase security-rule tests. The pull request remains intentionally in draft while real staging deployment, App Check validation, protected-media end-to-end testing, moderation, policy, and release-gate work remains.
+The rebuilt Flutter/Firebase foundation from `restart-foundation` merged into protected `main` through PR #4 on 2026-10-08. This **foundation merge was not a public-release approval**. Future work belongs on isolated review branches and must pass current-head automated checks and independently recorded manual signoffs before merge.
+
+Automated CI covers Flutter analysis and tests, iOS/Android builds and emulator journeys, Functions TypeScript builds, contract checks, and Firebase security-rule tests. Draft PR #21 tracks the pre-billing visible-control/visual acceptance matrix; its manual iOS/Android checks remain separate from CI. Security and other design changes require independent review.
+
+External staging App Check validation, real-device acceptance, operational moderation, final legal/policy signoffs, and release gates remain outstanding. Billing, paid infrastructure, Firebase deployment, and public release are **not** authorized by the merge or by green CI.
 
 Cloud Functions deployment is not required to keep coding locally. Use the Firebase Emulator Suite workflow in [`docs/local-development.md`](docs/local-development.md) to exercise trusted backend behavior without weakening security boundaries or changing release configuration.
