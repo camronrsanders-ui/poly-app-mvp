@@ -11,6 +11,7 @@ import '../../services/circle_membership_service.dart';
 import '../../services/profile_media_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/polycircle_spatial_orbit.dart';
+import 'confirmed_connection_topology.dart';
 import '../profile/profile_detail_screen.dart';
 import '../safety/safety_center_screen.dart';
 import 'relationship_manager_screen.dart';
@@ -742,66 +743,17 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
   List<PolycircleTopologyLink> _visibleTopologyFor(
     _CircleWorld world,
+    _UniverseModel model,
   ) {
-    if (!(kDebugMode && useFirebaseEmulators)) {
-      return const <PolycircleTopologyLink>[];
-    }
-
-    final ids = world.people
-        .map(_uidOf)
-        .where(
-          (id) => id.isNotEmpty,
-        )
-        .toList(growable: false);
-
-    if (ids.length < 2) {
-      return const <PolycircleTopologyLink>[];
-    }
-
-    final links = <PolycircleTopologyLink>[
-      PolycircleTopologyLink(
-        fromId: '__owner__',
-        toId: ids[0],
-        label: 'Partner',
-      ),
-      PolycircleTopologyLink(
-        fromId: ids[0],
-        toId: ids[1],
-        label: 'Metamour',
-      ),
-    ];
-
-    if (ids.length >= 3) {
-      links.add(
-        PolycircleTopologyLink(
-          fromId: '__owner__',
-          toId: ids[2],
-          label: 'Important connection',
-        ),
-      );
-    }
-
-    if (ids.length >= 4) {
-      links.add(
-        PolycircleTopologyLink(
-          fromId: ids[1],
-          toId: ids[3],
-          label: world.id == 'house' ? 'Household' : 'Chosen family',
-        ),
-      );
-    }
-
-    if (world.id == 'chosen' && ids.length >= 5) {
-      links.add(
-        PolycircleTopologyLink(
-          fromId: ids[2],
-          toId: ids[4],
-          label: 'Chosen family',
-        ),
-      );
-    }
-
-    return links;
+    // Confirmed matches are mutual connections, NOT evidence of being
+    // partners, metamours, household members, or chosen family. Draw only
+    // owner-to-member connection edges, and only for members actually
+    // present in the current view. Group membership alone makes no edge.
+    return confirmedConnectionTopology(
+      ownerUid: model.uid,
+      visibleUids: world.people.map(_uidOf),
+      confirmedUids: model.connections.map(_uidOf),
+    );
   }
 
   String _uidOf(
@@ -946,7 +898,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         ? _focused!
         : active.people.first;
 
-    final topologyLinks = _visibleTopologyFor(active);
+    final topologyLinks = _visibleTopologyFor(active, model);
 
     final migratingIds = _pendingWorldId == null
         ? const <String>{}
