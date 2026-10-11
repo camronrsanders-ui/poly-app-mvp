@@ -453,12 +453,29 @@ void main() {
         description: 'owner display-name editor',
       );
       expect(nameField, findsOneWidget);
-      expect(find.text('Save profile'), findsOneWidget);
       await takeAcceptanceScreenshot(
         binding,
         tester,
         '08a-profile-settings',
       );
+      // The settings page is a lazy ListView. Prove that the bottom Save and
+      // account controls are actually reachable rather than asserting on an
+      // offscreen/unbuilt widget.
+      final saveProfile = find.text('Save profile');
+      await tester.scrollUntilVisible(
+        saveProfile,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(saveProfile, findsOneWidget);
+      expect(find.text('Log out'), findsOneWidget);
+      expect(find.text('Delete my account'), findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08b-profile-settings-actions',
+      );
+      // Do not submit, sign out or initiate account deletion.
       await tester.pageBack();
       await waitForFinder(
         tester,
