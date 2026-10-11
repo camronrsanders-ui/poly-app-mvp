@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -85,6 +86,13 @@ void main() {
     'seeded device emulator completes the pre-billing core journey',
     (tester) async {
       await app.main();
+
+      if (_captureAcceptanceScreenshots &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        // Android integration_test screenshots require a Flutter image-backed
+        // surface. This is debug-test-only and never changes production UI.
+        await binding.convertFlutterSurfaceToImage();
+      }
 
       await waitForFinder(
         tester,
