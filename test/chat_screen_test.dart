@@ -62,6 +62,54 @@ Future<void> openSafetyMenu(WidgetTester tester) async {
 }
 
 void main() {
+  test('latest message follows only when user is already near the chat tail',
+      () {
+    expect(
+      chatShouldFollowLatest(
+        didInitialScroll: true,
+        wasNearBottom: true,
+        previousLastId: 'older',
+        latestLastId: 'newest',
+      ),
+      isTrue,
+    );
+    expect(
+      chatShouldFollowLatest(
+        didInitialScroll: true,
+        wasNearBottom: false,
+        previousLastId: 'older',
+        latestLastId: 'newest',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowLatest(
+        didInitialScroll: true,
+        wasNearBottom: true,
+        previousLastId: 'same',
+        latestLastId: 'same',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowLatest(
+        didInitialScroll: false,
+        wasNearBottom: true,
+        previousLastId: null,
+        latestLastId: 'first',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowLatest(
+        didInitialScroll: true,
+        wasNearBottom: true,
+        previousLastId: 'last',
+        latestLastId: null,
+      ),
+      isFalse,
+    );
+  });
   testWidgets(
     'Send is disabled for blank or whitespace-only drafts and after send',
     (tester) async {
