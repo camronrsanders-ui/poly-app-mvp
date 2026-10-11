@@ -39,6 +39,11 @@ def run():
         "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
         "--no-pub",
     ]
+    if args.platform == "android":
+        # CI-only A/B: use the Skia software rendering path to distinguish
+        # Linux emulator Impeller startup failure from Chat viewport defects.
+        # The actual Android and iOS product renderer remains unchanged.
+        command.append("--no-enable-impeller")
     environment = dict(os.environ)
     environment["POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY"] = str(output)
     timeout = 1500 if args.platform == "ios" else 900
