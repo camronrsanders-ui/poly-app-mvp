@@ -87,6 +87,33 @@ Future<void> openNavTab(
   await tester.pump();
 }
 
+/// A route title can enter the widget tree on the first frame of the
+/// Cupertino/Material push animation. Its screenshot is not representative
+/// until the foreground route is current and fully visible.
+Future<void> waitForForegroundRouteSettled(
+  WidgetTester tester,
+  Finder screenTitle, {
+  required String description,
+  int maxPumps = 100,
+}) async {
+  AnimationStatus? lastAnimationStatus;
+  for (var attempt = 0; attempt < maxPumps; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (screenTitle.evaluate().isEmpty) continue;
+    final route = ModalRoute.of(tester.element(screenTitle.first));
+    lastAnimationStatus = route?.animation?.status;
+    if (route?.isCurrent == true &&
+        (lastAnimationStatus == null ||
+            lastAnimationStatus == AnimationStatus.completed)) {
+      return;
+    }
+  }
+  throw TestFailure(
+    '$description was not the settled foreground route: '
+    'animation=$lastAnimationStatus.',
+  );
+}
+
 Future<void> takeAcceptanceScreenshot(
   IntegrationTestWidgetsFlutterBinding binding,
   WidgetTester tester,
@@ -392,6 +419,11 @@ void main() {
         tester,
         find.text('Safety center'),
         description: 'Safety center',
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety Center',
       );
       await takeAcceptanceScreenshot(binding, tester, '09-safety');
 

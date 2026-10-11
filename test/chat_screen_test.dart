@@ -62,6 +62,59 @@ Future<void> openSafetyMenu(WidgetTester tester) async {
 }
 
 void main() {
+  test('own newly sent messages override the history scroll position', () {
+    expect(
+      chatShouldFollowOwnSentMessage(
+        awaitingOwnSend: true,
+        currentUid: 'member-1',
+        previousLastId: 'old-message',
+        latestLastId: 'our-new-message',
+        latestSenderUid: 'member-1',
+      ),
+      isTrue,
+    );
+    expect(
+      chatShouldFollowOwnSentMessage(
+        awaitingOwnSend: false,
+        currentUid: 'member-1',
+        previousLastId: 'old-message',
+        latestLastId: 'our-new-message',
+        latestSenderUid: 'member-1',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowOwnSentMessage(
+        awaitingOwnSend: true,
+        currentUid: 'member-1',
+        previousLastId: 'old-message',
+        latestLastId: 'someone-elses-message',
+        latestSenderUid: 'member-2',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowOwnSentMessage(
+        awaitingOwnSend: true,
+        currentUid: 'member-1',
+        previousLastId: 'same',
+        latestLastId: 'same',
+        latestSenderUid: 'member-1',
+      ),
+      isFalse,
+    );
+    expect(
+      chatShouldFollowOwnSentMessage(
+        awaitingOwnSend: true,
+        currentUid: null,
+        previousLastId: 'old',
+        latestLastId: 'new',
+        latestSenderUid: 'member-1',
+      ),
+      isFalse,
+    );
+  });
+
   test('latest message follows only when user is already near the chat tail',
       () {
     expect(
