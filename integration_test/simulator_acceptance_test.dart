@@ -177,14 +177,14 @@ void main() {
       );
       await waitForFinder(
         tester,
-        find.text('Connect'),
-        description: 'Discover profile action',
+        find.byKey(const Key('discovery-connect')),
+        description: 'Discover profile action, not the Connect navigation tab',
         maxPumps: 240,
       );
       expect(find.text('Pass'), findsOneWidget);
       await takeAcceptanceScreenshot(binding, tester, '03-discover');
 
-      await openNavTab(tester, 'Connections');
+      await openNavTab(tester, 'Connect');
       await waitForFinder(
         tester,
         find.textContaining('Jordan'),
