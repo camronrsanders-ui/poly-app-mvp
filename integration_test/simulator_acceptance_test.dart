@@ -468,8 +468,20 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(saveProfile, findsOneWidget);
-      expect(find.text('Log out'), findsOneWidget);
-      expect(find.text('Delete my account'), findsOneWidget);
+      final logout = find.text('Log out');
+      await tester.scrollUntilVisible(
+        logout,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(logout, findsOneWidget);
+      final deleteAccount = find.text('Delete my account');
+      await tester.scrollUntilVisible(
+        deleteAccount,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(deleteAccount, findsOneWidget);
       await takeAcceptanceScreenshot(
         binding,
         tester,
