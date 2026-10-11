@@ -576,7 +576,7 @@ jobs:
           fi
 
           echo "✓ Android AVD created: $AVD_NAME"
-          nohup "$EMULATOR"             -avd "$AVD_NAME"             -no-window             -no-audio             -no-boot-anim             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > "$RUNNER_TEMP/polycircle-android-emulator.log" 2>&1 &
+          nohup "$EMULATOR"             -avd "$AVD_NAME"             -no-window             -no-audio             -no-boot-anim             -gpu software             -camera-back none             -camera-front none             > "$RUNNER_TEMP/polycircle-android-emulator.log" 2>&1 &
 
           DEVICE_ID=""
           for attempt in {1..180}; do
