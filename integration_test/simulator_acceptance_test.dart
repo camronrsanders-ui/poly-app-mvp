@@ -322,6 +322,65 @@ void main() {
       expect(find.text('Passed'), findsNothing);
       await takeAcceptanceScreenshot(binding, tester, '04-connections');
 
+      // UI-14: inspect a real seeded member's public profile through its
+      // existing Connection options. Only open the safety menu; never report,
+      // block, or send interest as part of screenshot acceptance.
+      final connectionOptions = find.byTooltip('Connection options').first;
+      await tester.ensureVisible(connectionOptions);
+      await tester.tap(connectionOptions);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View profile'));
+      await waitForFinder(
+        tester,
+        find.text('Step into their world'),
+        description: 'connected member public profile',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Step into their world'),
+        description: 'Member profile detail',
+      );
+      // Both media and consent-filtered Circle details are asynchronous.
+      // A spinner is not acceptable proof of the completed member page.
+      var memberProfileLoaded = false;
+      for (var pump = 0; pump < 160; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+          memberProfileLoaded = true;
+          break;
+        }
+      }
+      expect(
+        memberProfileLoaded,
+        isTrue,
+        reason: 'Member profile media and Circle must finish loading.',
+      );
+      final memberSafetyOptions = find.byType(PopupMenuButton<String>);
+      expect(memberSafetyOptions, findsOneWidget);
+      await tester.tap(memberSafetyOptions);
+      await tester.pumpAndSettle();
+      expect(find.text('Report'), findsOneWidget);
+      expect(find.text('Block'), findsOneWidget);
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('Step into their world'),
+        description: 'member profile after dismissing safety menu',
+      );
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '04a-member-profile',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.textContaining('Jordan'),
+        description: 'Connections restored after member profile',
+        maxPumps: 160,
+      );
+
       await openNavTab(tester, 'Circle');
       await waitForFinder(
         tester,
