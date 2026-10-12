@@ -492,7 +492,15 @@ void main() {
       // UI-12: the owner must be able to open profile editing and safely
       // return without unintentionally mutating any personal information.
       final editProfile = find.text('Edit profile');
-      await tester.ensureVisible(editProfile);
+      // The self-profile scroll is down at Cam's details after screenshot 08.
+      // Flutter lazily builds the earlier edit button; ensureVisible on an
+      // unbuilt widget fails instead of scrolling toward it.
+      await tester.scrollUntilVisible(
+        editProfile,
+        -200,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
       await tester.tap(editProfile);
       await waitForFinder(
         tester,
