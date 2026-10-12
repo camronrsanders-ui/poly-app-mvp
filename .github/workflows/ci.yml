@@ -387,6 +387,9 @@ jobs:
               > "build/simulator_acceptance/98-test-timeout-attempt-$attempt.log" || true
             xcrun simctl terminate "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
             xcrun simctl uninstall "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
+            # Uninstall can retain Firebase Auth credentials in iOS Keychain.
+            # This is an isolated CI simulator: clear its Keychain before a retry.
+            xcrun simctl keychain "$DEVICE_ID" reset
             (
               for grant_attempt in {1..900}; do
                 if xcrun simctl get_app_container "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1; then
