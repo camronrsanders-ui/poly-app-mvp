@@ -69,7 +69,8 @@ def run():
 
     names = {p.stem for p in output.glob("*.png") if p.stat().st_size > 1024}
     required = {
-        "01-login", "03-discover", "03a-discover-pass-counter",
+        "01-login", "02-compliance", "03-discover",
+        "03a-discover-pass-counter",
         "04-connections", "04a-member-profile", "05-circle",
         "05a-relationship-manager",
         "06-messages", "07-chat", "08-profile", "08a-profile-settings",
