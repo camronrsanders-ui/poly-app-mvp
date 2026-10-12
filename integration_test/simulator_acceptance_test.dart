@@ -325,17 +325,32 @@ void main() {
       // UI-14: inspect a real seeded member's public profile through its
       // existing Connection options. Only open the safety menu; never report,
       // block, or send interest as part of screenshot acceptance.
-      final connectionOptions = find.byTooltip('Connection options').first;
-      // Connections is a long, lazy-scrolling view. Jordan's spotlight may
-      // already be visible while the card overflow control is not built yet.
+      final connectionOptions = find.byTooltip('Connection options');
+      // A Finder.first throws before scrollUntilVisible can bring a lazy
+      // child into existence. Keep the unfiltered Finder through the scroll.
       await tester.scrollUntilVisible(
         connectionOptions,
         180,
         scrollable: find.byType(Scrollable).first,
         maxScrolls: 20,
       );
+      expect(connectionOptions, findsOneWidget);
+      await Scrollable.ensureVisible(
+        tester.element(connectionOptions),
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 180),
+      );
+      await tester.pumpAndSettle();
+      // Verify the popup really opened; a clipped tap must not count.
       await tester.tap(connectionOptions);
       await tester.pumpAndSettle();
+      await waitForFinder(
+        tester,
+        find.text('View profile'),
+        description: 'open Connections options menu',
+      );
+      expect(find.text('Open chat'), findsOneWidget);
+      expect(find.text('End connection'), findsOneWidget);
       await tester.tap(find.text('View profile'));
       await waitForFinder(
         tester,
