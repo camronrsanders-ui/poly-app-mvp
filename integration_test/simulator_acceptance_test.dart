@@ -531,10 +531,13 @@ void main() {
       );
       // The first visible frame can leave the label underneath the fixed
       // app bar (Android previously tried to tap it at y=54 and missed).
+      // An awaited animated ensureVisible can deadlock a live widget test:
+      // no frames advance the animation until this Future finishes. Snap to
+      // the centered position, then pump bounded frames before the real tap.
       await Scrollable.ensureVisible(
         tester.element(editProfile),
         alignment: 0.5,
-        duration: const Duration(milliseconds: 180),
+        duration: Duration.zero,
       );
       await pumpBounded(tester);
       expect(tester.getRect(editProfile).center.dy, greaterThan(90));
