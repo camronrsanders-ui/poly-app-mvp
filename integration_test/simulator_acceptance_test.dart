@@ -566,7 +566,8 @@ void main() {
         maxPumps: 160,
       );
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.text('Could not load profile photos right now.'), findsNothing);
+      expect(
+          find.text('Could not load profile photos right now.'), findsNothing);
       await takeAcceptanceScreenshot(
         binding,
         tester,
