@@ -74,7 +74,8 @@ def run():
         "04-connections", "04a-member-profile", "05-circle",
         "05a-relationship-manager",
         "06-messages", "07-chat", "08-profile", "08a-profile-settings",
-        "08b-profile-settings-actions", "09-safety",
+        "08aa-profile-photos", "08b-profile-settings-actions",
+        "09-safety",
     }
     missing = required - names
     if missing:
