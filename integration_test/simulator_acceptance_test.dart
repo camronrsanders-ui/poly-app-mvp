@@ -326,7 +326,14 @@ void main() {
       // existing Connection options. Only open the safety menu; never report,
       // block, or send interest as part of screenshot acceptance.
       final connectionOptions = find.byTooltip('Connection options').first;
-      await tester.ensureVisible(connectionOptions);
+      // Connections is a long, lazy-scrolling view. Jordan's spotlight may
+      // already be visible while the card overflow control is not built yet.
+      await tester.scrollUntilVisible(
+        connectionOptions,
+        180,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
       await tester.tap(connectionOptions);
       await tester.pumpAndSettle();
       await tester.tap(find.text('View profile'));
