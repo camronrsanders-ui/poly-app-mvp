@@ -534,7 +534,7 @@ void main() {
       await Scrollable.ensureVisible(
         tester.element(editProfile),
         alignment: 0.5,
-        duration: const Duration(milliseconds: 180),
+        duration: Duration.zero,
       );
       await pumpBounded(tester);
       expect(tester.getRect(editProfile).center.dy, greaterThan(90));
