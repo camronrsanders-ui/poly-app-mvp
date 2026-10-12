@@ -508,7 +508,17 @@ void main() {
         scrollable: find.byType(Scrollable).first,
         maxScrolls: 20,
       );
+      // The first visible frame can leave the label underneath the fixed
+      // app bar (Android previously tried to tap it at y=54 and missed).
+      await Scrollable.ensureVisible(
+        tester.element(editProfile),
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 180),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(editProfile).center.dy, greaterThan(90));
       await tester.tap(editProfile);
+      await tester.pumpAndSettle();
       await waitForFinder(
         tester,
         find.text('Manage profile photos'),
