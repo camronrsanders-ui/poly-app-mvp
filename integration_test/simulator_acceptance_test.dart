@@ -25,6 +25,12 @@ Future<void> waitForFinder(
   );
 }
 
+Future<void> pumpBounded(WidgetTester tester, {int frames = 12}) async {
+  for (var i = 0; i < frames; i += 1) {
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+}
+
 Future<Finder> waitForAny(
   WidgetTester tester,
   List<Finder> finders, {
@@ -449,10 +455,10 @@ void main() {
         alignment: 0.5,
         duration: const Duration(milliseconds: 180),
       );
-      await tester.pumpAndSettle();
+      await pumpBounded(tester);
       expect(tester.getRect(editProfile).center.dy, greaterThan(90));
       await tester.tap(editProfile);
-      await tester.pumpAndSettle();
+      await pumpBounded(tester);
       await waitForFinder(
         tester,
         find.text('Manage profile photos'),
