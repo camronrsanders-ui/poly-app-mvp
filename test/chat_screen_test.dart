@@ -168,21 +168,76 @@ void main() {
     // Simulates the Android IME settling after the send snapshot: the
     // maxScrollExtent grows by ~34px in late steps (the acceptance
     // journey's stable 26px overlap plus required clearance), then stops.
-    final tracker = OwnSentMessageFollowTracker();
+    final tracker = OwnSentMessageFollowTracker(guardFrames: 3);
     expect(tracker.observeFrame(1000), isTrue);
     expect(tracker.observeFrame(1012), isTrue);
     expect(tracker.observeFrame(1034), isTrue);
     expect(tracker.observeFrame(1034), isTrue);
-    // Second consecutive frame at the same extent: settled.
+    // Second consecutive frame at the same extent: settled, but the
+    // follow now guards against a late extent change instead of dying.
+    expect(tracker.observeFrame(1034), isTrue);
+    expect(tracker.isGuarding, isTrue);
+    expect(tracker.guardedExtent, 1034);
+    // Guard frames elapse with no further change: the follow ends.
+    expect(tracker.observeFrame(1034), isTrue);
+    expect(tracker.observeFrame(1034), isTrue);
     expect(tracker.observeFrame(1034), isFalse);
     expect(tracker.isActive, isFalse);
   });
 
   test('own-sent follow settles quickly when the viewport never moves', () {
-    final tracker = OwnSentMessageFollowTracker();
+    final tracker = OwnSentMessageFollowTracker(guardFrames: 2);
     expect(tracker.observeFrame(500), isTrue);
+    expect(tracker.observeFrame(500), isTrue);
+    // Stable for the second consecutive frame: settled into guard.
+    expect(tracker.observeFrame(500), isTrue);
+    expect(tracker.isGuarding, isTrue);
     expect(tracker.observeFrame(500), isTrue);
     expect(tracker.observeFrame(500), isFalse);
+    expect(tracker.isActive, isFalse);
+  });
+
+  test('own-sent follow re-pins when the extent grows after settling', () {
+    // The integrated QA failure mode: the extent plateaus long enough
+    // to settle, then grows again (a late IME inset step or the send
+    // acknowledgement's relayout). The follow must still be alive to
+    // re-pin, or the sent bubble is stranded under the composer.
+    final tracker = OwnSentMessageFollowTracker(guardFrames: 8);
+    expect(tracker.observeFrame(1000), isTrue);
+    expect(tracker.observeFrame(1000), isTrue);
+    expect(tracker.observeFrame(1000), isTrue);
+    expect(tracker.isGuarding, isTrue);
+    // A few guard frames pass at the settled extent.
+    expect(tracker.observeFrame(1000), isTrue);
+    expect(tracker.observeFrame(1000), isTrue);
+    // The extent grows by 22 (the measured QA shortfall): the follow
+    // resumes re-pinning instead of staying settled.
+    expect(tracker.observeFrame(1022), isTrue);
+    expect(tracker.isGuarding, isFalse);
+    expect(tracker.isActive, isTrue);
+    // It settles again at the new extent and guards once more.
+    expect(tracker.observeFrame(1022), isTrue);
+    expect(tracker.observeFrame(1022), isTrue);
+    expect(tracker.isGuarding, isTrue);
+    expect(tracker.guardedExtent, 1022);
+  });
+
+  test('own-sent follow is bounded across follow and guard phases', () {
+    final tracker = OwnSentMessageFollowTracker(
+      maxFrames: 4,
+      guardFrames: 3,
+    );
+    expect(tracker.observeFrame(100), isTrue);
+    expect(tracker.observeFrame(100), isTrue);
+    // Settled into the guard phase.
+    expect(tracker.observeFrame(100), isTrue);
+    expect(tracker.observeFrame(100), isTrue);
+    // A late growth resumes the follow, but the combined frame budget
+    // still ends it.
+    expect(tracker.observeFrame(130), isTrue);
+    expect(tracker.observeFrame(130), isTrue);
+    expect(tracker.observeFrame(130), isFalse);
+    expect(tracker.isActive, isFalse);
   });
 
   test('own-sent follow stops at the frame cap if the extent never settles',
