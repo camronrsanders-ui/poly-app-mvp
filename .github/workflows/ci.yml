@@ -374,11 +374,13 @@ jobs:
               exit 0
             fi
 
-            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+            # A clean local-emulator retry is safe for any first-attempt
+            # failure, including cold-start assertions (not only timeouts).
+            if [[ "$attempt" -eq 2 ]]; then
               exit "$STATUS"
             fi
 
-            echo "First iOS flutter test attempt stalled; capturing diagnostics before one retry."
+            echo "First iOS flutter test attempt failed; capturing diagnostics before one clean retry."
             xcrun simctl io "$DEVICE_ID" screenshot \
               "build/simulator_acceptance/98-test-timeout-attempt-$attempt.png" || true
             xcrun simctl spawn "$DEVICE_ID" log show --last 10m --style compact 2>/dev/null \
@@ -401,6 +403,8 @@ jobs:
               done
             ) &
             xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+            echo "Re-seeding the emulator fixture state before attempt 2."
+            POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator
             sleep 3
           done
           BASH
@@ -654,17 +658,21 @@ jobs:
               exit 0
             fi
 
-            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+            # A clean local-emulator retry is safe for any first-attempt
+            # failure, including cold-start assertions (not only timeouts).
+            if [[ "$attempt" -eq 2 ]]; then
               exit "$STATUS"
             fi
 
-            echo "First Android flutter test attempt stalled; capturing diagnostics before one retry."
+            echo "First Android flutter test attempt failed; capturing diagnostics before one clean retry."
             timeout 20s adb -s "$DEVICE_ID" exec-out screencap -p               > "build/android_acceptance/98-test-timeout-attempt-$attempt.png" || true
             timeout 20s adb -s "$DEVICE_ID" logcat -d -t 1000               > "build/android_acceptance/98-test-timeout-attempt-$attempt.log" || true
             timeout 10s adb -s "$DEVICE_ID" shell am force-stop               com.polycircle.app.staging || true
             timeout 10s adb -s "$DEVICE_ID" shell pm clear \
               com.polycircle.app.staging || true
             timeout 10s adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456 || true
+            echo "Re-seeding the emulator fixture state before attempt 2."
+            POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator
             sleep 3
           done
           BASH
