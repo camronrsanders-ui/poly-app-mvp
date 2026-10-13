@@ -195,6 +195,7 @@ void main() {
           find.text('Adult access & community rules'),
           find.text('Explore your orbit'),
         ],
+        maxPumps: 320,
       );
 
       if (route.evaluate().any(
@@ -341,15 +342,17 @@ void main() {
         maxScrolls: 20,
       );
       expect(connectionOptions, findsOneWidget);
+      // Connection tiles may animate indefinitely while loading photos;
+      // jump to the centered option, then pump a bounded number of frames.
       await Scrollable.ensureVisible(
         tester.element(connectionOptions),
         alignment: 0.5,
-        duration: const Duration(milliseconds: 180),
+        duration: Duration.zero,
       );
-      await tester.pumpAndSettle();
+      await pumpBounded(tester);
       // Verify the popup really opened; a clipped tap must not count.
       await tester.tap(connectionOptions);
-      await tester.pumpAndSettle();
+      await pumpBounded(tester);
       await waitForFinder(
         tester,
         find.text('View profile'),
@@ -387,7 +390,7 @@ void main() {
       final memberSafetyOptions = find.byType(PopupMenuButton<String>);
       expect(memberSafetyOptions, findsOneWidget);
       await tester.tap(memberSafetyOptions);
-      await tester.pumpAndSettle();
+      await pumpBounded(tester);
       expect(find.text('Report'), findsOneWidget);
       expect(find.text('Block'), findsOneWidget);
       await tester.pageBack();
@@ -566,7 +569,6 @@ void main() {
         tester,
         '08a-profile-settings',
       );
-
       // UI-15: entering Photo management must not start a picker or upload.
       // The backend-backed gallery must resolve to a real empty/status view.
       await tester.tap(find.text('Manage profile photos'));

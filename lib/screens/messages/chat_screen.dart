@@ -132,6 +132,62 @@ bool chatShouldFollowOwnSentMessage({
       latestLastId != previousLastId;
 }
 
+/// Tracks the own-sent-message viewport follow across frames.
+///
+/// After the member sends a message, the software keyboard can still be
+/// animating: late bottom-inset growth increases the message list's
+/// maxScrollExtent after the first scroll jump, which would otherwise
+/// leave the just-sent message hidden behind the composer (the Android
+/// acceptance journey measured a stable 26px overlap). The follow re-pins
+/// to the bottom on every frame until the observed extent is unchanged
+/// for [stableFramesRequired] consecutive frames, the member drags the
+/// list, or [maxFrames] frames have elapsed.
+@visibleForTesting
+class OwnSentMessageFollowTracker {
+  OwnSentMessageFollowTracker({
+    this.maxFrames = 240,
+    this.stableFramesRequired = 2,
+  });
+
+  /// Hard cap so a perpetually changing extent cannot pin the list
+  /// forever (240 frames is ~4s at 60fps, far beyond any IME settle).
+  final int maxFrames;
+
+  /// Consecutive frames that must report the same maxScrollExtent,
+  /// after jumping to it, before the viewport counts as settled.
+  final int stableFramesRequired;
+
+  double? _lastMaxExtent;
+  int _stableFrames = 0;
+  int _frames = 0;
+  bool _cancelled = false;
+  bool _settled = false;
+
+  bool get isActive => !_cancelled && !_settled;
+
+  /// Records the extent observed on this frame (sampled after jumping to
+  /// the bottom) and returns whether the follow should continue for
+  /// another frame.
+  bool observeFrame(double maxScrollExtent) {
+    if (!isActive) return false;
+    _frames += 1;
+    if (_lastMaxExtent != null && maxScrollExtent == _lastMaxExtent) {
+      _stableFrames += 1;
+    } else {
+      _stableFrames = 0;
+    }
+    _lastMaxExtent = maxScrollExtent;
+    if (_stableFrames >= stableFramesRequired || _frames >= maxFrames) {
+      _settled = true;
+      return false;
+    }
+    return true;
+  }
+
+  /// The member took over the scroll position; stop following.
+  void cancel() => _cancelled = true;
+}
+
 typedef ChatReportAction = Future<void> Function({
   required String reportedUid,
   required String reason,
@@ -340,7 +396,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialScrollScheduled = false;
   bool _didInitialScroll = false;
   bool _awaitingOwnSentMessage = false;
-  int _ownSentViewportFollowEpoch = 0;
+  OwnSentMessageFollowTracker? _ownSentFollow;
   bool _sending = false;
   bool _reporting = false;
   bool _endingConnection = false;
@@ -376,33 +432,6 @@ class _ChatScreenState extends State<ChatScreen> {
               onError: _onLiveError,
               cancelOnError: true,
             );
-  }
-
-  void _followOwnSentMessageThroughViewportChanges() {
-    final epoch = ++_ownSentViewportFollowEpoch;
-    // On Android the IME/keyboard can keep resizing the chat viewport after
-    // the Firestore snapshot and its first post-frame scroll. Follow only
-    // the user's own just-sent message through that short transition.
-    for (final delay in <Duration>[
-      Duration.zero,
-      const Duration(milliseconds: 120),
-      const Duration(milliseconds: 350),
-      const Duration(milliseconds: 700),
-    ]) {
-      unawaited(Future<void>.delayed(delay, () {
-        if (!mounted || epoch != _ownSentViewportFollowEpoch) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted ||
-              epoch != _ownSentViewportFollowEpoch ||
-              !_scrollController.hasClients) {
-            return;
-          }
-          _scrollController.jumpTo(
-            _scrollController.position.maxScrollExtent,
-          );
-        });
-      }));
-    }
   }
 
   void _onLiveSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
@@ -466,6 +495,34 @@ class _ChatScreenState extends State<ChatScreen> {
         _didInitialScroll = true;
       });
     }
+  }
+
+  /// Keep the member's just-sent message pinned to the bottom while the
+  /// viewport settles. A single jump is not enough: the keyboard may
+  /// still be animating when the send snapshot arrives, and each later
+  /// inset change grows the scroll extent behind the composer. Re-jump
+  /// every frame until [OwnSentMessageFollowTracker] reports the extent
+  /// stable; a member drag cancels the follow immediately.
+  void _followOwnSentMessageThroughViewportChanges() {
+    final tracker = OwnSentMessageFollowTracker();
+    _ownSentFollow = tracker;
+
+    void step() {
+      if (!mounted || !identical(_ownSentFollow, tracker)) return;
+      if (!tracker.isActive) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !identical(_ownSentFollow, tracker)) return;
+        if (!_scrollController.hasClients) {
+          step();
+          return;
+        }
+        final position = _scrollController.position;
+        _scrollController.jumpTo(position.maxScrollExtent);
+        if (tracker.observeFrame(position.maxScrollExtent)) step();
+      });
+    }
+
+    step();
   }
 
   void _onLiveError(Object error) {
@@ -1141,11 +1198,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 child: NotificationListener<ScrollStartNotification>(
                   onNotification: (notification) {
-                    // A deliberate user drag cancels any remaining
-                    // keyboard-resize follow callbacks. Programmatic jumps
-                    // do not carry dragDetails and must not cancel themselves.
+                    // Member-driven scrolls carry drag details; the
+                    // programmatic follow jumps do not and must not
+                    // cancel themselves.
                     if (notification.dragDetails != null) {
-                      _ownSentViewportFollowEpoch += 1;
+                      _ownSentFollow?.cancel();
                     }
                     return false;
                   },

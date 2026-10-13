@@ -163,6 +163,45 @@ void main() {
       isFalse,
     );
   });
+  test('own-sent follow keeps re-pinning while the extent is still growing',
+      () {
+    // Simulates the Android IME settling after the send snapshot: the
+    // maxScrollExtent grows by ~34px in late steps (the acceptance
+    // journey's stable 26px overlap plus required clearance), then stops.
+    final tracker = OwnSentMessageFollowTracker();
+    expect(tracker.observeFrame(1000), isTrue);
+    expect(tracker.observeFrame(1012), isTrue);
+    expect(tracker.observeFrame(1034), isTrue);
+    expect(tracker.observeFrame(1034), isTrue);
+    // Second consecutive frame at the same extent: settled.
+    expect(tracker.observeFrame(1034), isFalse);
+    expect(tracker.isActive, isFalse);
+  });
+
+  test('own-sent follow settles quickly when the viewport never moves', () {
+    final tracker = OwnSentMessageFollowTracker();
+    expect(tracker.observeFrame(500), isTrue);
+    expect(tracker.observeFrame(500), isTrue);
+    expect(tracker.observeFrame(500), isFalse);
+  });
+
+  test('own-sent follow stops at the frame cap if the extent never settles',
+      () {
+    final tracker = OwnSentMessageFollowTracker(maxFrames: 3);
+    expect(tracker.observeFrame(100), isTrue);
+    expect(tracker.observeFrame(200), isTrue);
+    expect(tracker.observeFrame(300), isFalse);
+    expect(tracker.isActive, isFalse);
+  });
+
+  test('own-sent follow stops immediately when the member drags', () {
+    final tracker = OwnSentMessageFollowTracker();
+    expect(tracker.observeFrame(100), isTrue);
+    tracker.cancel();
+    expect(tracker.isActive, isFalse);
+    expect(tracker.observeFrame(200), isFalse);
+  });
+
   testWidgets(
     'Send is disabled for blank or whitespace-only drafts and after send',
     (tester) async {

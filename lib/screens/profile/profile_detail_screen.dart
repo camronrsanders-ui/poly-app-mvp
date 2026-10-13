@@ -62,6 +62,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   late final ProfileCircleLoader _loadCircle;
   late final ProfileVisiblePhotosLoader _loadVisiblePhotos;
   late final Future<List<VisibleProfilePhoto>> _photoFuture;
+  late final Future<List<Map<String, dynamic>>> _circleFuture;
   bool _acting = false;
 
   ConnectionService get _connections =>
@@ -116,6 +117,12 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     _photoFuture = _uid.isEmpty
         ? Future.value(const <VisibleProfilePhoto>[])
         : _loadVisiblePhotos(_uid);
+    // Create the privacy-gated Circle request once per profile route.
+    // Constructing this Future in build() could retrigger a denied callable
+    // on every frame while the member's photos or popup animate.
+    _circleFuture = _uid.isEmpty
+        ? Future.value(const <Map<String, dynamic>>[])
+        : _loadCircle(_uid);
   }
 
   List<String> _strings(String key) {
@@ -478,7 +485,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           ),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _uid.isEmpty ? Future.value(const []) : _loadCircle(_uid),
+            future: _circleFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
