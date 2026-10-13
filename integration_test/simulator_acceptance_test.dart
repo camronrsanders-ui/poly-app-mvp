@@ -569,6 +569,54 @@ void main() {
         tester,
         '08a-profile-settings',
       );
+      // UI-15: entering Photo management must not start a picker or upload.
+      // The backend-backed gallery must resolve to a real empty/status view.
+      await tester.tap(find.text('Manage profile photos'));
+      await waitForFinder(
+        tester,
+        find.text('Protected profile photos'),
+        description: 'private photo management route',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Profile photos'),
+        description: 'Profile Photos',
+      );
+      await waitForFinder(
+        tester,
+        find.text('Choose a photo'),
+        description: 'available photo chooser button',
+      );
+      await waitForAny(
+        tester,
+        <Finder>[
+          find.text('No profile photos yet'),
+          find.text('Visible on your profile'),
+          find.text('Processing securely'),
+          find.text('Awaiting safety review'),
+          find.text('Waiting for upload'),
+          find.text('Not approved'),
+          find.text('Removed'),
+        ],
+        maxPumps: 160,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+          find.text('Could not load profile photos right now.'), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08aa-profile-photos',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('Manage profile photos'),
+        description: 'profile settings restored after photo management',
+        maxPumps: 160,
+      );
+
       // The settings page is a lazy ListView. Prove that the bottom Save and
       // account controls are actually reachable rather than asserting on an
       // offscreen/unbuilt widget.
