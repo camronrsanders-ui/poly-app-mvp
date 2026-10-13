@@ -15,8 +15,18 @@ class CircleViewService {
     if (ownerUid.trim().isEmpty) throw ArgumentError('Invalid profile owner.');
 
     final callable = _functions.httpsCallable('getCircleForProfile');
-    final result =
-        await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    late final HttpsCallableResult<Map<String, dynamic>> result;
+    try {
+      result = await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+    } on FirebaseFunctionsException catch (error) {
+      // A private, blocked, or otherwise restricted Circle is an expected
+      // visibility boundary, not a reason to fail the member-profile screen.
+      // Do not expose denied details or bypass the trusted Cloud Function.
+      if (error.code == 'permission-denied') {
+        return const <Map<String, dynamic>>[];
+      }
+      rethrow;
+    }
     final raw = result.data['cards'];
     if (raw is! List) return const [];
     return raw
