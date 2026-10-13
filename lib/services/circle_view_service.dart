@@ -1,7 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-
 class CircleViewService {
   CircleViewService({FirebaseFunctions? functions, FirebaseAuth? auth})
       : _functions = functions ?? FirebaseFunctions.instance,
@@ -37,4 +36,3 @@ class CircleViewService {
         .toList(growable: false);
   }
 }
-
