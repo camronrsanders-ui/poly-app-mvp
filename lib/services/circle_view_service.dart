@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+
 class CircleViewService {
   CircleViewService({FirebaseFunctions? functions, FirebaseAuth? auth})
       : _functions = functions ?? FirebaseFunctions.instance,
@@ -17,7 +18,8 @@ class CircleViewService {
     final callable = _functions.httpsCallable('getCircleForProfile');
     late final HttpsCallableResult<Map<String, dynamic>> result;
     try {
-      result = await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
+      result =
+          await callable.call<Map<String, dynamic>>({'ownerUid': ownerUid});
     } on FirebaseFunctionsException catch (error) {
       // A private, blocked, or otherwise restricted Circle is an expected
       // visibility boundary, not a reason to fail the member-profile screen.
@@ -35,3 +37,4 @@ class CircleViewService {
         .toList(growable: false);
   }
 }
+
