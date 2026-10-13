@@ -25,6 +25,12 @@ Future<void> waitForFinder(
   );
 }
 
+Future<void> pumpBounded(WidgetTester tester, {int frames = 12}) async {
+  for (var i = 0; i < frames; i += 1) {
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+}
+
 Future<Finder> waitForAny(
   WidgetTester tester,
   List<Finder> finders, {
@@ -45,24 +51,40 @@ Future<Finder> waitForAny(
 /// scroll on behalf of the app and hide a real chat UX defect.
 Future<void> waitForMessageAboveComposer(
   WidgetTester tester, {
-  required Finder message,
+  required String messageText,
   required Finder composer,
   int maxPumps = 48,
 }) async {
-  double? lastMessageBottom;
+  // Checking only the Text rect misses a cropped message bubble: its Sent
+  // receipt can be hidden under the composer while all text remains visible.
+  // The _MessageBubble Semantics node encloses the text, timestamp and receipt.
+  final completeBubble = find.byWidgetPredicate(
+    (widget) =>
+        widget is Semantics &&
+        (widget.properties.label ?? '').contains('You, $messageText'),
+    description: 'complete sent-message bubble and delivery receipt',
+  );
+  final busySend = find.descendant(
+    of: find.byTooltip('Send message'),
+    matching: find.byType(CircularProgressIndicator),
+  );
+  double? lastBubbleBottom;
   double? lastComposerTop;
   for (var attempt = 0; attempt < maxPumps; attempt += 1) {
     await tester.pump(const Duration(milliseconds: 250));
-    if (message.evaluate().length != 1 || composer.evaluate().length != 1) {
+    if (completeBubble.evaluate().length != 1 ||
+        composer.evaluate().length != 1 ||
+        busySend.evaluate().isNotEmpty) {
       continue;
     }
-    lastMessageBottom = tester.getRect(message).bottom;
+    lastBubbleBottom = tester.getRect(completeBubble).bottom;
     lastComposerTop = tester.getRect(composer).top;
-    if (lastMessageBottom < lastComposerTop - 8) return;
+    if (lastBubbleBottom < lastComposerTop - 8) return;
   }
   throw TestFailure(
-    'Latest chat message is not fully visible above its composer: '
-    'message bottom=$lastMessageBottom, composer top=$lastComposerTop.',
+    'Entire sent-message bubble (including receipt) must appear above the '
+    'composer with Send idle: bubble bottom=$lastBubbleBottom, '
+    'composer top=$lastComposerTop, busy=${busySend.evaluate().isNotEmpty}.',
   );
 }
 
@@ -173,6 +195,7 @@ void main() {
           find.text('Adult access & community rules'),
           find.text('Explore your orbit'),
         ],
+        maxPumps: 320,
       );
 
       if (route.evaluate().any(
@@ -306,6 +329,89 @@ void main() {
       expect(find.text('Passed'), findsNothing);
       await takeAcceptanceScreenshot(binding, tester, '04-connections');
 
+      // UI-14: inspect a real seeded member's public profile through its
+      // existing Connection options. Only open the safety menu; never report,
+      // block, or send interest as part of screenshot acceptance.
+      final connectionOptions = find.byTooltip('Connection options');
+      // A Finder.first throws before scrollUntilVisible can bring a lazy
+      // child into existence. Keep the unfiltered Finder through the scroll.
+      await tester.scrollUntilVisible(
+        connectionOptions,
+        180,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      expect(connectionOptions, findsOneWidget);
+      // Connection tiles may animate indefinitely while loading photos;
+      // jump to the centered option, then pump a bounded number of frames.
+      await Scrollable.ensureVisible(
+        tester.element(connectionOptions),
+        alignment: 0.5,
+        duration: Duration.zero,
+      );
+      await pumpBounded(tester);
+      // Verify the popup really opened; a clipped tap must not count.
+      await tester.tap(connectionOptions);
+      await pumpBounded(tester);
+      await waitForFinder(
+        tester,
+        find.text('View profile'),
+        description: 'open Connections options menu',
+      );
+      expect(find.text('Open chat'), findsOneWidget);
+      expect(find.text('End connection'), findsOneWidget);
+      await tester.tap(find.text('View profile'));
+      await waitForFinder(
+        tester,
+        find.text('Step into their world'),
+        description: 'connected member public profile',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Step into their world'),
+        description: 'Member profile detail',
+      );
+      // Both media and consent-filtered Circle details are asynchronous.
+      // A spinner is not acceptable proof of the completed member page.
+      var memberProfileLoaded = false;
+      for (var pump = 0; pump < 160; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+          memberProfileLoaded = true;
+          break;
+        }
+      }
+      expect(
+        memberProfileLoaded,
+        isTrue,
+        reason: 'Member profile media and Circle must finish loading.',
+      );
+      final memberSafetyOptions = find.byType(PopupMenuButton<String>);
+      expect(memberSafetyOptions, findsOneWidget);
+      await tester.tap(memberSafetyOptions);
+      await pumpBounded(tester);
+      expect(find.text('Report'), findsOneWidget);
+      expect(find.text('Block'), findsOneWidget);
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('Step into their world'),
+        description: 'member profile after dismissing safety menu',
+      );
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '04a-member-profile',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.textContaining('Jordan'),
+        description: 'Connections restored after member profile',
+        maxPumps: 160,
+      );
+
       await openNavTab(tester, 'Circle');
       await waitForFinder(
         tester,
@@ -388,7 +494,7 @@ void main() {
       );
       await waitForMessageAboveComposer(
         tester,
-        message: find.text(acceptanceMessage),
+        messageText: acceptanceMessage,
         composer: composer,
       );
       await takeAcceptanceScreenshot(binding, tester, '07-chat');
@@ -413,6 +519,141 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await takeAcceptanceScreenshot(binding, tester, '08-profile');
+
+      // UI-12: the owner must be able to open profile editing and safely
+      // return without unintentionally mutating any personal information.
+      final editProfile = find.text('Edit profile');
+      // The self-profile scroll is down at Cam's details after screenshot 08.
+      // Flutter lazily builds the earlier edit button; ensureVisible on an
+      // unbuilt widget fails instead of scrolling toward it.
+      await tester.scrollUntilVisible(
+        editProfile,
+        -200,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      // The first visible frame can leave the label underneath the fixed
+      // app bar (Android previously tried to tap it at y=54 and missed).
+      // An awaited animated ensureVisible can deadlock a live widget test:
+      // no frames advance the animation until this Future finishes. Snap to
+      // the centered position, then pump bounded frames before the real tap.
+      await Scrollable.ensureVisible(
+        tester.element(editProfile),
+        alignment: 0.5,
+        duration: Duration.zero,
+      );
+      await pumpBounded(tester);
+      expect(tester.getRect(editProfile).center.dy, greaterThan(90));
+      await tester.tap(editProfile);
+      await pumpBounded(tester);
+      await waitForFinder(
+        tester,
+        find.text('Manage profile photos'),
+        description: 'loaded editable profile settings',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Edit profile'),
+        description: 'Edit profile settings',
+      );
+      final nameField = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Display name',
+        description: 'owner display-name editor',
+      );
+      expect(nameField, findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08a-profile-settings',
+      );
+      // UI-15: entering Photo management must not start a picker or upload.
+      // The backend-backed gallery must resolve to a real empty/status view.
+      await tester.tap(find.text('Manage profile photos'));
+      await waitForFinder(
+        tester,
+        find.text('Protected profile photos'),
+        description: 'private photo management route',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Profile photos'),
+        description: 'Profile Photos',
+      );
+      await waitForFinder(
+        tester,
+        find.text('Choose a photo'),
+        description: 'available photo chooser button',
+      );
+      await waitForAny(
+        tester,
+        <Finder>[
+          find.text('No profile photos yet'),
+          find.text('Visible on your profile'),
+          find.text('Processing securely'),
+          find.text('Awaiting safety review'),
+          find.text('Waiting for upload'),
+          find.text('Not approved'),
+          find.text('Removed'),
+        ],
+        maxPumps: 160,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+          find.text('Could not load profile photos right now.'), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08aa-profile-photos',
+      );
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('Manage profile photos'),
+        description: 'profile settings restored after photo management',
+        maxPumps: 160,
+      );
+
+      // The settings page is a lazy ListView. Prove that the bottom Save and
+      // account controls are actually reachable rather than asserting on an
+      // offscreen/unbuilt widget.
+      final saveProfile = find.text('Save profile');
+      await tester.scrollUntilVisible(
+        saveProfile,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(saveProfile, findsOneWidget);
+      final logout = find.text('Log out');
+      await tester.scrollUntilVisible(
+        logout,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(logout, findsOneWidget);
+      final deleteAccount = find.text('Delete my account');
+      await tester.scrollUntilVisible(
+        deleteAccount,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(deleteAccount, findsOneWidget);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '08b-profile-settings-actions',
+      );
+      // Do not submit, sign out or initiate account deletion.
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile after abandoning profile edit',
+        maxPumps: 160,
+      );
 
       await tester.tap(find.byTooltip('Safety center'));
       await waitForFinder(

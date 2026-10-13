@@ -39,6 +39,11 @@ def run():
         "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
         "--no-pub",
     ]
+    if args.platform == "android":
+        # CI-only A/B: use the Skia software rendering path to distinguish
+        # Linux emulator Impeller startup failure from Chat viewport defects.
+        # The actual Android and iOS product renderer remains unchanged.
+        command.append("--no-enable-impeller")
     environment = dict(os.environ)
     environment["POLYCIRCLE_ACCEPTANCE_OUTPUT_DIRECTORY"] = str(output)
     timeout = 1500 if args.platform == "ios" else 900
@@ -64,9 +69,12 @@ def run():
 
     names = {p.stem for p in output.glob("*.png") if p.stat().st_size > 1024}
     required = {
-        "01-login", "03-discover", "03a-discover-pass-counter",
-        "04-connections", "05-circle", "05a-relationship-manager",
-        "06-messages", "07-chat", "08-profile", "09-safety",
+        "01-login", "02-compliance", "03-discover",
+        "03a-discover-pass-counter",
+        "04-connections", "04a-member-profile", "05-circle",
+        "05a-relationship-manager",
+        "06-messages", "07-chat", "08-profile", "08a-profile-settings",
+        "08aa-profile-photos", "08b-profile-settings-actions", "09-safety",
     }
     missing = required - names
     if missing:

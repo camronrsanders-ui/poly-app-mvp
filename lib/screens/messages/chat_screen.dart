@@ -132,6 +132,121 @@ bool chatShouldFollowOwnSentMessage({
       latestLastId != previousLastId;
 }
 
+/// Tracks the own-sent-message viewport follow across frames.
+///
+/// After the member sends a message, the software keyboard can still be
+/// animating: late bottom-inset growth increases the message list's
+/// maxScrollExtent after the first scroll jump, which would otherwise
+/// leave the just-sent message hidden behind the composer (the Android
+/// acceptance journey measured a stable 26px overlap). The follow re-pins
+/// to the bottom on every frame until the observed extent is unchanged
+/// for [stableFramesRequired] consecutive frames, the member drags the
+/// list, or [maxFrames] frames have elapsed.
+///
+/// A short stable plateau is not proof the viewport is done changing:
+/// the just-sent message's pending-to-confirmed snapshot, a late IME
+/// inset step, or a relayout can pause for a few frames and then grow
+/// the extent again (an integrated QA run measured the sent bubble
+/// resting 10px under the composer after exactly such a plateau, with
+/// no follow left alive to re-pin it). So once the extent settles, the
+/// follow keeps guarding for [guardFrames] more frames: an extent
+/// change while guarding resumes re-pinning until the extent settles
+/// again, instead of stranding the message under the composer.
+@visibleForTesting
+class OwnSentMessageFollowTracker {
+  OwnSentMessageFollowTracker({
+    this.maxFrames = 240,
+    this.stableFramesRequired = 2,
+    this.guardFrames = 600,
+  });
+
+  /// Hard cap so a perpetually changing extent cannot pin the list
+  /// forever (240 frames is ~4s at 60fps, far beyond any IME settle).
+  final int maxFrames;
+
+  /// Consecutive frames that must report the same maxScrollExtent,
+  /// after jumping to it, before the viewport counts as settled.
+  final int stableFramesRequired;
+
+  /// Frames the follow keeps watching for a late extent change after
+  /// the extent first settles (600 frames is ~10s at 60fps, far beyond
+  /// the send acknowledgement and IME settle it guards against).
+  final int guardFrames;
+
+  double? _lastMaxExtent;
+  int _stableFrames = 0;
+  int _frames = 0;
+  int _totalFrames = 0;
+  int _guardFramesLeft = 0;
+  bool _cancelled = false;
+  bool _settled = false;
+
+  bool get isActive => !_cancelled && !_settled;
+
+  /// Whether the follow has settled once and is now only watching for
+  /// a late extent change. While guarding, the extent the follow
+  /// settled at is available as [guardedExtent].
+  bool get isGuarding => isActive && _guardFramesLeft > 0;
+
+  /// The extent the follow settled at while guarding, or null when the
+  /// follow is not in its guard phase. The driver compares the live
+  /// position against this to tell a member scroll-away (same extent,
+  /// position short of it) apart from a late extent change.
+  double? get guardedExtent => isGuarding ? _lastMaxExtent : null;
+
+  /// Records the extent observed on this frame (sampled after jumping to
+  /// the bottom) and returns whether the follow should continue for
+  /// another frame.
+  bool observeFrame(double maxScrollExtent) {
+    if (!isActive) return false;
+    _totalFrames += 1;
+    if (_totalFrames >= maxFrames + guardFrames) {
+      _settled = true;
+      return false;
+    }
+    if (isGuarding) {
+      if (maxScrollExtent == _lastMaxExtent) {
+        _guardFramesLeft -= 1;
+        if (_guardFramesLeft <= 0) {
+          _settled = true;
+          return false;
+        }
+        return true;
+      }
+      // Late extent change after a settle plateau: resume re-pinning
+      // until the extent settles again, then guard once more.
+      _guardFramesLeft = 0;
+      _frames = 0;
+      _stableFrames = 0;
+      _lastMaxExtent = maxScrollExtent;
+      return true;
+    }
+    _frames += 1;
+    if (_lastMaxExtent != null && maxScrollExtent == _lastMaxExtent) {
+      _stableFrames += 1;
+    } else {
+      _stableFrames = 0;
+    }
+    _lastMaxExtent = maxScrollExtent;
+    if (_stableFrames >= stableFramesRequired) {
+      if (guardFrames > 0) {
+        _guardFramesLeft = guardFrames;
+        return true;
+      }
+      _settled = true;
+      return false;
+    }
+    if (_frames >= maxFrames) {
+      _settled = true;
+      return false;
+    }
+    return true;
+  }
+
+  /// The member took over the scroll position; stop following.
+  void cancel() => _cancelled = true;
+}
+
 typedef ChatReportAction = Future<void> Function({
   required String reportedUid,
   required String reason,
@@ -340,6 +455,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialScrollScheduled = false;
   bool _didInitialScroll = false;
   bool _awaitingOwnSentMessage = false;
+  OwnSentMessageFollowTracker? _ownSentFollow;
   bool _sending = false;
   bool _reporting = false;
   bool _endingConnection = false;
@@ -418,7 +534,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _liveMessagesError = null;
     });
 
-    if (followLatest) {
+    if (followOwnSend) {
+      _followOwnSentMessageThroughViewportChanges();
+    } else if (followLatest) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_scrollController.hasClients) return;
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -436,6 +554,46 @@ class _ChatScreenState extends State<ChatScreen> {
         _didInitialScroll = true;
       });
     }
+  }
+
+  /// Keep the member's just-sent message pinned to the bottom while the
+  /// viewport settles. A single jump is not enough: the keyboard may
+  /// still be animating when the send snapshot arrives, and each later
+  /// inset change grows the scroll extent behind the composer. Re-jump
+  /// every frame until [OwnSentMessageFollowTracker] reports the extent
+  /// stable, and keep guarding afterwards for late extent changes; a
+  /// member drag cancels the follow immediately.
+  void _followOwnSentMessageThroughViewportChanges() {
+    final tracker = OwnSentMessageFollowTracker();
+    _ownSentFollow = tracker;
+
+    void step() {
+      if (!mounted || !identical(_ownSentFollow, tracker)) return;
+      if (!tracker.isActive) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !identical(_ownSentFollow, tracker)) return;
+        if (!_scrollController.hasClients) {
+          step();
+          return;
+        }
+        final position = _scrollController.position;
+        final guardedExtent = tracker.guardedExtent;
+        if (guardedExtent != null &&
+            position.maxScrollExtent == guardedExtent &&
+            position.pixels < guardedExtent - 4) {
+          // While guarding, the extent is stable and every frame is
+          // pinned, so sitting short of the settled extent means the
+          // member scrolled away without a drag notification (for
+          // example a fling). Stop instead of snapping the list back.
+          tracker.cancel();
+          return;
+        }
+        _scrollController.jumpTo(position.maxScrollExtent);
+        if (tracker.observeFrame(position.maxScrollExtent)) step();
+      });
+    }
+
+    step();
   }
 
   void _onLiveError(Object error) {
@@ -1109,7 +1267,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     top: BorderSide(color: semantic.border),
                   ),
                 ),
-                child: _buildMessageContent(uid),
+                child: NotificationListener<ScrollStartNotification>(
+                  onNotification: (notification) {
+                    // Member-driven scrolls carry drag details; the
+                    // programmatic follow jumps do not and must not
+                    // cancel themselves.
+                    if (notification.dragDetails != null) {
+                      _ownSentFollow?.cancel();
+                    }
+                    return false;
+                  },
+                  child: _buildMessageContent(uid),
+                ),
               ),
             ),
             _MessageComposer(
