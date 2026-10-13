@@ -564,13 +564,27 @@ async function resetDiscoverFixtureState() {
   for (const action of ['discover', 'discover_location', 'like', 'pass']) {
     batch.delete(db.collection('_rate_limits').doc(`${action}_${ownerUid}`));
   }
+
+  // The seeded existing connection (Cam + Jordan) is not a Discover
+  // pair, so the loop above never resets it. Without an explicit reset,
+  // messages a previous acceptance attempt sent in that conversation
+  // survive the re-seed and poison the retry: the journey sends a fixed
+  // message text and asserts exactly one matching bubble, so a leftover
+  // copy makes the retry unpassable. seedExistingConnection recreates
+  // the match, the conversation, and its two fixture messages.
+  const connectionPair = [ownerUid, 'local-jordan'].sort().join('_');
+  batch.delete(db.collection('conversations').doc(connectionPair));
+  batch.delete(db.collection('matches').doc(connectionPair));
   await batch.commit();
 
+  const messagePairIds = allCandidateUids.map((candidateUid) =>
+    [ownerUid, candidateUid].sort().join('_'),
+  );
+  messagePairIds.push(connectionPair);
   const messageSnapshots = await Promise.all(
-    allCandidateUids.map((candidateUid) => {
-      const pair = [ownerUid, candidateUid].sort().join('_');
-      return db.collection('messages').where('conversationId', '==', pair).get();
-    }),
+    messagePairIds.map((pair) =>
+      db.collection('messages').where('conversationId', '==', pair).get(),
+    ),
   );
   const messageBatch = db.batch();
   for (const snapshot of messageSnapshots) {
