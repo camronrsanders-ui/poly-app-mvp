@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../config/feature_flags.dart';
 import 'circle/my_circle_screen.dart';
 import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
+import 'learn/learn_screen.dart';
 import 'messages/messages_screen.dart';
 import 'profile/self_profile_screen.dart';
 import 'safety/safety_center_screen.dart';
@@ -32,12 +34,15 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   late final List<Widget?> _pages;
 
-  static const _titles = [
+  static const int _learnIndex = 5;
+
+  late final List<String> _titles = [
     'Discover',
     'Connections',
     'Circle',
     'Messages',
     'Profile',
+    if (FeatureFlags.learnEnabled) 'Learn',
   ];
 
   @override
@@ -62,6 +67,7 @@ class _MainShellState extends State<MainShell> {
       2 => const MyCircleScreen(),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
+      5 => const LearnScreen(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -122,6 +128,12 @@ class _MainShellState extends State<MainShell> {
           : AppBar(
               title: Text(_titles[_index]),
               actions: [
+                if (FeatureFlags.learnEnabled)
+                  IconButton(
+                    tooltip: 'Get help & learn',
+                    icon: const Icon(Icons.favorite_outline),
+                    onPressed: () => _selectTab(_learnIndex),
+                  ),
                 IconButton(
                   tooltip: 'Safety center',
                   icon: const Icon(Icons.shield_outlined),
@@ -140,6 +152,7 @@ class _MainShellState extends State<MainShell> {
       bottomNavigationBar: _MainNavigation(
         selectedIndex: _index,
         immersive: discoverSelected,
+        showLearn: FeatureFlags.learnEnabled,
         onDestinationSelected: _selectTab,
       ),
     );
@@ -150,44 +163,52 @@ class _MainNavigation extends StatelessWidget {
   const _MainNavigation({
     required this.selectedIndex,
     required this.immersive,
+    required this.showLearn,
     required this.onDestinationSelected,
   });
 
   final int selectedIndex;
   final bool immersive;
+  final bool showLearn;
   final ValueChanged<int> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
-    const destinations = [
-      NavigationDestination(
+    final destinations = [
+      const NavigationDestination(
         icon: Icon(Icons.explore_outlined),
         selectedIcon: Icon(Icons.explore),
         label: 'Discover',
       ),
       // Preserve the full destination name in its tooltip and page header,
       // but avoid wrapping a 11-character tab label on compact phones.
-      NavigationDestination(
+      const NavigationDestination(
         icon: Icon(Icons.people_alt_outlined),
         selectedIcon: Icon(Icons.people_alt),
         label: 'Connect',
         tooltip: 'Connections',
       ),
-      NavigationDestination(
+      const NavigationDestination(
         icon: Icon(Icons.hub_outlined),
         selectedIcon: Icon(Icons.hub),
         label: 'Circle',
       ),
-      NavigationDestination(
+      const NavigationDestination(
         icon: Icon(Icons.chat_bubble_outline),
         selectedIcon: Icon(Icons.chat_bubble),
         label: 'Messages',
       ),
-      NavigationDestination(
+      const NavigationDestination(
         icon: Icon(Icons.person_outline),
         selectedIcon: Icon(Icons.person),
         label: 'Profile',
       ),
+      if (showLearn)
+        const NavigationDestination(
+          icon: Icon(Icons.menu_book_outlined),
+          selectedIcon: Icon(Icons.menu_book),
+          label: 'Learn',
+        ),
     ];
 
     if (!immersive) {
