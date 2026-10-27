@@ -23,4 +23,13 @@ class FeatureFlags {
   /// AI compatibility scoring is not part of MVP. Discovery remains
   /// transparent/rule-based until explicitly designed and reviewed.
   static const bool aiCompatibilityEnabled = false;
+
+  /// Learn (Stage 1) is static, in-app educational content: the
+  /// Get Help card, a glossary, learning paths, and book
+  /// recommendations, with crisis contacts and library/directory
+  /// links that open externally. It has no backend surface and no
+  /// unresolved policy gate, so it ships enabled. Stage 2 additions
+  /// (community term proposals, progress tracking) need their own
+  /// review before they are enabled.
+  static const bool learnEnabled = true;
 }
