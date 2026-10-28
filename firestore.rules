@@ -366,6 +366,9 @@ service cloud.firestore {
     // Opaque Discover paging state is trusted-backend-only. It can contain
     // ordered member UIDs but never private coordinates.
     match /_discover_sessions/{uid} { allow read, write: if false; }
+    // Bilateral check-ins are trusted-backend-only: state expiry and block
+    // checks are enforced by the check-in callables, never by client access.
+    match /connection_check_ins/{conversationId} { allow read, write: if false; }
     match /_rate_limits/{docId} { allow read, write: if false; }
   }
 }

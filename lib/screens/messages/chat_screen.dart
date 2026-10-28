@@ -5,12 +5,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/feature_flags.dart';
+import '../../services/check_in_service.dart';
 import '../../services/connection_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/shared_moments_service.dart';
 import '../../services/ugc_text_policy.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/check_in_card.dart';
 import '../../widgets/conversation_space_header.dart';
 import 'shared_moments_screen.dart';
 import 'shared_plans_screen.dart';
@@ -389,7 +391,8 @@ class ChatScreen extends StatefulWidget {
         sendAction = null,
         endConnectionAction = null,
         blockAction = null,
-        reportAction = null;
+        reportAction = null,
+        checkInActions = null;
 
   @visibleForTesting
   const ChatScreen.test({
@@ -402,6 +405,7 @@ class ChatScreen extends StatefulWidget {
     required this.endConnectionAction,
     required this.blockAction,
     required this.reportAction,
+    this.checkInActions,
     this.disableMessageStream = true,
   });
 
@@ -414,6 +418,10 @@ class ChatScreen extends StatefulWidget {
   final ChatMemberAction? endConnectionAction;
   final ChatMemberAction? blockAction;
   final ChatReportAction? reportAction;
+
+  /// Test seam for the check-in card; production builds construct the
+  /// actions from [CheckInService] instead.
+  final CheckInActions? checkInActions;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -430,6 +438,7 @@ class _ChatScreenState extends State<ChatScreen> {
   ConnectionService? _connectionsInstance;
   SafetyService? _safetyInstance;
   SharedMomentsService? _sharedMomentsInstance;
+  CheckInService? _checkInInstance;
 
   MessagingService get _messages => _messagesInstance ??= MessagingService();
   ConnectionService get _connections =>
@@ -437,6 +446,11 @@ class _ChatScreenState extends State<ChatScreen> {
   SafetyService get _safety => _safetyInstance ??= SafetyService();
   SharedMomentsService get _sharedMoments =>
       _sharedMomentsInstance ??= SharedMomentsService();
+  CheckInService get _checkIns => _checkInInstance ??= CheckInService();
+
+  CheckInActions get _checkInActions =>
+      widget.checkInActions ??
+      CheckInActions.fromService(_checkIns, widget.conversationId);
 
   String? get _currentUid =>
       widget.currentUid ?? FirebaseAuth.instance.currentUser?.uid;
@@ -1259,6 +1273,12 @@ class _ChatScreenState extends State<ChatScreen> {
         top: false,
         child: Column(
           children: [
+            if (FeatureFlags.checkInEnabled)
+              CheckInCard(
+                actions: _checkInActions,
+                otherDisplayName: widget.otherDisplayName,
+                otherUid: widget.otherUid,
+              ),
             Expanded(
               child: DecoratedBox(
                 decoration: BoxDecoration(
