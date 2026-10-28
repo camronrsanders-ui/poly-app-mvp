@@ -8,6 +8,7 @@ import {
   isActiveCompliantMember,
 } from './account_compliance';
 import {assertCanReceiveNewConnection} from './connection_eligibility';
+import {checkInDocIdsForAccountDeletion} from './connection_check_in_fields';
 import {candidateMatchesPreferences} from './discovery_preferences';
 import {
   distanceMiles,
@@ -728,6 +729,15 @@ export const deleteMyAccount = onCall(
       deleteDocs(preferencesAsRequester.docs);
       deleteDocs(profileMedia.docs);
 
+      // Check-ins are present-tense only (Phase 2 spec §3.3): every
+      // conversation this account belongs to loses its check-in doc in
+      // the same sweep, so no shared state or note outlives the account.
+      for (const checkInDocId of checkInDocIdsForAccountDeletion(
+        conversations.docs.map((doc) => doc.id),
+      )) {
+        writer.delete(db.collection('connection_check_ins').doc(checkInDocId));
+      }
+
       for (const doc of [...matchesA.docs, ...matchesB.docs]) {
         if (doc.get('active') !== true) continue;
         writer.set(doc.ref, {
@@ -772,6 +782,8 @@ export const deleteMyAccount = onCall(
         'block', 'unblock', 'block_list', 'unmatch', 'report', 'data_snapshot',
         'shared_moment_create', 'shared_moment_list', 'shared_moment_delete',
         'shared_plan_create', 'shared_plan_list', 'shared_plan_update', 'shared_plan_cancel',
+        'check_in_get', 'check_in_state_set', 'check_in_state_clear',
+        'check_in_note_set', 'check_in_note_clear',
         'moderation_list', 'moderation_review', 'moderation_account',
         'private_media_request', 'private_media_request_response', 'private_media_request_cancel',
         'private_media_preference_clear',

@@ -1,6 +1,7 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {assertActiveCompliantMember} from './account_compliance';
+import {checkInDocIdForConversation} from './connection_check_in_fields';
 
 const allowedReportReasons = new Set([
   'harassment',
@@ -217,6 +218,8 @@ export const blockUser = onCall(
     const pair = pairId(blockerUid, blockedUid);
     const matchRef = db.collection('matches').doc(pair);
     const conversationRef = db.collection('conversations').doc(pair);
+    const checkInRef = db.collection('connection_check_ins')
+      .doc(checkInDocIdForConversation(pair));
     const outgoingLikeRef = db.collection('likes').doc(`${blockerUid}_${blockedUid}`);
     const incomingLikeRef = db.collection('likes').doc(`${blockedUid}_${blockerUid}`);
 
@@ -237,6 +240,10 @@ export const blockUser = onCall(
 
       tx.delete(outgoingLikeRef);
       tx.delete(incomingLikeRef);
+      // A check-in is present-tense only (Phase 2 spec §3.3): a block
+      // deletes the pair's check-in doc in the same transaction that
+      // closes the conversation, rather than leaving it guard-refused.
+      tx.delete(checkInRef);
 
       if (match.exists && match.get('active') === true) {
         tx.set(matchRef, {
@@ -340,6 +347,8 @@ export const endConnection = onCall(
     const pair = pairId(uid, otherUid);
     const matchRef = db.collection('matches').doc(pair);
     const conversationRef = db.collection('conversations').doc(pair);
+    const checkInRef = db.collection('connection_check_ins')
+      .doc(checkInDocIdForConversation(pair));
     const outgoingLikeRef = db.collection('likes').doc(`${uid}_${otherUid}`);
     const incomingLikeRef = db.collection('likes').doc(`${otherUid}_${uid}`);
 
@@ -357,6 +366,9 @@ export const endConnection = onCall(
       // metadata when the connection was already closed by an earlier action.
       tx.delete(outgoingLikeRef);
       tx.delete(incomingLikeRef);
+      // Present-tense only (Phase 2 spec §3.3): ending the connection
+      // deletes its check-in doc even when the match was already closed.
+      tx.delete(checkInRef);
       if (match.get('active') !== true) return;
 
       tx.set(matchRef, {
