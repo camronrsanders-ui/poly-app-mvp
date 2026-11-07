@@ -716,6 +716,26 @@ void main() {
       );
       expect(find.textContaining('not emergency services'), findsOneWidget);
 
+      // Leaving a pushed route inside this segment cannot use
+      // tester.pageBack(): on iOS the covered route's Back button stays
+      // in the tree next to the foreground one, and pageBack() demands
+      // exactly one — PR #70's first CI run threw "One back button
+      // expected on screen — Found 2 widgets" at the S3 pageBack. Settle
+      // the foreground route first, then tap ITS Back button (the last
+      // 'Back' tooltip in traversal order is the topmost route's).
+      Future<void> leaveViaForegroundBack({
+        required Finder foregroundTitle,
+        required String description,
+      }) async {
+        await waitForForegroundRouteSettled(
+          tester,
+          foregroundTitle,
+          description: description,
+        );
+        await tester.tap(find.byTooltip('Back').last);
+        await pumpBounded(tester);
+      }
+
       // S2: the blocked-members entry resolves to the empty state on a
       // fresh seed (the seed creates no blocks, and its reset clears the
       // candidate blocks plus — since the UI-16 seed fix — Jordan's).
@@ -745,7 +765,10 @@ void main() {
         tester,
         '09a-blocked-members-empty',
       );
-      await tester.pageBack();
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Blocked members'),
+        description: 'Blocked members',
+      );
       await waitForFinder(
         tester,
         find.text('Safety center'),
@@ -765,7 +788,10 @@ void main() {
         );
       }
 
-      await tester.pageBack();
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Safety center'),
+        description: 'Safety Center',
+      );
       await waitForFinder(
         tester,
         find.text('View my profile'),
@@ -933,13 +959,19 @@ void main() {
       );
       expect(find.text('Unblock'), findsNothing);
       expect(find.text('Jordan'), findsNothing);
-      await tester.pageBack();
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Blocked members'),
+        description: 'Blocked members after unblock',
+      );
       await waitForFinder(
         tester,
         find.text('Safety center'),
         description: 'Safety center after unblock',
       );
-      await tester.pageBack();
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Safety center'),
+        description: 'Safety Center',
+      );
       await waitForFinder(
         tester,
         find.text('View my profile'),
