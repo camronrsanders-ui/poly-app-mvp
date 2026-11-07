@@ -144,9 +144,15 @@ Future<void> takeAcceptanceScreenshot(
   await tester.pump(const Duration(milliseconds: 300));
   final widgetException = tester.takeException();
   if (widgetException != null) {
+    // A FlutterError's one-line summary hides which widget failed (PR
+    // #70's 09b overflow named no culprit in any CI log). Include the
+    // full diagnostics so a failure identifies the exact widget.
+    final detail = widgetException is FlutterError
+        ? widgetException.toStringDeep()
+        : '$widgetException';
     throw TestFailure(
       'Unexpected widget/layout error at acceptance checkpoint $name: '
-      '$widgetException',
+      '$detail',
     );
   }
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');

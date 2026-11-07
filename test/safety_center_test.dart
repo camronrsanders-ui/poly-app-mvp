@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/safety/safety_center_screen.dart';
+import 'package:polycircle/theme/app_theme.dart';
 
 void main() {
   const blockedAlex = <String, dynamic>{
     'blockedUid': 'blocked-1',
     'displayName': 'Alex',
+  };
+
+  // The exact fixture the live acceptance journey produces: the seed's
+  // existing-connection member, blocked by the seeded owner mid-journey.
+  const blockedJordan = <String, dynamic>{
+    'blockedUid': 'local-jordan',
+    'displayName': 'Jordan',
   };
 
   testWidgets(
@@ -177,38 +185,50 @@ void main() {
   );
 
   testWidgets(
-    'Populated blocked-members row fits a narrow 320dp viewport',
+    'Populated blocked-members row fits narrow viewports with the '
+    'app theme',
     (tester) async {
-      // Mirror the CI Android emulator's display (320x640 at density 1.0).
-      // Regression coverage for PR #70's first CI run, where the populated
-      // row overflowed horizontally by 101px at this width: the name must
-      // ellipsize, the subtitle must wrap, and Unblock must stay on screen.
-      tester.view.physicalSize = const Size(320, 640);
-      tester.view.devicePixelRatio = 1;
+      // Regression coverage for PR #70's CI failures at the populated
+      // blocked-members checkpoint (101px at the 320dp Android
+      // viewport, 73px at the 375dp iOS viewport). The row must hold
+      // under the conditions the earlier version of this test missed:
+      // the REAL blocked fixture (Jordan, not a short fake name), the
+      // app's real theme (custom wide font and text sizes, not the
+      // default Material theme), and BOTH CI viewport widths. The name
+      // must ellipsize, the subtitle must wrap, and Unblock must stay
+      // on screen.
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: BlockedMembersScreen(
-            loadBlockedUsers: () async => [blockedAlex],
-            unblockMember: (_) async {},
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+      for (final size in [const Size(320, 640), const Size(375, 667)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Alex'), findsOneWidget);
-      expect(
-        find.text('Previous connections and private access stay closed.'),
-        findsOneWidget,
-      );
-      expect(find.text('Unblock'), findsOneWidget);
-      expect(
-        tester.getRect(find.text('Unblock')).right,
-        lessThanOrEqualTo(320),
-      );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            home: BlockedMembersScreen(
+              loadBlockedUsers: () async => [blockedJordan],
+              unblockMember: (_) async {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Jordan'), findsOneWidget);
+        expect(
+          find.text('Previous connections and private access stay closed.'),
+          findsOneWidget,
+        );
+        expect(find.text('Unblock'), findsOneWidget);
+        expect(
+          tester.getRect(find.text('Unblock')).right,
+          lessThanOrEqualTo(size.width),
+        );
+
+        await tester.pumpWidget(const SizedBox());
+      }
     },
   );
 
