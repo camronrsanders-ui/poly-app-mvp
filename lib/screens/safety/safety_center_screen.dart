@@ -365,8 +365,7 @@ class _BlockedMembersScreenState extends State<BlockedMembersScreen> {
                                 name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -391,8 +390,8 @@ class _BlockedMembersScreenState extends State<BlockedMembersScreen> {
                           child: working
                               ? const SizedBox.square(
                                   dimension: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2))
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
                               : const Text('Unblock'),
                         ),
                       ],
