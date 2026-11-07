@@ -499,6 +499,30 @@ void main() {
       );
       await takeAcceptanceScreenshot(binding, tester, '07-chat');
 
+      // UI-18 / UI-19: Shared Moments and Shared Plans are feature-gated
+      // OFF in the pre-billing build. Their only entry points are the
+      // conversation app-bar actions, which must not be rendered at all
+      // while the flags are off — no exposed entry or creation path, and
+      // no dormant control that is accidentally interactive. (The
+      // long-press "Save to Shared Moments" creation path is suppressed
+      // by the same flag; that branch is pinned at source level by the
+      // saved_message_moment_ui contract tests.)
+      expect(
+        find.byKey(const Key('conversation-shared-moments')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('conversation-shared-plans')),
+        findsNothing,
+      );
+      expect(find.byTooltip('Shared moments'), findsNothing);
+      expect(find.byTooltip('Plans'), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '07a-chat-gated-features-off',
+      );
+
       await tester.pageBack();
       await waitForFinder(
         tester,
