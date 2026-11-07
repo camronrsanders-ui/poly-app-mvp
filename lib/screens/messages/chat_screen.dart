@@ -1271,42 +1271,64 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            if (FeatureFlags.checkInEnabled)
-              CheckInCard(
-                actions: _checkInActions,
-                otherDisplayName: widget.otherDisplayName,
-                otherUid: widget.otherUid,
-              ),
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(color: semantic.border),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // The check-in card and the composer are the column's only
+            // inflexible children; the message list (Expanded) absorbs
+            // whatever height remains. On a short body — the Android
+            // emulator once its software keyboard shrinks the viewport —
+            // the card's natural height plus the composer can exceed the
+            // available height outright, which overflows this column and
+            // squeezes the message list to zero. Reserve the composer's
+            // space plus a usable slice of the list, and let the card
+            // scroll internally only when it would exceed the rest: on
+            // tall viewports the cap sits above the card's natural
+            // height, so the layout there is unchanged.
+            final cardSpace = constraints.maxHeight - 240;
+            final cardMaxHeight = cardSpace < 96 ? 96.0 : cardSpace;
+            return Column(
+              children: [
+                if (FeatureFlags.checkInEnabled)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: cardMaxHeight),
+                    child: SingleChildScrollView(
+                      child: CheckInCard(
+                        actions: _checkInActions,
+                        otherDisplayName: widget.otherDisplayName,
+                        otherUid: widget.otherUid,
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      border: Border(
+                        top: BorderSide(color: semantic.border),
+                      ),
+                    ),
+                    child: NotificationListener<ScrollStartNotification>(
+                      onNotification: (notification) {
+                        // Member-driven scrolls carry drag details; the
+                        // programmatic follow jumps do not and must not
+                        // cancel themselves.
+                        if (notification.dragDetails != null) {
+                          _ownSentFollow?.cancel();
+                        }
+                        return false;
+                      },
+                      child: _buildMessageContent(uid),
+                    ),
                   ),
                 ),
-                child: NotificationListener<ScrollStartNotification>(
-                  onNotification: (notification) {
-                    // Member-driven scrolls carry drag details; the
-                    // programmatic follow jumps do not and must not
-                    // cancel themselves.
-                    if (notification.dragDetails != null) {
-                      _ownSentFollow?.cancel();
-                    }
-                    return false;
-                  },
-                  child: _buildMessageContent(uid),
+                _MessageComposer(
+                  controller: _controller,
+                  sending: _sending,
+                  onSend: _send,
                 ),
-              ),
-            ),
-            _MessageComposer(
-              controller: _controller,
-              sending: _sending,
-              onSend: _send,
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

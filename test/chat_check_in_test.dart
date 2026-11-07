@@ -68,4 +68,56 @@ void main() {
       expect(loads, greaterThan(0));
     },
   );
+
+  testWidgets(
+    'chat screen does not overflow on a short keyboard-reduced viewport',
+    (tester) async {
+      // Mirrors the Android acceptance failure: the software keyboard
+      // shrinks the body until the check-in card's natural height plus
+      // the composer no longer fit. The card must yield space (scroll
+      // internally) instead of overflowing the chat column and
+      // squeezing the message list to zero height.
+      tester.view.physicalSize = const Size(411, 340);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final actions = CheckInActions(
+        load: () async => const CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: null,
+          sharedNote: null,
+        ),
+        setMyState: ({required state, note = ''}) async {},
+        clearMyState: () async {},
+        setSharedNote: (_) async {},
+        clearSharedNote: () async {},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatScreen.test(
+            conversationId: 'conversation-1',
+            otherUid: 'member-2',
+            otherDisplayName: 'Alex',
+            currentUid: 'member-1',
+            sendAction: ({required conversationId, required text}) async {},
+            endConnectionAction: (_) async {},
+            blockAction: (_) async {},
+            reportAction: _noopReport,
+            checkInActions: actions,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('check-in-card')), findsOneWidget);
+      expect(
+        find.byKey(const Key('conversation-message-composer')),
+        findsOneWidget,
+      );
+    },
+  );
 }
