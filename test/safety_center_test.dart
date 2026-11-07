@@ -176,6 +176,42 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Populated blocked-members row fits a narrow 320dp viewport',
+    (tester) async {
+      // Mirror the CI Android emulator's display (320x640 at density 1.0).
+      // Regression coverage for PR #70's first CI run, where the populated
+      // row overflowed horizontally by 101px at this width: the name must
+      // ellipsize, the subtitle must wrap, and Unblock must stay on screen.
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlockedMembersScreen(
+            loadBlockedUsers: () async => [blockedAlex],
+            unblockMember: (_) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Alex'), findsOneWidget);
+      expect(
+        find.text('Previous connections and private access stay closed.'),
+        findsOneWidget,
+      );
+      expect(find.text('Unblock'), findsOneWidget);
+      expect(
+        tester.getRect(find.text('Unblock')).right,
+        lessThanOrEqualTo(320),
+      );
+    },
+  );
+
   test(
     'BlockedMembersScreen requires both injected callbacks together',
     () {

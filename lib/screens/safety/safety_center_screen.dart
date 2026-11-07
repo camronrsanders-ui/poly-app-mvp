@@ -341,19 +341,61 @@ class _BlockedMembersScreenState extends State<BlockedMembersScreen> {
                   final rawName = block['displayName']?.toString().trim() ?? '';
                   final name = rawName.isEmpty ? 'Blocked member' : rawName;
                   final working = uid.isNotEmpty && _working.contains(uid);
-                  return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.block)),
-                    title: Text(name),
-                    subtitle: const Text(
-                        'Previous connections and private access stay closed.'),
-                    trailing: TextButton(
-                      onPressed:
-                          working || uid.isEmpty ? null : () => _unblock(block),
-                      child: working
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Unblock'),
+                  // A hand-built row instead of a ListTile: the text column
+                  // must be able to compress on narrow screens. As a
+                  // ListTile this row overflowed horizontally by 101px at
+                  // the 320dp-wide CI Android viewport once a member was
+                  // actually blocked (PR #70's first CI run) — the same
+                  // failure would hit real narrow Android phones. The
+                  // Expanded column ellipsizes the name and wraps the
+                  // subtitle, so the Unblock action always stays on screen.
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(child: Icon(Icons.block)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style:
+                                    Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Previous connections and private access stay closed.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: working || uid.isEmpty
+                              ? null
+                              : () => _unblock(block),
+                          child: working
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Text('Unblock'),
+                        ),
+                      ],
                     ),
                   );
                 },
