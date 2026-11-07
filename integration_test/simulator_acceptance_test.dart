@@ -517,11 +517,6 @@ void main() {
       );
       expect(find.byTooltip('Shared moments'), findsNothing);
       expect(find.byTooltip('Plans'), findsNothing);
-      await takeAcceptanceScreenshot(
-        binding,
-        tester,
-        '07a-chat-gated-features-off',
-      );
 
       await tester.pageBack();
       await waitForFinder(
