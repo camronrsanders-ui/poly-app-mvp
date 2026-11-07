@@ -463,6 +463,103 @@ async function seedDiscoverPhotos() {
   }
 }
 
+async function seedModerationFixtures() {
+  // UI-17: deterministic pending-review fixtures for the emulator-only
+  // moderator queue. The acceptance journey mutates these fixtures —
+  // approving flips a doc to active and rejecting deletes its Storage
+  // object — and CI re-seeds before attempt 2, so each fixture is deleted
+  // and recreated on every run. Owners are never the moderator (the
+  // review callable bans self-review) and never Cam (his member gallery
+  // evidence stays empty), and every doc id is a fixed string.
+  const bucket = storage.bucket(`${projectId}.firebasestorage.app`);
+  const now = Date.now();
+  const fixtures = [
+    {
+      photoId: 'local-moderation-photo-approve',
+      ownerUid: 'local-jordan',
+      portrait: 'profile-07.jpg',
+      status: 'processed_pending_review',
+      createdAt: Timestamp.fromMillis(now - 30 * 60 * 1000),
+      processedAt: Timestamp.fromMillis(now - 25 * 60 * 1000),
+    },
+    {
+      photoId: 'local-moderation-photo-reject',
+      ownerUid: 'local-alex',
+      portrait: 'profile-08.jpg',
+      status: 'processed_pending_review',
+      createdAt: Timestamp.fromMillis(now - 20 * 60 * 1000),
+      processedAt: Timestamp.fromMillis(now - 15 * 60 * 1000),
+    },
+    {
+      // Pending but deliberately malformed: the storagePath is not the
+      // canonical processed path, so listProfilePhotosForReview filters
+      // the doc out before any download. No Storage object is created.
+      photoId: 'local-moderation-photo-invalid',
+      ownerUid: 'local-riley',
+      portrait: null,
+      storagePath:
+        'users/local-riley/profile_quarantine/'
+        + 'local-moderation-photo-invalid.jpg',
+      status: 'processed_pending_review',
+      createdAt: Timestamp.fromMillis(now - 10 * 60 * 1000),
+      processedAt: Timestamp.fromMillis(now - 5 * 60 * 1000),
+    },
+    {
+      // Already decided before the journey starts: proves non-pending
+      // statuses are excluded from the queue. Like a real rejection, its
+      // processed Storage object is gone.
+      photoId: 'local-moderation-photo-decided',
+      ownerUid: 'local-jordan',
+      portrait: null,
+      status: 'rejected',
+      createdAt: Timestamp.fromMillis(now - 40 * 60 * 1000),
+      processedAt: Timestamp.fromMillis(now - 35 * 60 * 1000),
+      reviewedAt: Timestamp.fromMillis(now - 5 * 60 * 1000),
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const storagePath = fixture.storagePath
+      ?? `users/${fixture.ownerUid}/profile/${fixture.photoId}.jpg`;
+    const mediaRef = db.collection('profile_media').doc(fixture.photoId);
+    await mediaRef.delete();
+    await bucket.file(storagePath).delete({ignoreNotFound: true});
+
+    const doc = {
+      photoId: fixture.photoId,
+      ownerUid: fixture.ownerUid,
+      status: fixture.status,
+      contentType: 'image/jpeg',
+      storagePath,
+      createdAt: fixture.createdAt,
+      processedAt: fixture.processedAt,
+      updatedAt: fixture.processedAt,
+      emulatorFixture: true,
+    };
+    if (fixture.portrait !== null) {
+      const bytes = await readFile(
+        path.join(discoverPortraitDirectory, fixture.portrait),
+      );
+      await saveDiscoverFixturePhoto(bucket.file(storagePath), bytes, {
+        contentType: 'image/jpeg',
+        metadata: {
+          ownerUid: fixture.ownerUid,
+          photoId: fixture.photoId,
+          processed: 'true',
+          emulatorFixture: 'true',
+        },
+      });
+      doc.processedSizeBytes = bytes.length;
+    }
+    if (fixture.status === 'rejected') {
+      doc.rejectionReason = 'local_moderation_qa';
+      doc.reviewedAt = fixture.reviewedAt;
+      doc.reviewedByUid = 'local-moderator';
+    }
+    await mediaRef.set(doc);
+  }
+}
+
 async function seedIncomingInterest() {
   // Emulator-only deterministic mutual-match fixture.
   // Alex has already expressed interest in Cam, but Cam must still
@@ -607,6 +704,7 @@ async function main() {
   for (const person of seededPeople) await seedPerson(person);
   await seedDiscoverLocations();
   await seedDiscoverPhotos();
+  await seedModerationFixtures();
   await seedIncomingInterest();
   await seedExistingConnection();
   await seedRelationshipCards();
@@ -626,6 +724,10 @@ async function main() {
     `Discover protected portrait fixtures: ${discoverFixtureCount} fictional emulator-only photos.`,
   );
   console.log('Existing connection: Jordan.');
+  console.log(
+    'Moderation queue fixtures: Jordan (approve), Alex (reject), '
+    + 'Riley (invalid path), Jordan (already rejected).',
+  );
 }
 
 main().then(() => process.exit(0)).catch((error) => {
