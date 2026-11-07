@@ -668,6 +668,289 @@ void main() {
       );
       await takeAcceptanceScreenshot(binding, tester, '09-safety');
 
+      // UI-17 (non-staff cell): the local moderator entry must stay
+      // hidden for a member session. Cam holds no moderator claim, so
+      // the Safety Center card never renders here.
+      expect(find.text('Local moderator QA'), findsNothing);
+      expect(find.text('Review pending profile photos'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      // UI-17 (staff segment): sign out and return as the seeded local
+      // moderator. This segment runs last and ends signed in as staff,
+      // so nothing may follow it.
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety Center before sign-out',
+      );
+      await tester.tap(find.byTooltip('Back').last);
+      await pumpBounded(tester);
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile before sign-out',
+      );
+      final logOutTile = find.widgetWithText(ListTile, 'Log out');
+      await tester.scrollUntilVisible(
+        logOutTile,
+        -200,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      await tester.ensureVisible(logOutTile);
+      await pumpBounded(tester);
+      await tester.tap(logOutTile);
+      await waitForFinder(
+        tester,
+        find.text('Welcome back'),
+        description: 'login screen after sign-out',
+        maxPumps: 240,
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'moderator@local.polycircle.test',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'LocalOnly123!',
+      );
+      final staffSignIn = find.widgetWithText(FilledButton, 'Sign in');
+      await tester.ensureVisible(staffSignIn);
+      await tester.tap(staffSignIn);
+
+      final staffRoute = await waitForAny(
+        tester,
+        <Finder>[
+          find.text('Adult access & community rules'),
+          find.byType(NavigationBar),
+        ],
+        maxPumps: 320,
+      );
+
+      if (staffRoute.evaluate().any(
+            (element) =>
+                element.widget is Text &&
+                (element.widget as Text).data ==
+                    'Adult access & community rules',
+          )) {
+        // The moderator fixture predates the approval fields, so the
+        // same adult-access gate Cam passed applies here. Work it
+        // exactly as the member branch did, without a screenshot.
+        await tester.tap(find.text('Date of birth'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+
+        final staffGateScroll = find.byType(Scrollable).first;
+
+        final staffTermsTile = find.widgetWithText(
+          CheckboxListTile,
+          'I am 18+ and accept the Terms of Use',
+        );
+        await tester.scrollUntilVisible(
+          staffTermsTile,
+          120,
+          scrollable: staffGateScroll,
+        );
+        await tester.ensureVisible(staffTermsTile);
+        await tester.pumpAndSettle();
+        final staffTermsCheckbox = find.descendant(
+          of: staffTermsTile,
+          matching: find.byType(Checkbox),
+        );
+        await tester.tap(staffTermsCheckbox);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(staffTermsCheckbox).value, isTrue);
+
+        final staffGuidelinesTile = find.widgetWithText(
+          CheckboxListTile,
+          'I accept the Community Guidelines',
+        );
+        await tester.scrollUntilVisible(
+          staffGuidelinesTile,
+          120,
+          scrollable: staffGateScroll,
+        );
+        await tester.ensureVisible(staffGuidelinesTile);
+        await tester.pumpAndSettle();
+        final staffGuidelinesCheckbox = find.descendant(
+          of: staffGuidelinesTile,
+          matching: find.byType(Checkbox),
+        );
+        await tester.tap(staffGuidelinesCheckbox);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(staffGuidelinesCheckbox).value, isTrue);
+
+        final staffVerifyLabel = find.text('Verify & continue');
+        await tester.scrollUntilVisible(
+          staffVerifyLabel,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(staffVerifyLabel);
+      }
+
+      await waitForFinder(
+        tester,
+        find.byType(NavigationBar),
+        description: 'main shell as moderator',
+        maxPumps: 240,
+      );
+      await openNavTab(tester, 'Profile');
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'moderator self profile',
+        maxPumps: 160,
+      );
+      await tester.tap(find.byTooltip('Safety center'));
+      await waitForFinder(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety center as moderator',
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety Center as moderator',
+      );
+      // The entry renders only once the moderator claim check resolves.
+      await waitForFinder(
+        tester,
+        find.text('Local moderator QA'),
+        description: 'local moderator entry for staff',
+        maxPumps: 240,
+      );
+      final reviewEntry = find.widgetWithText(
+        FilledButton,
+        'Review pending profile photos',
+      );
+      await tester.ensureVisible(reviewEntry);
+      await tester.tap(reviewEntry);
+      await waitForFinder(
+        tester,
+        find.text('Local photo moderation'),
+        description: 'photo moderation queue screen',
+        maxPumps: 160,
+      );
+      await waitForForegroundRouteSettled(
+        tester,
+        find.text('Local photo moderation'),
+        description: 'Local photo moderation',
+      );
+
+      // The queue lists the two valid pending fixtures in processedAt
+      // order: Jordan first, then Alex. Riley's malformed-path fixture
+      // is filtered out server-side and must never appear, and both
+      // previews must render rather than fall back to unavailable.
+      await waitForFinder(
+        tester,
+        find.text('Jordan'),
+        description: 'first pending moderation card',
+        maxPumps: 240,
+      );
+      expect(find.text('Preview unavailable.'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await takeAcceptanceScreenshot(binding, tester, '10-moderation-queue');
+
+      final alexCard = find.widgetWithText(Card, 'Alex');
+      await tester.scrollUntilVisible(
+        alexCard,
+        220,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      expect(alexCard, findsOneWidget);
+      expect(find.text('Riley'), findsNothing);
+
+      // Approve Jordan's photo: it leaves the pending queue.
+      final jordanCard = find.widgetWithText(Card, 'Jordan');
+      await tester.scrollUntilVisible(
+        jordanCard,
+        -220,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      final approveJordan = find.descendant(
+        of: jordanCard,
+        matching: find.widgetWithText(FilledButton, 'Approve'),
+      );
+      await tester.ensureVisible(approveJordan);
+      await pumpBounded(tester);
+      await tester.tap(approveJordan);
+      await waitForFinder(
+        tester,
+        find.text('Approve this photo?'),
+        description: 'approve confirmation dialog',
+      );
+      final confirmApprove = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Approve'),
+      );
+      await tester.tap(confirmApprove);
+      await waitForFinder(
+        tester,
+        find.text('Photo approved.'),
+        description: 'approve success snackbar',
+        maxPumps: 240,
+      );
+      expect(tester.takeException(), isNull);
+      var approvedCardGone = false;
+      for (var attempt = 0; attempt < 160; attempt += 1) {
+        await tester.pump(const Duration(milliseconds: 250));
+        if (find.text('Jordan').evaluate().isEmpty) {
+          approvedCardGone = true;
+          break;
+        }
+      }
+      expect(
+        approvedCardGone,
+        isTrue,
+        reason: 'Approved photo must leave the pending queue.',
+      );
+
+      // Reject Alex's photo: the queue drains to its empty state.
+      final rejectAlex = find.descendant(
+        of: alexCard,
+        matching: find.widgetWithText(OutlinedButton, 'Reject'),
+      );
+      await tester.scrollUntilVisible(
+        rejectAlex,
+        220,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      await tester.ensureVisible(rejectAlex);
+      await pumpBounded(tester);
+      await tester.tap(rejectAlex);
+      await waitForFinder(
+        tester,
+        find.text('Reject this photo?'),
+        description: 'reject confirmation dialog',
+      );
+      final confirmReject = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Reject'),
+      );
+      await tester.tap(confirmReject);
+      await waitForFinder(
+        tester,
+        find.text('Photo rejected.'),
+        description: 'reject success snackbar',
+        maxPumps: 240,
+      );
+      expect(tester.takeException(), isNull);
+      await waitForFinder(
+        tester,
+        find.text('No photos awaiting review'),
+        description: 'empty moderation queue',
+        maxPumps: 240,
+      );
+      expect(find.text('Alex'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await takeAcceptanceScreenshot(binding, tester, '10-moderation-empty');
+
       expect(tester.takeException(), isNull);
     },
   );
