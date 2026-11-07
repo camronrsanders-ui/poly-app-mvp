@@ -471,7 +471,29 @@ async function seedModerationFixtures() {
   // and recreated on every run. Owners are never the moderator (the
   // review callable bans self-review) and never Cam (his member gallery
   // evidence stays empty), and every doc id is a fixed string.
-  const bucket = storage.bucket(`${projectId}.firebasestorage.app`);
+  //
+  // These objects must land in the bucket the review callables read:
+  // profile_media_moderation.ts resolves photos through the Admin SDK's
+  // DEFAULT bucket (getStorage().bucket()), which initializeApp()
+  // derives from FIREBASE_CONFIG's storageBucket — in every environment
+  // configured for this repo that is "<projectId>.appspot.com".
+  // seedDiscoverPhotos writes to "<projectId>.firebasestorage.app", a
+  // different bucket in the Storage emulator; objects written there are
+  // invisible to the review path, its preview download 404s, and the
+  // rejected list call leaves the moderator queue empty. Mirror the
+  // functions-side resolution here: FIREBASE_CONFIG first, then the
+  // conventional default bucket name for the project.
+  let configuredBucket = '';
+  try {
+    configuredBucket = process.env.FIREBASE_CONFIG
+      ? String(JSON.parse(process.env.FIREBASE_CONFIG).storageBucket ?? '')
+      : '';
+  } catch (_) {
+    // A malformed config must never make the fixture bucket less strict.
+  }
+  const bucket = storage.bucket(
+    configuredBucket || `${projectId}.appspot.com`,
+  );
   const now = Date.now();
   const fixtures = [
     {
@@ -549,6 +571,17 @@ async function seedModerationFixtures() {
           emulatorFixture: 'true',
         },
       });
+      // Fail the seed loudly rather than silently producing an empty
+      // moderation queue: the review list downloads each pending object
+      // from this bucket, and one missing object rejects the whole call.
+      const [objectExists] = await bucket.file(storagePath).exists();
+      if (!objectExists) {
+        throw new Error(
+          `Moderation fixture ${fixture.photoId} did not land in bucket `
+          + `${bucket.name} at ${storagePath}; refusing to seed an `
+          + 'unreviewable queue.',
+        );
+      }
       doc.processedSizeBytes = bytes.length;
     }
     if (fixture.status === 'rejected') {
