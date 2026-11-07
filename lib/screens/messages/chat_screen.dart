@@ -306,8 +306,12 @@ Future<void> showChatReportFlow({
                 ),
                 const SizedBox(height: 12),
               ],
+              // Expand to the dialog's content width: sized by its
+              // widest item instead, the field can overflow the dialog
+              // on narrow viewports (the longest reason is 31 chars).
               DropdownButtonFormField<String>(
                 initialValue: reason,
+                isExpanded: true,
                 items: reasons.entries
                     .map(
                       (entry) => DropdownMenuItem(
