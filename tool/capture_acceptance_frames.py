@@ -76,6 +76,7 @@ def run():
         "06-messages", "07-chat", "08-profile", "08a-profile-settings",
         "08aa-profile-photos", "08b-profile-settings-actions", "09-safety",
         "09a-blocked-members-empty", "09b-blocked-members-jordan",
+        "10-moderation-queue", "10-moderation-empty",
     }
     missing = required - names
     if missing:
