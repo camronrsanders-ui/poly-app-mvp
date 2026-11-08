@@ -144,9 +144,15 @@ Future<void> takeAcceptanceScreenshot(
   await tester.pump(const Duration(milliseconds: 300));
   final widgetException = tester.takeException();
   if (widgetException != null) {
+    // A FlutterError's one-line summary hides which widget failed (PR
+    // #70's 09b overflow named no culprit in any CI log). Include the
+    // full diagnostics so a failure identifies the exact widget.
+    final detail = widgetException is FlutterError
+        ? widgetException.toStringDeep()
+        : '$widgetException';
     throw TestFailure(
       'Unexpected widget/layout error at acceptance checkpoint $name: '
-      '$widgetException',
+      '$detail',
     );
   }
   debugPrint('POLYCIRCLE_ACCEPTANCE:$name');
@@ -686,6 +692,317 @@ void main() {
         description: 'Safety Center',
       );
       await takeAcceptanceScreenshot(binding, tester, '09-safety');
+
+      // UI-16: Safety Center entries, a real report submit, and the full
+      // block/unblock cycle against the live backend. This segment must run
+      // LAST: confirming a block permanently closes the seeded Cam+Jordan
+      // match and conversation, and unblocking does not restore them, so
+      // nothing after this segment may depend on that connection. Within
+      // the segment the order is likewise fixed: the report and the block
+      // dialog's Cancel happen before the confirmed block, because after
+      // the block the chat route no longer exists.
+      //
+      // S1: the Safety Center is already the settled foreground route. Its
+      // explainer sections are the acceptance row's "help entries"; there
+      // is no separate Help button on this screen.
+      expect(
+        find.text('Your boundaries are part of the product'),
+        findsOneWidget,
+      );
+      // S1b: the local moderator entry renders only for a session holding
+      // a moderator claim; the seeded owner does not (this pre-covers the
+      // non-staff cell of UI-17).
+      await pumpBounded(tester);
+      expect(find.text('Local moderator QA'), findsNothing);
+      expect(find.text('Review pending profile photos'), findsNothing);
+      final safetyScroll = find.byType(Scrollable).first;
+      for (final heading in <String>[
+        'Block at any time',
+        'End a connection',
+        'Report concerning behavior',
+        'Severe content is blocked before posting',
+        'Private media stays gated',
+        'Profile photos are protected',
+        'Keep location coarse',
+        'Relationship descriptions are not verification',
+        'Adults only',
+      ]) {
+        await tester.scrollUntilVisible(
+          find.text(heading),
+          300,
+          scrollable: safetyScroll,
+        );
+        expect(find.text(heading), findsOneWidget);
+      }
+      await tester.scrollUntilVisible(
+        find.textContaining('not emergency services'),
+        300,
+        scrollable: safetyScroll,
+      );
+      expect(find.textContaining('not emergency services'), findsOneWidget);
+
+      // Leaving a pushed route inside this segment cannot use
+      // tester.pageBack(): on iOS the covered route's Back button stays
+      // in the tree next to the foreground one, and pageBack() demands
+      // exactly one — PR #70's first CI run threw "One back button
+      // expected on screen — Found 2 widgets" at the S3 pageBack. Settle
+      // the foreground route first, then tap ITS Back button (the last
+      // 'Back' tooltip in traversal order is the topmost route's).
+      Future<void> leaveViaForegroundBack({
+        required Finder foregroundTitle,
+        required String description,
+      }) async {
+        await waitForForegroundRouteSettled(
+          tester,
+          foregroundTitle,
+          description: description,
+        );
+        await tester.tap(find.byTooltip('Back').last);
+        await pumpBounded(tester);
+      }
+
+      // S2: the blocked-members entry resolves to the empty state on a
+      // fresh seed (the seed creates no blocks, and its reset clears the
+      // candidate blocks plus — since the UI-16 seed fix — Jordan's).
+      final manageBlocked = find.text('Manage blocked members');
+      await tester.scrollUntilVisible(
+        manageBlocked,
+        -300,
+        scrollable: safetyScroll,
+      );
+      await tester.tap(manageBlocked);
+      await waitForFinder(
+        tester,
+        find.text('Blocked members'),
+        description: 'blocked members screen title',
+        maxPumps: 160,
+      );
+      await waitForFinder(
+        tester,
+        find.text('No blocked members'),
+        description: 'empty blocked members state',
+        maxPumps: 160,
+      );
+      // A spinner is not acceptable evidence of the resolved empty state.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '09a-blocked-members-empty',
+      );
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Blocked members'),
+        description: 'Blocked members',
+      );
+      await waitForFinder(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety center after empty blocked list',
+      );
+
+      // S3: reach Jordan's chat safety controls. The popup-menu mitigation
+      // from checkpoint 04a applies here too: pump bounded frames after
+      // the tap, then wait for a menu item before tapping anything.
+      Future<void> openConversationSafetyMenu() async {
+        await tester.tap(find.byTooltip('Conversation safety options'));
+        await pumpBounded(tester);
+        await waitForFinder(
+          tester,
+          find.text('Report person'),
+          description: 'open conversation safety menu',
+        );
+      }
+
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Safety center'),
+        description: 'Safety Center',
+      );
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile after Safety center',
+        maxPumps: 160,
+      );
+      await openNavTab(tester, 'Messages');
+      await waitForFinder(
+        tester,
+        find.text('Jordan'),
+        description: 'seeded conversation before safety flows',
+        maxPumps: 160,
+      );
+      await tester.tap(find.text('Jordan'));
+      final safetyComposer = find.byKey(
+        const Key('conversation-message-composer'),
+      );
+      await waitForFinder(
+        tester,
+        safetyComposer,
+        description: 'conversation composer for safety flows',
+        maxPumps: 160,
+      );
+      await openConversationSafetyMenu();
+      expect(find.text('End connection'), findsOneWidget);
+      expect(find.text('Block'), findsOneWidget);
+
+      // S4: submit a real report against Jordan. The default reason is
+      // sufficient; the backing callable writes one reports document and
+      // changes no other visible state.
+      await tester.tap(find.text('Report person'));
+      await waitForFinder(
+        tester,
+        find.text('Report Jordan'),
+        description: 'report dialog',
+      );
+      expect(find.text('Reason'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit report'));
+      await waitForFinder(
+        tester,
+        find.text(
+          'Report submitted. Thank you for helping protect the community.',
+        ),
+        description: 'report submitted confirmation',
+        maxPumps: 160,
+      );
+      await pumpBounded(tester);
+
+      // S5: open the block confirmation and back out without confirming,
+      // mirroring the manual checklist's destructive-action discipline.
+      await openConversationSafetyMenu();
+      await tester.tap(find.text('Block'));
+      await waitForFinder(
+        tester,
+        find.text('Block Jordan?'),
+        description: 'block confirmation dialog',
+      );
+      expect(
+        find.text(
+          'They will no longer be able to interact with you through '
+          'Polycircle. You can manage blocks later.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await pumpBounded(tester);
+      expect(find.text('Block Jordan?'), findsNothing);
+      expect(safetyComposer, findsOneWidget);
+
+      // S6: confirm the block. blockUser closes the match and conversation
+      // server-side and revokes private access, then the chat route pops
+      // back to the main shell. Do not assert on Jordan's Messages tile
+      // here; the blocked list in S7 is the authoritative observable.
+      await openConversationSafetyMenu();
+      await tester.tap(find.text('Block'));
+      await waitForFinder(
+        tester,
+        find.text('Block Jordan?'),
+        description: 'block confirmation dialog reopened',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Block'));
+      await waitForFinder(
+        tester,
+        navLabel('Profile'),
+        description: 'main navigation after blocking Jordan',
+      );
+
+      // S7: the blocked-members list now shows Jordan with an Unblock
+      // action.
+      await openNavTab(tester, 'Profile');
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile before populated blocked list',
+        maxPumps: 160,
+      );
+      await tester.tap(find.byTooltip('Safety center'));
+      await waitForFinder(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety center for populated blocked list',
+      );
+      await tester.tap(find.text('Manage blocked members'));
+      await waitForFinder(
+        tester,
+        find.text('Jordan'),
+        description: 'blocked member Jordan',
+        maxPumps: 160,
+      );
+      expect(
+        find.text('Previous connections and private access stay closed.'),
+        findsOneWidget,
+      );
+      expect(find.text('Unblock'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await takeAcceptanceScreenshot(
+        binding,
+        tester,
+        '09b-blocked-members-jordan',
+      );
+
+      // S8: open the unblock confirmation and back out; the list must be
+      // unchanged.
+      await tester.tap(find.text('Unblock'));
+      await waitForFinder(
+        tester,
+        find.text('Unblock Jordan?'),
+        description: 'unblock confirmation dialog',
+      );
+      expect(
+        find.text(
+          'Unblocking allows future eligible interaction, but it does not '
+          'restore a previous match, conversation, or private-media access.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await pumpBounded(tester);
+      expect(find.text('Unblock Jordan?'), findsNothing);
+      expect(find.text('Jordan'), findsOneWidget);
+      expect(find.text('Unblock'), findsOneWidget);
+
+      // S9: confirm the unblock. The screen refreshes itself; afterwards a
+      // second unblock is unreachable in the UI, which is the drivable
+      // half of the duplicate-action check (the backend half is pinned by
+      // the safety functions and their tests).
+      await tester.tap(find.text('Unblock'));
+      await waitForFinder(
+        tester,
+        find.text('Unblock Jordan?'),
+        description: 'unblock confirmation dialog reopened',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Unblock'));
+      await waitForFinder(
+        tester,
+        find.text('Jordan unblocked.'),
+        description: 'unblocked confirmation',
+        maxPumps: 160,
+      );
+      await waitForFinder(
+        tester,
+        find.text('No blocked members'),
+        description: 'blocked list cleared after unblock',
+        maxPumps: 160,
+      );
+      expect(find.text('Unblock'), findsNothing);
+      expect(find.text('Jordan'), findsNothing);
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Blocked members'),
+        description: 'Blocked members after unblock',
+      );
+      await waitForFinder(
+        tester,
+        find.text('Safety center'),
+        description: 'Safety center after unblock',
+      );
+      await leaveViaForegroundBack(
+        foregroundTitle: find.text('Safety center'),
+        description: 'Safety Center',
+      );
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile at the end of the UI-16 segment',
+        maxPumps: 160,
+      );
 
       expect(tester.takeException(), isNull);
     },

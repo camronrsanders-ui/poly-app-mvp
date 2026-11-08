@@ -602,6 +602,15 @@ async function resetDiscoverFixtureState() {
   const connectionPair = [ownerUid, 'local-jordan'].sort().join('_');
   batch.delete(db.collection('conversations').doc(connectionPair));
   batch.delete(db.collection('matches').doc(connectionPair));
+
+  // Jordan is likewise not a Discover candidate, so the loop above never
+  // clears a Cam+Jordan block. The UI-16 acceptance segment blocks and
+  // unblocks Jordan against the live backend; a block left behind by a
+  // previous attempt would survive the re-seed and poison the retry:
+  // Jordan would start attempt 2 already blocked, and blocked filtering
+  // could hide the connection the retry asserts on.
+  batch.delete(db.collection('blocks').doc(`${ownerUid}_local-jordan`));
+  batch.delete(db.collection('blocks').doc(`local-jordan_${ownerUid}`));
   await batch.commit();
 
   const messagePairIds = allCandidateUids.map((candidateUid) =>
