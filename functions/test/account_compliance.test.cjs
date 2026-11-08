@@ -55,9 +55,30 @@ test('inactive or missing accounts never pass member compliance', () => {
   assert.equal(isActiveCompliantMember(snapshot({}, false)), false);
 });
 
-test('legacy account without compliance field is temporarily allowed for migration fixtures', () => {
-  // This compatibility test is intentionally temporary. Remove it together with
-  // the migration allowance before public release once old local/test accounts
-  // have been migrated to the explicit compliance schema.
-  assert.equal(isActiveCompliantMember(snapshot({accountStatus: 'active'})), true);
+test('legacy active account without approval or policy fields fails closed', () => {
+  assert.equal(isActiveCompliantMember(snapshot({accountStatus: 'active'})), false);
+  assert.equal(isActiveCompliantMember(snapshot({
+    accountStatus: 'active',
+    adultAccessApproved: null,
+    termsAcceptedVersion: CURRENT_TERMS_VERSION,
+    communityGuidelinesAcceptedVersion: CURRENT_COMMUNITY_GUIDELINES_VERSION,
+  })), false);
+});
+
+test('partial adult and policy records cannot grant member access', () => {
+  const baseline = {
+    accountStatus: 'active',
+    adultAccessApproved: true,
+    termsAcceptedVersion: CURRENT_TERMS_VERSION,
+    communityGuidelinesAcceptedVersion: CURRENT_COMMUNITY_GUIDELINES_VERSION,
+  };
+  for (const missingField of [
+    'adultAccessApproved',
+    'termsAcceptedVersion',
+    'communityGuidelinesAcceptedVersion',
+  ]) {
+    const partial = {...baseline};
+    delete partial[missingField];
+    assert.equal(isActiveCompliantMember(snapshot(partial)), false, missingField);
+  }
 });
