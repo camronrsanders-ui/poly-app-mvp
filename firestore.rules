@@ -21,18 +21,15 @@ service cloud.firestore {
     function userIsActive(uid) {
       return exists(/databases/$(database)/documents/users/$(uid))
         && get(/databases/$(database)/documents/users/$(uid)).data.accountStatus == 'active'
-        // Newly-created accounts explicitly start with adultAccessApproved=false
-        // and cannot use member paths until the trusted compliance callable
-        // approves the current adult/policy gate. The missing-field branch is a
-        // temporary migration allowance for old local/test account documents.
-        && (
-          !get(/databases/$(database)/documents/users/$(uid)).data.keys().hasAny(['adultAccessApproved'])
-          || (
-            get(/databases/$(database)/documents/users/$(uid)).data.adultAccessApproved == true
-            && get(/databases/$(database)/documents/users/$(uid)).data.termsAcceptedVersion == currentTermsVersion()
-            && get(/databases/$(database)/documents/users/$(uid)).data.communityGuidelinesAcceptedVersion == currentCommunityGuidelinesVersion()
-          )
-        );
+        // Member data is inaccessible without explicit trusted adult approval
+        // and current policy acceptance. Missing legacy fields must fail closed.
+        && get(/databases/$(database)/documents/users/$(uid)).data.keys().hasAll([
+          'adultAccessApproved', 'termsAcceptedVersion',
+          'communityGuidelinesAcceptedVersion'
+        ])
+        && get(/databases/$(database)/documents/users/$(uid)).data.adultAccessApproved == true
+        && get(/databases/$(database)/documents/users/$(uid)).data.termsAcceptedVersion == currentTermsVersion()
+        && get(/databases/$(database)/documents/users/$(uid)).data.communityGuidelinesAcceptedVersion == currentCommunityGuidelinesVersion();
     }
 
     function conversationExists(conversationId) {
