@@ -23,4 +23,13 @@ class FeatureFlags {
   /// AI compatibility scoring is not part of MVP. Discovery remains
   /// transparent/rule-based until explicitly designed and reviewed.
   static const bool aiCompatibilityEnabled = false;
+
+  /// Bilateral check-ins (Final Upgrade Phase 2) let both people in a
+  /// conversation post a current state that expires after 24 hours,
+  /// plus one jointly editable shared note. Access is callable-mediated
+  /// only, with its own backend gate (CONNECTION_CHECK_INS_ENABLED) so
+  /// it can ship or freeze independently of Shared Moments/Plans.
+  /// Enabled in this build so the feature is exercisable end to end;
+  /// production gating stays behind the founder's release gates.
+  static const bool checkInEnabled = true;
 }

@@ -129,3 +129,72 @@ test('client cannot self-approve adult access even with a complete current polic
     lastActiveAt: serverTimestamp(),
   }));
 });
+
+test('legacy active account can read own account marker but cannot access member data until trusted approval', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users', 'alice'), {
+      uid: 'alice',
+      accountStatus: 'active',
+      // Deliberately omit approval and policy fields to model legacy accounts.
+    });
+    await setDoc(doc(db, 'profiles', 'alice'), {
+      ...baseProfile('alice'),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+
+  const db = env.authenticatedContext('alice').firestore();
+  await assertSucceeds(getDoc(doc(db, 'users', 'alice')));
+  await assertFails(getDoc(doc(db, 'profiles', 'alice')));
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'new-card'), {
+    ownerUid: 'alice',
+    label: 'Partner',
+    connectionType: 'romantic',
+    displayNameOptional: '',
+    status: 'active',
+    note: '',
+    visibility: 'private',
+    sortOrder: 0,
+    isActive: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+
+  await trustedApproveAdultAccess();
+  await assertSucceeds(getDoc(doc(db, 'profiles', 'alice')));
+});
+
+test('partial or stale trusted compliance cannot unlock existing profile', async () => {
+  for (const [index, approval] of [
+    {adultAccessApproved: true},
+    {
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+    },
+    {
+      adultAccessApproved: true,
+      termsAcceptedVersion: 'stale-terms',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
+    },
+  ].entries()) {
+    const uid = `legacy-${index}`;
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users', uid), {
+        uid,
+        accountStatus: 'active',
+        ...approval,
+      });
+      await setDoc(doc(db, 'profiles', uid), {
+        ...baseProfile(uid),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+    const db = env.authenticatedContext(uid).firestore();
+    await assertSucceeds(getDoc(doc(db, 'users', uid)));
+    await assertFails(getDoc(doc(db, 'profiles', uid)));
+  }
+});

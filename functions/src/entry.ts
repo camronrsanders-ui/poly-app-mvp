@@ -11,3 +11,10 @@ export {
   updateSharedPlan,
   cancelSharedPlan,
 } from './shared_plans';
+export {
+  getCheckIn,
+  setMyCheckInState,
+  clearMyCheckInState,
+  setSharedCheckInNote,
+  clearSharedCheckInNote,
+} from './connection_check_ins';
