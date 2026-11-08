@@ -192,6 +192,9 @@ class _MainNavigation extends StatelessWidget {
 
     if (!immersive) {
       return NavigationBar(
+        // Match the immersive Discover bar's height so the bottom
+        // navigation does not shift vertically when switching tabs.
+        height: 72,
         selectedIndex: selectedIndex,
         onDestinationSelected: onDestinationSelected,
         destinations: destinations,
