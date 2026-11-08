@@ -5,12 +5,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/feature_flags.dart';
+import '../../services/check_in_service.dart';
 import '../../services/connection_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/safety_service.dart';
 import '../../services/shared_moments_service.dart';
 import '../../services/ugc_text_policy.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/check_in_card.dart';
 import '../../widgets/conversation_space_header.dart';
 import 'shared_moments_screen.dart';
 import 'shared_plans_screen.dart';
@@ -393,7 +395,8 @@ class ChatScreen extends StatefulWidget {
         sendAction = null,
         endConnectionAction = null,
         blockAction = null,
-        reportAction = null;
+        reportAction = null,
+        checkInActions = null;
 
   @visibleForTesting
   const ChatScreen.test({
@@ -406,6 +409,7 @@ class ChatScreen extends StatefulWidget {
     required this.endConnectionAction,
     required this.blockAction,
     required this.reportAction,
+    this.checkInActions,
     this.disableMessageStream = true,
   });
 
@@ -418,6 +422,10 @@ class ChatScreen extends StatefulWidget {
   final ChatMemberAction? endConnectionAction;
   final ChatMemberAction? blockAction;
   final ChatReportAction? reportAction;
+
+  /// Test seam for the check-in card; production builds construct the
+  /// actions from [CheckInService] instead.
+  final CheckInActions? checkInActions;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -434,6 +442,7 @@ class _ChatScreenState extends State<ChatScreen> {
   ConnectionService? _connectionsInstance;
   SafetyService? _safetyInstance;
   SharedMomentsService? _sharedMomentsInstance;
+  CheckInService? _checkInInstance;
 
   MessagingService get _messages => _messagesInstance ??= MessagingService();
   ConnectionService get _connections =>
@@ -441,6 +450,11 @@ class _ChatScreenState extends State<ChatScreen> {
   SafetyService get _safety => _safetyInstance ??= SafetyService();
   SharedMomentsService get _sharedMoments =>
       _sharedMomentsInstance ??= SharedMomentsService();
+  CheckInService get _checkIns => _checkInInstance ??= CheckInService();
+
+  CheckInActions get _checkInActions =>
+      widget.checkInActions ??
+      CheckInActions.fromService(_checkIns, widget.conversationId);
 
   String? get _currentUid =>
       widget.currentUid ?? FirebaseAuth.instance.currentUser?.uid;
@@ -1261,36 +1275,64 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(color: semantic.border),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // The check-in card and the composer are the column's only
+            // inflexible children; the message list (Expanded) absorbs
+            // whatever height remains. On a short body — the Android
+            // emulator once its software keyboard shrinks the viewport —
+            // the card's natural height plus the composer can exceed the
+            // available height outright, which overflows this column and
+            // squeezes the message list to zero. Reserve the composer's
+            // space plus a usable slice of the list, and let the card
+            // scroll internally only when it would exceed the rest: on
+            // tall viewports the cap sits above the card's natural
+            // height, so the layout there is unchanged.
+            final cardSpace = constraints.maxHeight - 240;
+            final cardMaxHeight = cardSpace < 96 ? 96.0 : cardSpace;
+            return Column(
+              children: [
+                if (FeatureFlags.checkInEnabled)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: cardMaxHeight),
+                    child: SingleChildScrollView(
+                      child: CheckInCard(
+                        actions: _checkInActions,
+                        otherDisplayName: widget.otherDisplayName,
+                        otherUid: widget.otherUid,
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      border: Border(
+                        top: BorderSide(color: semantic.border),
+                      ),
+                    ),
+                    child: NotificationListener<ScrollStartNotification>(
+                      onNotification: (notification) {
+                        // Member-driven scrolls carry drag details; the
+                        // programmatic follow jumps do not and must not
+                        // cancel themselves.
+                        if (notification.dragDetails != null) {
+                          _ownSentFollow?.cancel();
+                        }
+                        return false;
+                      },
+                      child: _buildMessageContent(uid),
+                    ),
                   ),
                 ),
-                child: NotificationListener<ScrollStartNotification>(
-                  onNotification: (notification) {
-                    // Member-driven scrolls carry drag details; the
-                    // programmatic follow jumps do not and must not
-                    // cancel themselves.
-                    if (notification.dragDetails != null) {
-                      _ownSentFollow?.cancel();
-                    }
-                    return false;
-                  },
-                  child: _buildMessageContent(uid),
+                _MessageComposer(
+                  controller: _controller,
+                  sending: _sending,
+                  onSend: _send,
                 ),
-              ),
-            ),
-            _MessageComposer(
-              controller: _controller,
-              sending: _sending,
-              onSend: _send,
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

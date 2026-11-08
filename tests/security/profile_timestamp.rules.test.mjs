@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -63,8 +64,8 @@ after(async () => env.cleanup());
 
 test('active owner can create profile only with server timestamps', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
   ]);
   const aliceDb = env.authenticatedContext('alice').firestore();
   const bobDb = env.authenticatedContext('bob').firestore();
@@ -80,7 +81,7 @@ test('active owner can create profile only with server timestamps', async () => 
 
 test('profile write rejects severe UGC at the Firestore boundary', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
 
@@ -98,7 +99,7 @@ test('profile write rejects severe UGC at the Firestore boundary', async () => {
 test('profile update preserves creation time and requires server updatedAt', async () => {
   const createdAt = new Date('2026-01-01T00:00:00.000Z');
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', profile('alice', {createdAt, updatedAt: new Date()})],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -119,7 +120,7 @@ test('profile update preserves creation time and requires server updatedAt', asy
 
 test('active client cannot directly delete the profile and orphan account state', async () => {
   await seed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', profile('alice', {createdAt: new Date(), updatedAt: new Date()})],
   ]);
   const db = env.authenticatedContext('alice').firestore();

@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -24,7 +25,7 @@ after(async () => {
 
 async function seedActiveUser(uid) {
   await env.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), 'users', uid), {uid, accountStatus: 'active'});
+    await setDoc(doc(ctx.firestore(), 'users', uid), approvedAccount(uid));
   });
 }
 

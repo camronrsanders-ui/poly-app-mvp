@@ -325,6 +325,32 @@ async function upsertAuthUser(person) {
 
 async function seedPerson(person) {
   await upsertAuthUser(person);
+  // Emulator-only fake accounts deliberately arrive with complete approved
+  // fixtures — EXCEPT the acceptance-journey driver (local-cam), who must
+  // pass the real compliance gate on camera so the journey's 02-compliance
+  // evidence exists. For the driver, any stale approval written by an
+  // earlier seed revision is deleted instead, mirroring how upsertAuthUser
+  // explicitly clears claims on every seed. Never copy this synthetic
+  // approval into a real-user migration.
+  const approvalFixture = person.uid === 'local-cam'
+    ? {
+        adultAccessApproved: FieldValue.delete(),
+        termsAcceptedVersion: FieldValue.delete(),
+        communityGuidelinesAcceptedVersion: FieldValue.delete(),
+        ageAssuranceMethod: FieldValue.delete(),
+        ageSignalStatus: FieldValue.delete(),
+        ageAssuranceCheckedAt: FieldValue.delete(),
+        ugcPolicyAcceptedAt: FieldValue.delete(),
+      }
+    : {
+        adultAccessApproved: true,
+        termsAcceptedVersion: '2026-08-alpha-v1',
+        communityGuidelinesAcceptedVersion: '2026-08-v1',
+        ageAssuranceMethod: 'emulator_fixture',
+        ageSignalStatus: 'adult:emulator_fixture',
+        ageAssuranceCheckedAt: FieldValue.serverTimestamp(),
+        ugcPolicyAcceptedAt: FieldValue.serverTimestamp(),
+      };
   await db.collection('users').doc(person.uid).set({
     uid: person.uid,
     email: person.email,
@@ -332,6 +358,7 @@ async function seedPerson(person) {
     onboardingComplete: true,
     lastActiveAt: FieldValue.serverTimestamp(),
     accountStatus: 'active',
+    ...approvalFixture,
   }, {merge: true});
 
   // Auth-only fields such as email and staff claims must never be copied into
