@@ -39,3 +39,16 @@ test('Circle view rate-limit state is cleaned during account deletion', () => {
   assert.match(circle, /action\s*=\s*'circle_view'/);
   assert.match(index, /'circle_view'/);
 });
+
+test('check-in data never surfaces through the Circle profile projection', () => {
+  // Bilateral check-ins are visible to exactly the two conversation
+  // participants (Final Upgrade Phase 2 spec §3.2): the projection must
+  // never read or expose the check-in collection or its fields.
+  assert.doesNotMatch(circle, /connection_check_ins/);
+  assert.doesNotMatch(circle, /checkIn|sharedNote/);
+  // The collection itself stays callable-only in the rules.
+  assert.match(
+    rules,
+    /match \/connection_check_ins\/\{conversationId\} \{ allow read, write: if false; \}/,
+  );
+});
