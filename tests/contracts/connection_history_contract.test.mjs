@@ -60,6 +60,28 @@ test('block and unmatch close chat without pretending a new message was sent', (
   }
 });
 
+test('block and unmatch delete the pair check-in doc with the connection', () => {
+  const blockSection = safety.match(/export const blockUser[\s\S]*?export const unblockUser/)?.[0] ?? '';
+  const unmatchSection = safety.match(/export const endConnection[\s\S]*$/)?.[0] ?? '';
+
+  for (const section of [blockSection, unmatchSection]) {
+    // Present-tense only (Final Upgrade Phase 2 spec §3.3): closing a
+    // connection deletes its bilateral check-in outright, in the same
+    // transaction, rather than leaving the doc behind guard refusals.
+    assert.match(section, /collection\('connection_check_ins'\)/);
+    assert.match(section, /tx\.delete\(checkInRef\)/);
+  }
+
+  // The unmatch delete runs even when the match was already closed: it
+  // sits with the like cleanup, before the inactive early return.
+  const deleteIndex = unmatchSection.indexOf('tx.delete(checkInRef)');
+  const guardIndex = unmatchSection.indexOf("if (match.get('active') !== true) return;");
+  assert.ok(
+    deleteIndex >= 0 && guardIndex > deleteIndex,
+    'endConnection must delete the check-in before the already-ended early return.',
+  );
+});
+
 test('account deletion preserves last-message chronology and old end history', () => {
   const section = index.match(/export const deleteMyAccount[\s\S]*?export \{blockUser/)?.[0] ?? '';
   assert.match(section, /if \(doc\.get\('active'\) !== true\) continue/);

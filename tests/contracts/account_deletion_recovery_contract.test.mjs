@@ -73,6 +73,22 @@ test('Shared Moments and Shared Plans user-scoped rate limits are included in de
   }
 });
 
+test('check-in docs and rate limits are included in deletion cleanup', () => {
+  for (const action of [
+    'check_in_get',
+    'check_in_state_set',
+    'check_in_state_clear',
+    'check_in_note_set',
+    'check_in_note_clear',
+  ]) {
+    assert.match(deletion, new RegExp(`'${action}'`), `${action} must be cleaned on deletion`);
+  }
+  // Present-tense only (Final Upgrade Phase 2 spec §3.3): the sweep
+  // deletes the check-in doc of every conversation the account is in.
+  assert.match(deletion, /checkInDocIdsForAccountDeletion\(/);
+  assert.match(deletion, /collection\('connection_check_ins'\)/);
+});
+
 test('profile-media and moderation rate limits stay covered by account deletion cleanup', () => {
   for (const action of [
     'profile_photo_upload',
