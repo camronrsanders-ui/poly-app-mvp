@@ -25,6 +25,9 @@ async function seed() {
     await setDoc(doc(db, 'users', 'alice'), {
       uid: 'alice', email: 'alice@example.test', createdAt: new Date(),
       onboardingComplete: true, lastActiveAt: new Date(), accountStatus: 'active',
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
     });
     await setDoc(doc(db, 'reports', 'report-1'), {
       reportId: 'report-1',

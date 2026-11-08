@@ -1,3 +1,4 @@
+import {approvedAccount} from './approved_account_fixture.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -76,7 +77,7 @@ after(async () => {
 
 test('unauthenticated user cannot read a public profile', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', baseProfile('alice')],
   ]);
   const db = env.unauthenticatedContext().firestore();
@@ -85,7 +86,7 @@ test('unauthenticated user cannot read a public profile', async () => {
 
 test('profile owner can read own profile', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', baseProfile('alice', 'hidden')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -94,8 +95,8 @@ test('profile owner can read own profile', async () => {
 
 test('unrelated user cannot update another profile', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['profiles', 'alice', baseProfile('alice')],
   ]);
   const db = env.authenticatedContext('bob').firestore();
@@ -108,6 +109,9 @@ test('user cannot promote or alter their own moderation status', async () => {
       uid: 'alice',
       email: 'alice@example.com',
       accountStatus: 'active',
+      adultAccessApproved: true,
+      termsAcceptedVersion: '2026-08-alpha-v1',
+      communityGuidelinesAcceptedVersion: '2026-08-v1',
       createdAt: new Date(),
       onboardingComplete: true,
       lastActiveAt: new Date(),
@@ -127,7 +131,7 @@ test('client cannot create an underage profile', async () => {
 
 test('profile owner cannot change uid ownership field', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', baseProfile('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -136,7 +140,7 @@ test('profile owner cannot change uid ownership field', async () => {
 
 test('profile owner can save only a reviewed Discover radius value', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', baseProfile('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -164,7 +168,7 @@ test('client cannot store permanent profile photo URLs', async () => {
 
 test('profile owner cannot add unknown privileged fields', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
     ['profiles', 'alice', baseProfile('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
@@ -178,8 +182,8 @@ test('profile owner cannot add unknown privileged fields', async () => {
 
 test('blocked user cannot directly read an otherwise public profile', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['profiles', 'alice', baseProfile('alice')],
     ['blocks', 'alice_bob', {blockerUid: 'alice', blockedUid: 'bob'}],
   ]);
@@ -189,8 +193,8 @@ test('blocked user cannot directly read an otherwise public profile', async () =
 
 test('matches-only profile is unreadable without a match', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['profiles', 'alice', baseProfile('alice', 'matches_only')],
   ]);
   const db = env.authenticatedContext('bob').firestore();
@@ -199,8 +203,8 @@ test('matches-only profile is unreadable without a match', async () => {
 
 test('active match still cannot read the other users full profile document directly', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['profiles', 'alice', baseProfile('alice', 'matches_only')],
     ['matches', 'alice_bob', {userAUid: 'alice', userBUid: 'bob', active: true}],
   ]);
@@ -239,7 +243,7 @@ test('client cannot forge another users block', async () => {
 
 test('client cannot create or delete block state directly', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
   ]);
   const db = env.authenticatedContext('alice').firestore();
   await assertFails(setDoc(doc(db, 'blocks', 'alice_bob'), {
@@ -299,8 +303,8 @@ test('client cannot read private-media metadata even when authenticated', async 
 
 test('blocked pair cannot read an existing conversation or messages', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       participantUids: ['alice', 'bob'],
       active: true,
@@ -325,9 +329,9 @@ test('blocked pair cannot read an existing conversation or messages', async () =
 
 test('nonparticipant cannot read an unblocked conversation or its messages', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
-    ['users', 'charlie', {uid: 'charlie', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
+    ['users', 'charlie', approvedAccount('charlie')],
     ['conversations', 'alice_bob', {
       participantUids: ['alice', 'bob'],
       active: true,
@@ -351,8 +355,8 @@ test('nonparticipant cannot read an unblocked conversation or its messages', asy
 
 test('participant cannot rewrite another users message content', async () => {
   await adminSeed([
-    ['users', 'alice', {uid: 'alice', accountStatus: 'active'}],
-    ['users', 'bob', {uid: 'bob', accountStatus: 'active'}],
+    ['users', 'alice', approvedAccount('alice')],
+    ['users', 'bob', approvedAccount('bob')],
     ['conversations', 'alice_bob', {
       participantUids: ['alice', 'bob'],
       active: true,
