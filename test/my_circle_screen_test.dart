@@ -59,6 +59,7 @@ Future<void> pumpCircle(
   MyCircleCreateAction? createCircleAction,
   MyCircleInviteAction? inviteMemberAction,
   MyCircleRespondAction? respondToInviteAction,
+  bool reduceMotion = false,
 }) async {
   tester.view.physicalSize = const Size(1100, 1800);
   tester.view.devicePixelRatio = 1;
@@ -67,6 +68,16 @@ Future<void> pumpCircle(
 
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            disableAnimations: reduceMotion,
+            accessibleNavigation: reduceMotion,
+          ),
+          child: child!,
+        );
+      },
       home: Scaffold(
         body: MyCircleScreen(
           uidProvider: () => 'owner-1',
@@ -494,6 +505,109 @@ void main() {
       expect(receivedInviteId, 'invite-2');
       expect(acceptedDecision, isFalse);
       expect(find.text('Circle invitation declined.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Previous and Next step focus through the roster',
+    (tester) async {
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[
+          connection('ana', 'Ana'),
+          connection('bo', 'Bo'),
+          connection('cy', 'Cy'),
+        ],
+      );
+
+      expect(find.text('Ana, 30'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Next person'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bo, 30'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Next person'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cy, 30'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Previous person'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bo, 30'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Everyone roster reaches people beyond the orbit render cap',
+    (tester) async {
+      await pumpCircle(
+        tester,
+        loadConnections: () async => List<Map<String, dynamic>>.generate(
+          30,
+          (index) => connection('person-$index', 'Person $index'),
+        ),
+      );
+
+      // The total is always visible: the render cap is never silent.
+      expect(find.text('Everyone · 30'), findsOneWidget);
+
+      await tester.tap(find.text('Everyone · 30'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Everyone in My Circle'), findsOneWidget);
+      expect(find.text('Person 1'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'Person 29');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Person 29'), findsOneWidget);
+
+      await tester.tap(find.text('Person 29'));
+      await tester.pumpAndSettle();
+
+      // Person 30 of 30 — outside the rendered window — is now
+      // the focused person.
+      expect(find.text('Person 29, 30'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Reduced motion switches worlds instantly, without camera travel',
+    (tester) async {
+      final alex = connection('alex', 'Alex');
+      final circle = const CircleSummary(
+        circleId: 'friends-1',
+        name: 'Friends',
+        ownerUid: 'owner-1',
+        role: 'owner',
+        memberCount: 1,
+        members: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'uid': 'alex',
+            'displayName': 'Alex',
+          },
+        ],
+      );
+
+      await pumpCircle(
+        tester,
+        reduceMotion: true,
+        loadConnections: () async => <Map<String, dynamic>>[alex],
+        loadSnapshot: () async => snapshot(
+          circles: <CircleSummary>[circle],
+        ),
+      );
+
+      expect(find.text('MY CIRCLE'), findsOneWidget);
+
+      await tester.tap(find.text('Friends'));
+      await tester.pump();
+
+      // One frame, no 620ms camera travel: the world has swapped.
+      expect(find.text('FRIENDS'), findsOneWidget);
+      expect(find.text('Alex, 30'), findsOneWidget);
     },
   );
 }
