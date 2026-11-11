@@ -136,7 +136,7 @@ class LearnContent {
       name: '988 Suicide & Crisis Lifeline',
       contact: 'Call or text 988',
       note:
-          'US, 24/7. For suicidal thoughts, emotional distress, or when you\'re worried about someone else.',
+          'US, 24/7. For suicidal thoughts, emotional distress, or when you\'re worried about someone else. Spanish-language support available.',
       actions: [CrisisAction(label: 'Call or text', uri: 'tel:988')],
     ),
     CrisisResource(
@@ -160,7 +160,7 @@ class LearnContent {
     CrisisResource(
       name: 'Trans Lifeline',
       contact: 'Call 877-565-8860',
-      note: 'Peer support run by and for trans people.',
+      note: 'Peer support run by and for trans people, in English and Spanish.',
       actions: [
         CrisisAction(label: 'Call', uri: 'tel:+18775658860'),
       ],
@@ -169,10 +169,19 @@ class LearnContent {
       name: 'National Domestic Violence Hotline',
       contact: 'Call 1-800-799-7233 or text START to 88788',
       note:
-          '24/7. Safety planning and advocacy if a partner — any partner — is hurting or controlling you.',
+          '24/7. Safety planning and advocacy if a partner — any partner — is hurting or controlling you. Interpreters available in 200+ languages, including Spanish.',
       actions: [
         CrisisAction(label: 'Call', uri: 'tel:+18007997233'),
         CrisisAction(label: 'Text', uri: 'sms:88788?body=START'),
+      ],
+    ),
+    CrisisResource(
+      name: 'Call BlackLine',
+      contact: 'Call or text 1-800-604-5841',
+      note:
+          'Peer support that centers Black, Indigenous, and people of color, with an LGBTQ+ Black femme lens — a non-police alternative when you need to talk.',
+      actions: [
+        CrisisAction(label: 'Call or text', uri: 'tel:+18006045841'),
       ],
     ),
   ];
@@ -199,6 +208,30 @@ class LearnContent {
               'openpathcollective.org — sliding-scale sessions (about \$30–\$80) with member therapists, if cost is the barrier.',
           url: 'https://openpathcollective.org',
         ),
+        SupportEntry(
+          name: 'NQTTCN directory',
+          detail:
+              'nqttcn.com — the National Queer and Trans Therapists of Color Network: queer and trans therapists of color, listed by the communities they serve.',
+          url: 'https://nqttcn.com',
+        ),
+        SupportEntry(
+          name: 'Latinx Therapy directory',
+          detail:
+              'latinxtherapy.com — Latine therapists, many bilingual in Spanish and English, searchable by language, location, and specialty.',
+          url: 'https://latinxtherapy.com',
+        ),
+        SupportEntry(
+          name: 'Therapy for Black Girls directory',
+          detail:
+              'therapyforblackgirls.com — a directory of Black women therapists, alongside a podcast and community centered on Black women\'s and girls\' mental health.',
+          url: 'https://therapyforblackgirls.com',
+        ),
+        SupportEntry(
+          name: 'Inclusive Therapists directory',
+          detail:
+              'inclusivetherapists.com — affirming, culturally responsive therapists; search by identity, language, and specialty.',
+          url: 'https://www.inclusivetherapists.com',
+        ),
       ],
     ),
     SupportGroup(
@@ -215,6 +248,18 @@ class LearnContent {
           detail:
               'lovemore.com — nonprofit supporting polyamory education, community, and advocacy.',
           url: 'https://www.lovemore.com',
+        ),
+        SupportEntry(
+          name: 'Black & Poly',
+          detail:
+              'blackandpoly.org — a nonprofit building community, education, and local groups by and for Black polyamorous people.',
+          url: 'https://blackandpoly.org',
+        ),
+        SupportEntry(
+          name: 'Poly Role Models',
+          detail:
+              'polyrolemodels.tumblr.com — Kevin A. Patterson\'s interview series sharing real polyamorous people\'s stories, deliberately centering the voices most often left out.',
+          url: 'https://polyrolemodels.tumblr.com',
         ),
       ],
     ),
@@ -235,7 +280,7 @@ class LearnContent {
       definition:
           'Practicing, or being open to, more than one romantic relationship at the same time, with the knowledge and consent of everyone involved. The emphasis is on ongoing emotional connection, not just sex.',
       example:
-          'Sam is married to Jo and also dating Alex — everyone knows about everyone, and they all talk openly about it.',
+          'Sam is married to Lucía and also dating Alex — everyone knows about everyone, and they all talk openly about it.',
     ),
     GlossaryTerm(
       term: 'Ethical non-monogamy (ENM)',
@@ -267,7 +312,7 @@ class LearnContent {
       definition:
           'Your partner\'s partner — someone you\'re connected to through a shared partner, but not dating yourself. Metamours can be anything from strangers to close friends.',
       example:
-          'Alex is my metamour: we both date Jordan, and we grab coffee now and then, but Alex and I aren\'t partners.',
+          'Alex is my metamour: we both date Mateo, and we grab coffee now and then, but Alex and I aren\'t partners.',
     ),
     GlossaryTerm(
       term: 'Polycule',
@@ -283,7 +328,7 @@ class LearnContent {
       definition:
           'A relationship between exactly two people. Polyamorous networks are built out of dyads — each pair has its own relationship, even inside a group.',
       example:
-          'Even in our triad, my dyad with Kai needs its own time and attention, separate from the group.',
+          'Even in our triad, my dyad with Jamal needs its own time and attention, separate from the group.',
     ),
     GlossaryTerm(
       term: 'Triad / throuple',
@@ -315,7 +360,7 @@ class LearnContent {
       definition:
           'A central, deeply committed partner in someone\'s life — the person (or people) they build their day-to-day around. Similar in weight to "primary partner," but without implying a ranked ladder of importance.',
       example:
-          'Riley is my anchor partner — we share a home, a calendar, and big life decisions.',
+          'Deja is my anchor partner — we share a home, a calendar, and big life decisions.',
     ),
     GlossaryTerm(
       term: 'Nesting partner',
@@ -460,6 +505,14 @@ class LearnContent {
           'A loaded term for an established couple looking for a (usually bisexual, usually female) third person to date both of them — often with rules that protect the couple and little real power for the person joining. It\'s criticized because the "unicorn" is expected to fit a pre-made structure, date both partners equally, and leave quietly if it doesn\'t work. Wanting a triad isn\'t the problem; treating a person as an accessory to a couple is.',
       example:
           'They realized their dating profile was unicorn hunting — "must date both of us, no separate relationships" — and rewrote it after reading how that lands on the other side.',
+    ),
+    GlossaryTerm(
+      term: 'Fetishization',
+      category: 'People & connections',
+      definition:
+          'Being desired because of a racial stereotype rather than as a whole person — pursued as a "type" or a fantasy while who you actually are goes unseen. It often arrives dressed as a compliment, but it reduces a person to a body and a set of assumptions. Being curious about someone different from you is human; treating them as an experience to collect is fetishization.',
+      example:
+          'When someone says "I only date Latina women — they\'re so fiery," that isn\'t a preference. The actual person has disappeared behind the stereotype.',
     ),
     GlossaryTerm(
       term: 'Chosen family',
@@ -649,6 +702,33 @@ class LearnContent {
         ),
       ],
     ),
+    LearningPath(
+      title: 'Navigating polyamory as a person of color',
+      promise:
+          'The parts the generic advice skips: being the only one in the room, being loved as a whole person, and finding your people.',
+      reads: [
+        MicroRead(
+          title: 'Being the only one in the room',
+          description:
+              'Poly spaces can look less diverse than the world outside them. Why that happens, what it does to dating and trust, and how to choose rooms that deserve you.',
+        ),
+        MicroRead(
+          title: 'Fetishization vs. attraction',
+          description:
+              'Being wanted feels different from being stereotyped. How to tell the two apart, and what to do when a compliment lands like a label.',
+        ),
+        MicroRead(
+          title: 'Talking about race with partners',
+          description:
+              'Raising race with partners and metamours who may never have had to think about it: why the conversation matters, and what a good response looks like.',
+        ),
+        MicroRead(
+          title: 'Finding your people',
+          description:
+              'Community that doesn\'t require translation: POC-led groups like Black & Poly, and voices like Love\'s Not Color Blind and A Polyamory Devotional on this shelf.',
+        ),
+      ],
+    ),
   ];
 
   static const List<BookRecommendation> books = [
@@ -694,6 +774,29 @@ class LearnContent {
       libraryUrl:
           'https://search.worldcat.org/search?q=Stepping+Off+the+Relationship+Escalator',
       libraryActionLabel: 'Find it at your library',
+    ),
+    BookRecommendation(
+      title: 'Love\'s Not Color Blind',
+      author: 'Kevin A. Patterson',
+      readThisIf:
+          'you want the honest conversation about race inside polyamorous communities — who gets welcomed, who gets desired, and who gets believed',
+      libraryUrl: 'https://www.overdrive.com/search?q=Love\'s+Not+Color+Blind',
+      blurb:
+          'The essential book on race and representation in polyamory. Foreword by Ruby Bouie Johnson.',
+    ),
+    BookRecommendation(
+      title: 'A Polyamory Devotional',
+      author: 'Evita "Lavitaloca" Sawyers',
+      readThisIf:
+          'you want a year of short daily reflections on real non-monogamous life — jealousy, joy, boundaries, and all — from a Black queer educator\'s practice',
+      libraryUrl: 'https://www.overdrive.com/search?q=A+Polyamory+Devotional',
+    ),
+    BookRecommendation(
+      title: 'Pleasure Activism',
+      author: 'adrienne maree brown (editor)',
+      readThisIf:
+          'you\'re curious how pleasure, consent, and liberation practice speak to loving freely — an anthology adjacent to ENM rather than a polyamory manual, and richer for it',
+      libraryUrl: 'https://www.overdrive.com/search?q=Pleasure+Activism',
     ),
   ];
 }

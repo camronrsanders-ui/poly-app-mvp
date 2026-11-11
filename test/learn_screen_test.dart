@@ -244,14 +244,16 @@ void main() {
       for (final book in LearnContent.books) {
         expect(book.libraryUrl, startsWith('https://'), reason: book.title);
       }
-      // Four of the five books resolve in the OverDrive catalog. The
-      // Relationship Escalator book is not carried there (verified
-      // 2026-10-27), so its library action points at WorldCat.
+      // Seven of the eight books resolve in the OverDrive catalog
+      // (the three representation additions verified 2026-11-11).
+      // The Relationship Escalator book is not carried there
+      // (verified 2026-10-27), so its library action points at
+      // WorldCat.
       expect(
         LearnContent.books
             .where((book) => book.libraryUrl.contains('overdrive.com'))
             .length,
-        4,
+        7,
       );
       expect(
         LearnContent.books
