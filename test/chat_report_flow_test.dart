@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/messages/chat_screen.dart';
+import 'package:polycircle/theme/app_theme.dart';
 
 Future<void> pumpReportLauncher(
   WidgetTester tester, {
   String? messageId,
+  String otherDisplayName = 'Alex',
+  ThemeData? theme,
   required ChatReportAction reportUser,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       home: Scaffold(
         body: Builder(
           builder: (context) => FilledButton(
@@ -16,7 +20,7 @@ Future<void> pumpReportLauncher(
               await showChatReportFlow(
                 context: context,
                 reportedUid: 'target-1',
-                otherDisplayName: 'Alex',
+                otherDisplayName: otherDisplayName,
                 conversationId: 'conversation-1',
                 messageId: messageId,
                 reportUser: reportUser,
@@ -249,4 +253,61 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  // Regression coverage for PR #70's live-journey failure: in the real
+  // app (custom wide font, floating snackbar theme) at CI device
+  // widths, the UI-16 segment's report submit was followed — at the
+  // next screenshot checkpoint — by "A RenderFlex overflowed by 101
+  // pixels" (Android 320dp) / "73 pixels" (iOS 375dp). The tests above
+  // use the default theme on an 800x600 surface, where every layout in
+  // this flow fits; these variants reproduce the live conditions:
+  // AppTheme, the seeded name 'Jordan', and the two CI viewport sizes.
+  // The dialog (reason dropdown) and the confirmation snackbar are
+  // both exercised, in the journey's order.
+  for (final entry in <String, Size>{
+    'Android 320dp': const Size(320, 640),
+    'iOS 375dp': const Size(375, 667),
+  }.entries) {
+    testWidgets(
+      'chat report flow fits a narrow viewport (${entry.key}) '
+      'with the app theme',
+      (tester) async {
+        tester.view.physicalSize = entry.value;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await pumpReportLauncher(
+          tester,
+          otherDisplayName: 'Jordan',
+          theme: AppTheme.light,
+          reportUser: ({
+            required String reportedUid,
+            required String reason,
+            required String details,
+            required String contentType,
+            String? contentId,
+            String? conversationId,
+          }) async {},
+        );
+
+        await openReport(tester);
+
+        expect(find.text('Report Jordan'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.tap(find.text('Submit report'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            'Report submitted. Thank you for helping protect the '
+            'community.',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
