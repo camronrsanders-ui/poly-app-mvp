@@ -366,50 +366,7 @@ jobs:
             echo "Starting iOS flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" "$attempt" <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-
-          device_id = sys.argv[1]
-          attempt = sys.argv[2]
-          log_path = pathlib.Path(
-              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
-          )
-          command = [
-              "flutter",
-              "test",
-              "integration_test/simulator_acceptance_test.dart",
-              "-d",
-              device_id,
-              "--flavor",
-              "staging",
-              "--dart-define=USE_FIREBASE_EMULATORS=true",
-              "--dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1",
-              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
-              "--no-pub",
-          ]
-
-          process = subprocess.Popen(command)
-          try:
-              status = process.wait(timeout=1500)
-          except subprocess.TimeoutExpired:
-              print(
-                  "flutter test attempt exceeded 25 minutes; terminating it so CI can retry.",
-                  file=sys.stderr,
-              )
-              process.terminate()
-              try:
-                  process.wait(timeout=10)
-              except subprocess.TimeoutExpired:
-                  process.kill()
-                  process.wait()
-              sys.exit(124)
-
-          sys.exit(status)
-          PY
+            python3 tool/capture_acceptance_frames.py --platform ios --device "$DEVICE_ID" --attempt "$attempt"
             STATUS=$?
             set -e
 
@@ -417,11 +374,13 @@ jobs:
               exit 0
             fi
 
-            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+            # A clean local-emulator retry is safe for any first-attempt
+            # failure, including cold-start assertions (not only timeouts).
+            if [[ "$attempt" -eq 2 ]]; then
               exit "$STATUS"
             fi
 
-            echo "First iOS flutter test attempt stalled; capturing diagnostics before one retry."
+            echo "First iOS flutter test attempt failed; capturing diagnostics before one clean retry."
             xcrun simctl io "$DEVICE_ID" screenshot \
               "build/simulator_acceptance/98-test-timeout-attempt-$attempt.png" || true
             xcrun simctl spawn "$DEVICE_ID" log show --last 10m --style compact 2>/dev/null \
@@ -429,7 +388,23 @@ jobs:
               | tail -n 400 \
               > "build/simulator_acceptance/98-test-timeout-attempt-$attempt.log" || true
             xcrun simctl terminate "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
+            xcrun simctl uninstall "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1 || true
+            # Uninstall can retain Firebase Auth credentials in iOS Keychain.
+            # This is an isolated CI simulator: clear its Keychain before a retry.
+            xcrun simctl keychain "$DEVICE_ID" reset
+            (
+              for grant_attempt in {1..900}; do
+                if xcrun simctl get_app_container "$DEVICE_ID" com.polycircle.app.staging >/dev/null 2>&1; then
+                  xcrun simctl privacy "$DEVICE_ID" grant location com.polycircle.app.staging || true
+                  xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+                  break
+                fi
+                sleep 1
+              done
+            ) &
             xcrun simctl location "$DEVICE_ID" set "12.3456,-45.6789"
+            echo "Re-seeding the emulator fixture state before attempt 2."
+            POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator
             sleep 3
           done
           BASH
@@ -565,6 +540,20 @@ jobs:
           test -x "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
 
           echo "✓ Android SDK command-line tools exposed from $SDK_ROOT"
+      - name: Prebuild local Android staging APK before emulator startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Initialize Gradle and the native SDK before the resource-intensive
+          # emulator starts. Only the isolated CI staging Firebase config is used.
+          flutter build apk --debug --flavor staging --no-pub \
+            --dart-define=USE_FIREBASE_EMULATORS=true \
+            --dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2 \
+            --dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=true \
+            --dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true \
+            --dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true
+          test -s build/app/outputs/flutter-apk/app-staging-debug.apk
+          echo "✓ Staging APK built before Android emulator boot"
       - name: Boot isolated Android emulator
         shell: bash
         run: |
@@ -661,61 +650,7 @@ jobs:
             echo "Starting Android flutter test attempt $attempt/2."
 
             set +e
-            python3 - "$DEVICE_ID" "$attempt" <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-
-          device_id = sys.argv[1]
-          attempt = sys.argv[2]
-          log_path = pathlib.Path(
-              f"build/android_acceptance/flutter-test-attempt-{attempt}.log"
-          )
-          command = [
-              "flutter",
-              "test",
-              "integration_test/simulator_acceptance_test.dart",
-              "-d",
-              device_id,
-              "--flavor",
-              "staging",
-              "--dart-define=USE_FIREBASE_EMULATORS=true",
-              "--dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2",
-              "--dart-define=POLYCIRCLE_CAPTURE_ACCEPTANCE_SCREENSHOTS=false",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_ADULT_SIGNAL=true",
-              "--dart-define=POLYCIRCLE_ACCEPTANCE_LOCATION=true",
-              "--no-pub",
-          ]
-
-          with log_path.open("w", encoding="utf-8") as log_file:
-              process = subprocess.Popen(
-                  command,
-                  stdout=log_file,
-                  stderr=subprocess.STDOUT,
-                  text=True,
-              )
-              try:
-                  status = process.wait(timeout=900)
-              except subprocess.TimeoutExpired:
-                  print(
-                      "Android flutter test attempt exceeded 15 minutes; terminating it so CI can retry.",
-                      file=sys.stderr,
-                  )
-                  process.terminate()
-                  try:
-                      process.wait(timeout=10)
-                  except subprocess.TimeoutExpired:
-                      process.kill()
-                      process.wait()
-                  status = 124
-
-          try:
-              sys.stdout.write(log_path.read_text(encoding="utf-8"))
-          except OSError as error:
-              print(f"Could not read Android flutter-test log: {error}", file=sys.stderr)
-
-          sys.exit(status)
-          PY
+            python3 tool/capture_acceptance_frames.py --platform android --device "$DEVICE_ID" --attempt "$attempt"
             STATUS=$?
             set -e
 
@@ -723,15 +658,21 @@ jobs:
               exit 0
             fi
 
-            if [[ "$STATUS" -ne 124 || "$attempt" -eq 2 ]]; then
+            # A clean local-emulator retry is safe for any first-attempt
+            # failure, including cold-start assertions (not only timeouts).
+            if [[ "$attempt" -eq 2 ]]; then
               exit "$STATUS"
             fi
 
-            echo "First Android flutter test attempt stalled; capturing diagnostics before one retry."
+            echo "First Android flutter test attempt failed; capturing diagnostics before one clean retry."
             timeout 20s adb -s "$DEVICE_ID" exec-out screencap -p               > "build/android_acceptance/98-test-timeout-attempt-$attempt.png" || true
             timeout 20s adb -s "$DEVICE_ID" logcat -d -t 1000               > "build/android_acceptance/98-test-timeout-attempt-$attempt.log" || true
             timeout 10s adb -s "$DEVICE_ID" shell am force-stop               com.polycircle.app.staging || true
+            timeout 10s adb -s "$DEVICE_ID" shell pm clear \
+              com.polycircle.app.staging || true
             timeout 10s adb -s "$DEVICE_ID" emu geo fix -45.6789 12.3456 || true
+            echo "Re-seeding the emulator fixture state before attempt 2."
+            POLYCIRCLE_ALLOW_REAL_PROJECT_EMULATOR=true POLYCIRCLE_DISCOVER_FIXTURE_COUNT=2 POLYCIRCLE_DISCOVER_FIXTURE_RADIUS=20 GCLOUD_PROJECT=polycircle-staging-82204f npm --prefix functions run seed:emulator
             sleep 3
           done
           BASH
@@ -763,6 +704,29 @@ jobs:
           fi
           wait "$LOCATION_GRANT_PID" || true
           exit "$STATUS"
+      - name: Preserve failed Android emulator diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p build/android_acceptance
+          if [[ -f "$RUNNER_TEMP/polycircle-android-emulator.log" ]]; then
+            tail -n 800 "$RUNNER_TEMP/polycircle-android-emulator.log" \
+              > build/android_acceptance/97-emulator-process.log || true
+          fi
+          {
+            echo "=== Device state ==="
+            adb devices -l || true
+            echo "=== Emulator / Gradle process memory (KiB) ==="
+            ps -eo pid,ppid,rss,comm | grep -Ei 'qemu|emulator|gradle|java|adb' || true
+            echo "=== Host memory ==="
+            free -m || true
+            echo "=== Memory pressure ==="
+            cat /proc/pressure/memory || true
+            echo "=== Filesystem ==="
+            df -h . || true
+            echo "=== Recent kernel memory alerts, if permitted ==="
+            dmesg 2>/dev/null | tail -n 120 || true
+          } > build/android_acceptance/97-runner-diagnostics.txt 2>&1
       - name: Capture final Android emulator evidence
         if: always()
         shell: bash

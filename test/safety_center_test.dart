@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/safety/safety_center_screen.dart';
+import 'package:polycircle/theme/app_theme.dart';
 
 void main() {
   const blockedAlex = <String, dynamic>{
     'blockedUid': 'blocked-1',
     'displayName': 'Alex',
+  };
+
+  // The exact fixture the live acceptance journey produces: the seed's
+  // existing-connection member, blocked by the seeded owner mid-journey.
+  const blockedJordan = <String, dynamic>{
+    'blockedUid': 'local-jordan',
+    'displayName': 'Jordan',
   };
 
   testWidgets(
@@ -173,6 +181,54 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Try again'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Populated blocked-members row fits narrow viewports with the '
+    'app theme',
+    (tester) async {
+      // Regression coverage for PR #70's CI failures at the populated
+      // blocked-members checkpoint (101px at the 320dp Android
+      // viewport, 73px at the 375dp iOS viewport). The row must hold
+      // under the conditions the earlier version of this test missed:
+      // the REAL blocked fixture (Jordan, not a short fake name), the
+      // app's real theme (custom wide font and text sizes, not the
+      // default Material theme), and BOTH CI viewport widths. The name
+      // must ellipsize, the subtitle must wrap, and Unblock must stay
+      // on screen.
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      for (final size in [const Size(320, 640), const Size(375, 667)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            home: BlockedMembersScreen(
+              loadBlockedUsers: () async => [blockedJordan],
+              unblockMember: (_) async {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Jordan'), findsOneWidget);
+        expect(
+          find.text('Previous connections and private access stay closed.'),
+          findsOneWidget,
+        );
+        expect(find.text('Unblock'), findsOneWidget);
+        expect(
+          tester.getRect(find.text('Unblock')).right,
+          lessThanOrEqualTo(size.width),
+        );
+
+        await tester.pumpWidget(const SizedBox());
+      }
     },
   );
 

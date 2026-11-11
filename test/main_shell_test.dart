@@ -91,7 +91,7 @@ void main() {
         buildCounts: builds,
       );
 
-      await selectTab(tester, 'Connections');
+      await selectTab(tester, 'Connect');
       expect(find.text('Test page 1'), findsOneWidget);
 
       await selectTab(tester, 'Circle');
@@ -118,7 +118,7 @@ void main() {
       );
 
       const tabs = <String, int>{
-        'Connections': 1,
+        'Connect': 1,
         'Circle': 2,
         'Messages': 3,
         'Profile': 4,
@@ -153,7 +153,7 @@ void main() {
         buildCounts: builds,
       );
 
-      await selectTab(tester, 'Connections');
+      await selectTab(tester, 'Connect');
       expect(find.text('Test page 1'), findsOneWidget);
 
       await tester.tap(find.text('Find people'));
@@ -188,6 +188,42 @@ void main() {
 
       expect(safetyCalls, 1);
       expect(find.text('Test page 3'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'switching tabs removes feedback from the previous destination',
+    (tester) async {
+      await pumpShell(tester, buildCounts: <int, int>{});
+      final context = tester.element(find.byType(MainShell));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Discover feedback')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Discover feedback'), findsOneWidget);
+
+      await selectTab(tester, 'Connect');
+
+      expect(find.text('Test page 1'), findsOneWidget);
+      expect(find.text('Discover feedback'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'compact navigation does not wrap Connections on 320px phones',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpShell(tester, buildCounts: <int, int>{});
+
+      expect(find.text('Connect'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await selectTab(tester, 'Connect');
+      expect(find.text('Test page 1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 }

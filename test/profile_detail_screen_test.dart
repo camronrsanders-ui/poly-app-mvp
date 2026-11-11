@@ -42,6 +42,44 @@ Future<void> openReport(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'Private member Circle stays hidden and does not re-fetch on rebuild',
+    (tester) async {
+      var circleRequests = 0;
+      final screen = ProfileDetailScreen.test(
+        profile: targetProfile,
+        reportUser: ({
+          required String reportedUid,
+          required String reason,
+          required String details,
+          required String contentType,
+          String? contentId,
+          String? conversationId,
+        }) async {},
+        loadCircle: (_) async {
+          circleRequests += 1;
+          throw StateError('Circle is private');
+        },
+        loadVisiblePhotos: (_) async => const <VisibleProfilePhoto>[],
+      );
+
+      await tester.pumpWidget(MaterialApp(home: screen));
+      await tester.pumpAndSettle();
+      expect(find.text('This Circle is not shared with you.'), findsOneWidget);
+      expect(circleRequests, 1);
+      expect(tester.takeException(), isNull);
+
+      // Theme changes rebuild the page while the same route stays open.
+      await tester.pumpWidget(
+        MaterialApp(theme: ThemeData(useMaterial3: false), home: screen),
+      );
+      await tester.pumpAndSettle();
+      expect(circleRequests, 1);
+      expect(find.text('This Circle is not shared with you.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'Profile photo carousel exposes position semantics without personal description',
     (tester) async {
       final semanticsHandle = tester.ensureSemantics();
@@ -85,6 +123,56 @@ void main() {
       );
 
       semanticsHandle.dispose();
+    },
+  );
+
+  testWidgets(
+    'Profile report reason fits a phone viewport and Cancel has no effect',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var reportCalls = 0;
+      await pumpProfile(
+        tester,
+        ({
+          required String reportedUid,
+          required String reason,
+          required String details,
+          required String contentType,
+          String? contentId,
+          String? conversationId,
+        }) async {
+          reportCalls += 1;
+        },
+      );
+
+      await openReport(tester);
+      expect(tester.takeException(), isNull);
+
+      final reasonSelector = find.byType(DropdownButtonFormField<String>);
+      expect(reasonSelector, findsOneWidget);
+      final dropdown = find.descendant(
+        of: reasonSelector,
+        matching: find.byType(DropdownButton<String>),
+      );
+      expect(dropdown, findsOneWidget);
+      expect(
+          tester.widget<DropdownButton<String>>(dropdown).isExpanded, isTrue);
+
+      await tester.tap(find.text('Harassment'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Child safety / underage concern'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(reportCalls, 0);
     },
   );
 

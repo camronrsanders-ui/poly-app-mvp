@@ -429,6 +429,12 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
                   const SizedBox(height: 16),
                   FilledButton(
                       onPressed: _reload, child: const Text('Try again')),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _signOut,
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Log out'),
+                  ),
                 ],
               ),
             ),

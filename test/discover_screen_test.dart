@@ -389,6 +389,92 @@ void main() {
     expect(find.text('1 / 15+'), findsOneWidget);
   });
 
+  testWidgets('narrow Discover Pass end card stays readable and overflow-free',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeDiscoverRepository();
+    final location = _FakeLocationProvider(_readyLocation());
+    await tester.pumpWidget(_app(repository, location));
+    await tester.pumpAndSettle();
+    await _nextProfiles(tester, 1);
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    final pass = find.byKey(const ValueKey('discovery-pass'));
+    await tester.drag(
+      find.byKey(const ValueKey('discover-world-scroll-view')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(pass);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.text('Pass')).height, lessThan(30));
+    await tester.tap(pass);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+    final endCard = find.byKey(const ValueKey('discover-end-of-results'));
+    await tester.ensureVisible(endCard);
+    await tester.pumpAndSettle();
+    final message =
+        find.text('You’ve explored the nearby worlds available right now.');
+    expect(message, findsOneWidget);
+    expect(tester.getSize(message).width, greaterThan(140));
+    expect(find.text('Refresh'), findsWidgets);
+    expect(find.text('Increase radius'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final action in ['Pass', 'Connect']) {
+    testWidgets('$action updates remaining orbit count without a refresh',
+        (tester) async {
+      final repository = _FakeDiscoverRepository();
+      final location = _FakeLocationProvider(_readyLocation());
+      final actedOn = <String>[];
+      await tester.pumpWidget(
+        _app(
+          repository,
+          location,
+          passUser: (uid) async {
+            actedOn.add(uid);
+          },
+          likeUser: (uid) async {
+            actedOn.add(uid);
+            return false;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 / 2'), findsOneWidget);
+      await _nextProfiles(tester, 1);
+      expect(find.text('2 / 2'), findsOneWidget);
+
+      final actionKey = action == 'Pass'
+          ? const ValueKey('discovery-pass')
+          : const ValueKey('discovery-connect');
+      await tester.drag(
+        find.byKey(const ValueKey('discover-world-scroll-view')),
+        const Offset(0, -500),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(actionKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(actionKey));
+      await tester.pumpAndSettle();
+
+      expect(actedOn, ['profile-1']);
+      expect(find.text('Profile 0, 25'), findsOneWidget);
+      expect(find.text('Profile 1, 26'), findsNothing);
+      expect(find.text('1 / 1'), findsOneWidget);
+      expect(find.text('1 / 2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final action in ['Pass', 'Connect']) {
     testWidgets('$action at the first batch edge keeps the next profile stable',
         (tester) async {
@@ -427,6 +513,7 @@ void main() {
 
       expect(actedOn, ['profile-14']);
       expect(find.text('Profile 15, 40'), findsOneWidget);
+      expect(find.text('15 / 29'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

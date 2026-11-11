@@ -55,6 +55,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   final Set<String> _actingOn = {};
   final Set<String> _sessionUids = {};
   final Map<String, int> _sessionOrdinals = {};
+  // Explicit Pass/Connect/Block removals affect the displayed count.
+  // Paginated, memory-trimmed profiles must still count as delivered.
+  final Set<int> _removedSessionOrdinals = <int>{};
   final Map<String, Future<List<VisibleProfilePhoto>>> _photoFutures = {};
   Future<void> _photoLoadTail = Future<void>.value();
   List<Map<String, dynamic>> _profiles = const [];
@@ -200,6 +203,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       _profiles = const [];
       _sessionUids.clear();
       _sessionOrdinals.clear();
+      _removedSessionOrdinals.clear();
       _photoFutures.clear();
       _nextCursor = null;
       _sessionDeliveredCount = 0;
@@ -325,21 +329,27 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     _photoFutures.removeWhere((uid, _) => !retainedUids.contains(uid));
   }
 
-  String _counterLabel(int index) {
-    if (_profiles.isEmpty) return '0';
+  int _remainingSessionOrdinal(int index) {
     final safeIndex = index.clamp(0, _profiles.length - 1);
     final uid = _profileUid(_profiles[safeIndex]);
-    final ordinal =
+    final deliveredOrdinal =
         uid == null ? safeIndex + 1 : (_sessionOrdinals[uid] ?? safeIndex + 1);
-    return '$ordinal / $_sessionDeliveredCount${_hasMore ? '+' : ''}';
+    final removedBefore = _removedSessionOrdinals
+        .where((ordinal) => ordinal < deliveredOrdinal)
+        .length;
+    return deliveredOrdinal - removedBefore;
+  }
+
+  String _counterLabel(int index) {
+    if (_profiles.isEmpty) return '0';
+    final ordinal = _remainingSessionOrdinal(index);
+    final total = _sessionDeliveredCount - _removedSessionOrdinals.length;
+    return '$ordinal / $total${_hasMore ? '+' : ''}';
   }
 
   String _counterSemantics(int index) {
     if (_profiles.isEmpty) return 'No profiles';
-    final safeIndex = index.clamp(0, _profiles.length - 1);
-    final uid = _profileUid(_profiles[safeIndex]);
-    final ordinal =
-        uid == null ? safeIndex + 1 : (_sessionOrdinals[uid] ?? safeIndex + 1);
+    final ordinal = _remainingSessionOrdinal(index);
     return _hasMore
         ? 'Profile $ordinal in this Discover session, more nearby profiles available'
         : 'Profile $ordinal in this Discover session';
@@ -365,6 +375,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       final nextProfiles = List<Map<String, dynamic>>.of(_profiles)
         ..removeAt(index);
       _profiles = nextProfiles;
+      final ordinal = _sessionOrdinals[uid];
+      if (ordinal != null) _removedSessionOrdinals.add(ordinal);
       _photoFutures.remove(uid);
       _focusedIndex =
           _profiles.isEmpty ? 0 : index.clamp(0, _profiles.length - 1);
@@ -842,38 +854,51 @@ class _DiscoverPagingMessage extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: semantic.border),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: AppTheme.accentBlue),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 20, color: AppTheme.accentBlue),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: semantic.textSecondary,
+                          height: 1.35,
+                        ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: semantic.textSecondary,
-                      height: 1.35,
-                    ),
-              ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xxs,
+              children: [
+                TextButton(onPressed: onAction, child: Text(actionLabel)),
+                if (secondaryLabel != null && onSecondary != null)
+                  TextButton(
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.xs),
-            TextButton(onPressed: onAction, child: Text(actionLabel)),
-            if (secondaryLabel != null && onSecondary != null)
-              TextButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel!),
-              ),
           ],
         ),
       ),
