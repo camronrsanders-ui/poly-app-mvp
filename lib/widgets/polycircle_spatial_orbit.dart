@@ -16,6 +16,48 @@ class PolycircleSpatialOrbitController {
       positions,
     );
   }
+
+  void Function(String id)? _focusItemHandler;
+
+  /// Brings the person with [id] into focus, sliding the rendered
+  /// window first when they are outside it. No-op when no orbit is
+  /// attached or the id is not in the current roster.
+  void focusItem(String id) {
+    _focusItemHandler?.call(id);
+  }
+}
+
+/// Presentation values for sparse Circle populations, kept pure so
+/// the sparse-state rules stay testable without rendering the orbit.
+///
+/// One person is a portrait, not a system: their node renders larger.
+/// Two people are a pair, not a ranking: neither may dominate through
+/// projected depth, so depth emphasis is damped toward the middle.
+class SpatialOrbitVisuals {
+  const SpatialOrbitVisuals._();
+
+  static double baseNodeSize(int renderedCount) {
+    if (renderedCount <= 1) {
+      return 108;
+    }
+
+    if (renderedCount == 2) {
+      return 92;
+    }
+
+    return 76;
+  }
+
+  static double balancedDepth01({
+    required int renderedCount,
+    required double depth01,
+  }) {
+    if (renderedCount == 2) {
+      return .5 + (depth01 - .5) * .35;
+    }
+
+    return depth01;
+  }
 }
 
 class PolycircleTopologyLink {
@@ -79,7 +121,7 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
 }
 
 class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const double _focusAngle = math.pi / 2;
 
   late final AnimationController _motion;
@@ -94,22 +136,107 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
 
   String? _lastPublishedId;
 
+  /// The focused person's stable identity. List positions shift as
+  /// people are added, removed, or reordered; focus must follow the
+  /// person, never the slot they happen to occupy.
+  String? _focusedId;
+
+  /// Start of the rendered window inside the full roster. The window
+  /// bounds rendering only — every person stays reachable because
+  /// focus can slide it (see [PolycircleSpatialOrbitController]).
+  int _windowStart = 0;
+
   bool _dragging = false;
 
-  List<T> get _items =>
-      widget.items.take(widget.maxVisibleItems).toList(growable: false);
+  /// Same reduced-motion standard as Discover's orbit: the platform
+  /// accessibility signals decide, read the Flutter-idiomatic way.
+  bool get _reduceMotion {
+    final media = MediaQuery.maybeOf(context);
+
+    return media?.disableAnimations == true ||
+        media?.accessibleNavigation == true;
+  }
+
+  /// The bounded window of the roster that is actually rendered.
+  List<T> get _items {
+    final roster = widget.items;
+
+    if (roster.length <= widget.maxVisibleItems) {
+      return List<T>.of(roster, growable: false);
+    }
+
+    final start = _windowStart.clamp(
+      0,
+      roster.length - widget.maxVisibleItems,
+    );
+
+    return roster.sublist(start, start + widget.maxVisibleItems);
+  }
+
+  int _rosterIndexOfId(String id) {
+    for (var index = 0; index < widget.items.length; index++) {
+      if (widget.itemId(widget.items[index]) == id) {
+        return index;
+      }
+    }
+
+    return -1;
+  }
+
+  void _clampWindowStart() {
+    final maxStart = math.max(
+      0,
+      widget.items.length - widget.maxVisibleItems,
+    );
+
+    _windowStart = _windowStart.clamp(0, maxStart);
+  }
+
+  void _ensureWindowContains(int rosterIndex) {
+    if (rosterIndex < _windowStart) {
+      _windowStart = rosterIndex;
+    } else if (rosterIndex >= _windowStart + widget.maxVisibleItems) {
+      _windowStart = rosterIndex - widget.maxVisibleItems + 1;
+    }
+
+    _clampWindowStart();
+  }
+
+  void _attachController(PolycircleSpatialOrbitController? controller) {
+    controller?._focusItemHandler = _focusById;
+  }
+
+  void _detachController(PolycircleSpatialOrbitController? controller) {
+    if (controller?._focusItemHandler == _focusById) {
+      controller?._focusItemHandler = null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     _motion = AnimationController.unbounded(
       vsync: this,
     )..addListener(_motionFrame);
+
+    _focusedId = widget.items.isEmpty
+        ? null
+        : widget.itemId(
+            widget.items.first,
+          );
+
+    _attachController(widget.controller);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
+    _detachController(widget.controller);
+
     _motion
       ..removeListener(_motionFrame)
       ..dispose();
@@ -118,20 +245,121 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.inactive) {
+      return;
+    }
+
+    // Never leave a drag or a fling half-finished behind the app
+    // switcher: on return the orbit must show a settled, truthful
+    // focus rather than a ghost of an interrupted gesture.
+    _motion.stop();
+    _dragging = false;
+    _lastPointerAngle = null;
+    _angularVelocity = 0;
+  }
+
+  @override
   void didUpdateWidget(
     covariant PolycircleSpatialOrbit<T> oldWidget,
   ) {
     super.didUpdateWidget(oldWidget);
 
-    if (_items.isEmpty) {
-      _focusedIndex = 0;
+    if (oldWidget.controller != widget.controller) {
+      _detachController(oldWidget.controller);
+      _attachController(widget.controller);
+    }
+
+    final oldIds = oldWidget.items
+        .map(oldWidget.itemId)
+        .toList(growable: false);
+
+    final newIds = widget.items.map(widget.itemId).toList(growable: false);
+
+    if (_sameIds(oldIds, newIds)) {
       return;
     }
 
-    if (_focusedIndex >= _items.length) {
+    // The roster itself changed (people added, removed, reordered,
+    // or a different world). Settle any in-flight gesture, then
+    // re-anchor focus on the same PERSON — never silently on whoever
+    // inherited their slot.
+    _motion.stop();
+    _dragging = false;
+    _lastPointerAngle = null;
+    _angularVelocity = 0;
+
+    if (widget.items.isEmpty) {
       _focusedIndex = 0;
-      _rotation = _focusAngle;
+      _focusedId = null;
+      _windowStart = 0;
+      return;
     }
+
+    final previousId = _focusedId;
+
+    var targetRosterIndex =
+        previousId == null ? -1 : newIds.indexOf(previousId);
+
+    if (targetRosterIndex < 0) {
+      // The focused person is gone (removed or blocked). Fall back
+      // to whoever now occupies their place in the roster, clamped
+      // to the end — deterministic, and published below so the
+      // focused panel can never keep showing the removed person.
+      final previousRosterIndex =
+          previousId == null ? 0 : math.max(0, oldIds.indexOf(previousId));
+
+      targetRosterIndex = math.min(
+        previousRosterIndex,
+        newIds.length - 1,
+      );
+    }
+
+    _clampWindowStart();
+    _ensureWindowContains(targetRosterIndex);
+
+    _focusedIndex = targetRosterIndex - _windowStart;
+    _focusedId = newIds[targetRosterIndex];
+
+    _rotation = _focusAngle -
+        _baseAngle(
+          _focusedIndex,
+          _items.length,
+        );
+
+    _setMotionValueSilently(_rotation);
+
+    if (_focusedId != _lastPublishedId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        _publishFocus(
+          _focusedIndex,
+          haptic: false,
+        );
+      });
+    }
+  }
+
+  bool _sameIds(
+    List<String> before,
+    List<String> after,
+  ) {
+    if (before.length != after.length) return false;
+
+    for (var index = 0; index < before.length; index++) {
+      if (before[index] != after[index]) return false;
+    }
+
+    return true;
+  }
+
+  void _setMotionValueSilently(double value) {
+    _motion
+      ..removeListener(_motionFrame)
+      ..value = value
+      ..addListener(_motionFrame);
   }
 
   double _normalize(double angle) {
@@ -203,6 +431,8 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
 
     final item = _items[index];
     final id = widget.itemId(item);
+
+    _focusedId = id;
 
     if (haptic && index != _lastHapticIndex) {
       _lastHapticIndex = index;
@@ -325,7 +555,9 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
 
     final velocity = _angularVelocity.clamp(-4.4, 4.4).toDouble();
 
-    if (velocity.abs() > .08) {
+    // Reduced motion: a drag ends where the finger leaves it. No
+    // inertia-driven travel after release.
+    if (!_reduceMotion && velocity.abs() > .08) {
       await _motion.animateWith(
         FrictionSimulation(
           .27,
@@ -372,6 +604,22 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
 
     final target = _rotation + correction;
 
+    if (_reduceMotion) {
+      // Reduced motion: focus changes are immediate. No camera
+      // travel, no easing — the person is simply focused now.
+      setState(() {
+        _rotation = target;
+        _focusedIndex = index;
+      });
+
+      _publishFocus(
+        index,
+        haptic: true,
+      );
+
+      return;
+    }
+
     _motion.value = _rotation;
 
     await _motion.animateTo(
@@ -392,6 +640,28 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
     _publishFocus(
       index,
       haptic: true,
+    );
+  }
+
+  /// Focuses the person with [id] wherever they are in the roster,
+  /// sliding the rendered window so they are inside it first. This
+  /// is what keeps every authorized person reachable past the
+  /// render cap.
+  void _focusById(String id) {
+    if (_focusedId == id) {
+      return;
+    }
+
+    final rosterIndex = _rosterIndexOfId(id);
+
+    if (rosterIndex < 0) {
+      return;
+    }
+
+    _ensureWindowContains(rosterIndex);
+
+    _focusIndex(
+      rosterIndex - _windowStart,
     );
   }
 
@@ -663,10 +933,19 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
       return const SizedBox.shrink();
     }
 
+    // Sparse populations get portrait treatment (SpatialOrbitVisuals):
+    // a single person renders larger, and a pair is depth-damped so
+    // neither person reads as the "front", more important one. Depth
+    // sorting above still uses the raw projection.
+    final depth01 = SpatialOrbitVisuals.balancedDepth01(
+      renderedCount: _items.length,
+      depth01: node.depth01,
+    );
+
     // Perspective already alters
     // scale. Depth adds another
     // controlled layer of emphasis.
-    final visualScale = (node.perspective * (.78 + node.depth01 * .20))
+    final visualScale = (node.perspective * (.78 + depth01 * .20))
         .clamp(
           .53,
           1.30,
@@ -677,14 +956,16 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
 
     final opacity = focused
         ? 1.0
-        : (.36 + node.depth01 * .64)
+        : (.36 + depth01 * .64)
             .clamp(
               0.0,
               1.0,
             )
             .toDouble();
 
-    const baseSize = 76.0;
+    final baseSize = SpatialOrbitVisuals.baseNodeSize(
+      _items.length,
+    );
 
     final displayedSize = baseSize * finalScale;
 
@@ -743,13 +1024,13 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
                     boxShadow: [
                       BoxShadow(
                         color: colors.primary.withAlpha(
-                          focused ? 68 : (8 + node.depth01 * 32).round(),
+                          focused ? 68 : (8 + depth01 * 32).round(),
                         ),
-                        blurRadius: focused ? 28 : 8 + node.depth01 * 18,
+                        blurRadius: focused ? 28 : 8 + depth01 * 18,
                         spreadRadius: focused ? 4 : 0,
                         offset: Offset(
                           0,
-                          4 + node.depth01 * 8,
+                          4 + depth01 * 8,
                         ),
                       ),
                     ],
