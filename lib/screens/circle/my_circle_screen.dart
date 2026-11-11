@@ -1134,8 +1134,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
               ),
               _OrbitFocusControls(
                 totalCount: active.people.length,
-                canStep:
-                    active.people.length > 1 && _pendingWorldId == null,
+                canStep: active.people.length > 1 && _pendingWorldId == null,
                 canOpenRoster: _pendingWorldId == null,
                 onPrevious: () => _stepFocus(active, -1),
                 onNext: () => _stepFocus(active, 1),
@@ -3254,10 +3253,7 @@ class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
                   children: [
                     Text(
                       'Everyone in ${widget.worldName}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
                     ),
@@ -3266,10 +3262,7 @@ class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
                       'All ${widget.people.length} people in this world. '
                       'The orbit shows some of them at a time, but nobody '
                       'is left out — tap anyone to focus them.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: colors.onSurfaceVariant,
                           ),
                     ),
@@ -3296,12 +3289,10 @@ class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
                     ? Center(
                         child: Text(
                           'No one matches that search.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: colors.onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
                         ),
                       )
                     : ListView.builder(

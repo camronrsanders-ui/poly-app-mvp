@@ -271,9 +271,8 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
       _attachController(widget.controller);
     }
 
-    final oldIds = oldWidget.items
-        .map(oldWidget.itemId)
-        .toList(growable: false);
+    final oldIds =
+        oldWidget.items.map(oldWidget.itemId).toList(growable: false);
 
     final newIds = widget.items.map(widget.itemId).toList(growable: false);
 
