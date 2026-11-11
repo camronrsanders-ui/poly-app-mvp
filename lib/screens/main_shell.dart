@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../config/feature_flags.dart';
 import 'circle/my_circle_screen.dart';
 import 'connections/connections_screen.dart';
 import 'discover/discover_screen.dart';
+import 'learn/learn_screen.dart';
 import 'messages/messages_screen.dart';
 import 'profile/self_profile_screen.dart';
 import 'safety/safety_center_screen.dart';
@@ -110,6 +112,14 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  Future<void> _openLearn() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const LearnPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final discoverSelected = _index == 0;
@@ -122,6 +132,18 @@ class _MainShellState extends State<MainShell> {
           : AppBar(
               title: Text(_titles[_index]),
               actions: [
+                if (_index == 4 && FeatureFlags.learnEnabled)
+                  IconButton(
+                    tooltip: 'Learn',
+                    icon: const Icon(Icons.menu_book_outlined),
+                    onPressed: _openLearn,
+                  ),
+                if (FeatureFlags.learnEnabled)
+                  IconButton(
+                    tooltip: 'Get help & learn',
+                    icon: const Icon(Icons.favorite_outline),
+                    onPressed: _openLearn,
+                  ),
                 IconButton(
                   tooltip: 'Safety center',
                   icon: const Icon(Icons.shield_outlined),

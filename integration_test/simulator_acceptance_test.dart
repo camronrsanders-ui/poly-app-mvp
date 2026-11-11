@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:polycircle/content/learn_content.dart';
 import 'package:polycircle/main.dart' as app;
 
 const bool _captureAcceptanceScreenshots = bool.fromEnvironment(
@@ -677,6 +678,27 @@ void main() {
         tester,
         find.text('View my profile'),
         description: 'self profile after abandoning profile edit',
+        maxPumps: 160,
+      );
+
+      // Learn (2026-11-11 placement revision): Learn is not a
+      // bottom-navigation tab — the bar stays at five destinations.
+      // It opens as a full-screen route from the book action at the
+      // top of the Profile screen.
+      expect(navLabel('Learn'), findsNothing);
+      await tester.tap(find.byTooltip('Learn'));
+      await waitForFinder(
+        tester,
+        find.text(LearnContent.helpCardHeading),
+        description: 'Learn page from the Profile book action',
+        maxPumps: 160,
+      );
+      await takeAcceptanceScreenshot(binding, tester, '08c-learn');
+      await tester.pageBack();
+      await waitForFinder(
+        tester,
+        find.text('View my profile'),
+        description: 'self profile after Learn',
         maxPumps: 160,
       );
 

@@ -32,4 +32,13 @@ class FeatureFlags {
   /// Enabled in this build so the feature is exercisable end to end;
   /// production gating stays behind the founder's release gates.
   static const bool checkInEnabled = true;
+
+  /// Learn (Stage 1) is static, in-app educational content: the
+  /// Get Help card, a glossary, learning paths, and book
+  /// recommendations, with crisis contacts and library/directory
+  /// links that open externally. It has no backend surface and no
+  /// unresolved policy gate, so it ships enabled. Stage 2 additions
+  /// (community term proposals, progress tracking) need their own
+  /// review before they are enabled.
+  static const bool learnEnabled = true;
 }
