@@ -209,9 +209,17 @@ void main() {
           resource.name: resource,
       };
 
+      // 988 takes calls and texts, so it carries two buttons —
+      // Call (tel:) and Text (sms:) — never one button labeled
+      // "Call or text" that only dials (fixed 2026-11-11).
+      final lifeline = byName['988 Suicide & Crisis Lifeline']!;
       expect(
-        byName['988 Suicide & Crisis Lifeline']!.actions.single.uri,
-        'tel:988',
+        lifeline.actions.map((action) => action.uri),
+        containsAll(['tel:988', 'sms:988']),
+      );
+      expect(
+        lifeline.actions.map((action) => action.label),
+        containsAll(['Call', 'Text']),
       );
       expect(
         byName['Crisis Text Line']!.actions.single.uri,
@@ -230,6 +238,18 @@ void main() {
       expect(
         hotline.actions.map((action) => action.uri),
         containsAll(['tel:+18007997233', 'sms:88788?body=START']),
+      );
+
+      // Call BlackLine is call-or-text at one number — the same
+      // two-button rule as 988 (fixed 2026-11-11).
+      final blackLine = byName['Call BlackLine']!;
+      expect(
+        blackLine.actions.map((action) => action.uri),
+        containsAll(['tel:+18006045841', 'sms:+18006045841']),
+      );
+      expect(
+        blackLine.actions.map((action) => action.label),
+        containsAll(['Call', 'Text']),
       );
 
       // Every crisis resource offers at least one tap-to-act action,

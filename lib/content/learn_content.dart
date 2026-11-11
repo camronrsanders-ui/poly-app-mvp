@@ -137,7 +137,10 @@ class LearnContent {
       contact: 'Call or text 988',
       note:
           'US, 24/7. For suicidal thoughts, emotional distress, or when you\'re worried about someone else. Spanish-language support available.',
-      actions: [CrisisAction(label: 'Call or text', uri: 'tel:988')],
+      actions: [
+        CrisisAction(label: 'Call', uri: 'tel:988'),
+        CrisisAction(label: 'Text', uri: 'sms:988'),
+      ],
     ),
     CrisisResource(
       name: 'Crisis Text Line',
@@ -181,7 +184,8 @@ class LearnContent {
       note:
           'Peer support that centers Black, Indigenous, and people of color, with an LGBTQ+ Black femme lens — a non-police alternative when you need to talk.',
       actions: [
-        CrisisAction(label: 'Call or text', uri: 'tel:+18006045841'),
+        CrisisAction(label: 'Call', uri: 'tel:+18006045841'),
+        CrisisAction(label: 'Text', uri: 'sms:+18006045841'),
       ],
     ),
   ];
