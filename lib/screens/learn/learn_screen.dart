@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../content/learn_content.dart';
 
-/// Stage 1 Learn tab: static educational content from
+/// Stage 1 Learn content: static educational content from
 /// [LearnContent] — the Get Help card first, a searchable glossary,
 /// learning paths, and a book shelf. No backend surface and no
 /// progress tracking; term proposals and per-path progress are
@@ -13,6 +13,23 @@ class LearnScreen extends StatefulWidget {
 
   @override
   State<LearnScreen> createState() => _LearnScreenState();
+}
+
+/// Full-screen Learn page: the route pushed when a member opens Learn
+/// from the book action at the top of the Profile screen or from the
+/// shell app bar's help action. Learn is not a bottom-navigation tab —
+/// the bar stays at five destinations — so the page carries its own
+/// scaffold and app bar, like the Safety Center route.
+class LearnPage extends StatelessWidget {
+  const LearnPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Learn')),
+      body: const LearnScreen(),
+    );
+  }
 }
 
 class _LearnScreenState extends State<LearnScreen> {
@@ -401,12 +418,12 @@ class _LearnScreenState extends State<LearnScreen> {
   @override
   Widget build(BuildContext context) {
     // The Get Help card leads the page: it is the first thing rendered
-    // when the Learn tab opens, above search and all learning content.
+    // when the Learn page opens, above search and all learning content.
     // It is not fixed in place — the full card is ~800px tall, which
     // cannot stay pinned on short viewports or at large text scales
     // without crowding out everything else. Persistent one-tap access
     // is instead provided by the shell app bar's help action, which
-    // switches to this tab from Messages and Profile.
+    // opens this page as a full-screen route.
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
       children: [

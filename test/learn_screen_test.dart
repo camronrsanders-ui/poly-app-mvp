@@ -150,7 +150,8 @@ void main() {
   );
 
   testWidgets(
-    'Main shell reaches Learn from the tab and the app-bar help action',
+    'Main shell keeps five tabs and opens Learn from Profile and the '
+    'app-bar help action',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -163,10 +164,33 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Learn').last);
-      await tester.pumpAndSettle();
-      expect(find.text('Shell page 5'), findsOneWidget);
+      // The bottom bar stays at five destinations: Learn is not a tab.
+      expect(find.byType(NavigationDestination), findsNWidgets(5));
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Learn'),
+        ),
+        findsNothing,
+      );
 
+      // The Profile header carries the book action that opens Learn
+      // as a full-screen route.
+      await tester.tap(find.text('Profile').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Shell page 4'), findsOneWidget);
+      expect(find.byTooltip('Learn'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Learn'));
+      await tester.pumpAndSettle();
+      expect(find.text(LearnContent.helpCardHeading), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Shell page 4'), findsOneWidget);
+
+      // The app-bar help action stays where it was and opens the
+      // same Learn page.
       await tester.tap(find.text('Messages').last);
       await tester.pumpAndSettle();
       expect(find.text('Shell page 3'), findsOneWidget);
@@ -174,7 +198,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Get help & learn'));
       await tester.pumpAndSettle();
-      expect(find.text('Shell page 5'), findsOneWidget);
+      expect(find.text(LearnContent.helpCardHeading), findsOneWidget);
     },
   );
 

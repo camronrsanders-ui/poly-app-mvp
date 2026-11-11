@@ -34,15 +34,12 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   late final List<Widget?> _pages;
 
-  static const int _learnIndex = 5;
-
-  late final List<String> _titles = [
+  static const _titles = [
     'Discover',
     'Connections',
     'Circle',
     'Messages',
     'Profile',
-    if (FeatureFlags.learnEnabled) 'Learn',
   ];
 
   @override
@@ -67,7 +64,6 @@ class _MainShellState extends State<MainShell> {
       2 => const MyCircleScreen(),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
-      5 => const LearnScreen(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -116,6 +112,14 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  Future<void> _openLearn() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const LearnPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final discoverSelected = _index == 0;
@@ -128,11 +132,17 @@ class _MainShellState extends State<MainShell> {
           : AppBar(
               title: Text(_titles[_index]),
               actions: [
+                if (_index == 4 && FeatureFlags.learnEnabled)
+                  IconButton(
+                    tooltip: 'Learn',
+                    icon: const Icon(Icons.menu_book_outlined),
+                    onPressed: _openLearn,
+                  ),
                 if (FeatureFlags.learnEnabled)
                   IconButton(
                     tooltip: 'Get help & learn',
                     icon: const Icon(Icons.favorite_outline),
-                    onPressed: () => _selectTab(_learnIndex),
+                    onPressed: _openLearn,
                   ),
                 IconButton(
                   tooltip: 'Safety center',
@@ -152,7 +162,6 @@ class _MainShellState extends State<MainShell> {
       bottomNavigationBar: _MainNavigation(
         selectedIndex: _index,
         immersive: discoverSelected,
-        showLearn: FeatureFlags.learnEnabled,
         onDestinationSelected: _selectTab,
       ),
     );
@@ -163,52 +172,44 @@ class _MainNavigation extends StatelessWidget {
   const _MainNavigation({
     required this.selectedIndex,
     required this.immersive,
-    required this.showLearn,
     required this.onDestinationSelected,
   });
 
   final int selectedIndex;
   final bool immersive;
-  final bool showLearn;
   final ValueChanged<int> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
-    final destinations = [
-      const NavigationDestination(
+    const destinations = [
+      NavigationDestination(
         icon: Icon(Icons.explore_outlined),
         selectedIcon: Icon(Icons.explore),
         label: 'Discover',
       ),
       // Preserve the full destination name in its tooltip and page header,
       // but avoid wrapping a 11-character tab label on compact phones.
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.people_alt_outlined),
         selectedIcon: Icon(Icons.people_alt),
         label: 'Connect',
         tooltip: 'Connections',
       ),
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.hub_outlined),
         selectedIcon: Icon(Icons.hub),
         label: 'Circle',
       ),
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.chat_bubble_outline),
         selectedIcon: Icon(Icons.chat_bubble),
         label: 'Messages',
       ),
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.person_outline),
         selectedIcon: Icon(Icons.person),
         label: 'Profile',
       ),
-      if (showLearn)
-        const NavigationDestination(
-          icon: Icon(Icons.menu_book_outlined),
-          selectedIcon: Icon(Icons.menu_book),
-          label: 'Learn',
-        ),
     ];
 
     if (!immersive) {
