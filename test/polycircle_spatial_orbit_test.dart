@@ -86,31 +86,30 @@ Offset _pointAt(
   );
 }
 
-/// Drags around the ring by [totalRadians] in [steps] even angular
-/// steps, building release velocity like a real fling would. The
-/// drag starts between nodes so no node's tap recognizer competes
-/// with the orbit's pan recognizer.
-Future<void> _dragArc(
-  WidgetTester tester, {
-  required double totalRadians,
-  required int steps,
-}) async {
+/// One decisive sweep around the ring, in the shape Discover's
+/// drag tests use (a single large moveBy with an explicit
+/// timestamp): from the bottom of the ring (pointer angle pi/2,
+/// Ana's seat) to pointer angle 2.55 — a +0.98 radian drag, past
+/// the half-step, building real release velocity.
+///
+/// Geometry of the four-person ring (Ana, Bo, Cy, Di) makes the two
+/// motion modes land on DIFFERENT people, so both drag tests below
+/// fail loudly if the drag never engages:
+/// - release-nearest is Di (0.59 rad from focus vs Ana's 0.98);
+/// - with inertia, the clamped release velocity carries the ring
+///   onward until Bo sits almost exactly at the focus angle.
+Future<void> _singleSweep(WidgetTester tester) async {
   final center = _orbitCenter(tester);
 
-  const startTheta = .4;
+  final start = _pointAt(center, math.pi / 2);
+  final end = _pointAt(center, 2.55);
 
-  final gesture = await tester.startGesture(
-    _pointAt(center, startTheta),
+  final gesture = await tester.startGesture(start);
+
+  await gesture.moveBy(
+    end - start,
+    timeStamp: const Duration(milliseconds: 100),
   );
-
-  for (var step = 1; step <= steps; step++) {
-    await gesture.moveTo(
-      _pointAt(center, startTheta + totalRadians * step / steps),
-    );
-    await tester.pump(
-      const Duration(milliseconds: 16),
-    );
-  }
 
   await gesture.up();
 }
@@ -386,19 +385,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // A short, fast drag: the hand moves focus less than one
-      // step, and reduced motion means the release adds nothing.
-      await _dragArc(
-        tester,
-        totalRadians: -.6,
-        steps: 3,
-      );
-      await tester.pump(
-        const Duration(milliseconds: 300),
-      );
+      // The sweep itself carries focus to Di, the release-nearest
+      // person — and reduced motion adds nothing after release,
+      // so Di is exactly where focus settles.
+      await _singleSweep(tester);
       await tester.pumpAndSettle();
 
-      expect(find.text('Ana'), findsOneWidget);
+      expect(find.text('Di'), findsOneWidget);
     },
   );
 
@@ -417,21 +410,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await _dragArc(
-        tester,
-        totalRadians: -.6,
-        steps: 3,
-      );
-      await tester.pump(
-        const Duration(milliseconds: 300),
-      );
+      await _singleSweep(tester);
+      await tester.pumpAndSettle();
 
-      // The same gesture that stays on Ana under reduced motion
-      // has flung focus onward: the inertia-driven travel after
-      // release carries the ring well past Ana's slot. (Where a
-      // multi-revolution fling finally settles is phase-dependent,
-      // so this asserts the departure, not a landing spot.)
-      expect(find.text('Ana'), findsNothing);
+      // The same sweep that settles on Di under reduced motion
+      // keeps travelling here: inertia carries the ring past Di
+      // until Bo sits at the focus angle.
+      expect(find.text('Bo'), findsOneWidget);
     },
   );
 
