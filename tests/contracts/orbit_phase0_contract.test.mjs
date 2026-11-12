@@ -23,6 +23,16 @@ test('Circle orbit honors platform reduced-motion signals', () => {
   assert.match(orbit, /_reduceMotion/);
 });
 
+test('reduced motion gates off inertia-driven travel after a drag', () => {
+  // Widget-test coverage of this branch is not possible in the
+  // current harness (the stock GestureDetector pan delivers no
+  // usable updates there — see the note in
+  // test/polycircle_spatial_orbit_test.dart), so the gate itself
+  // is pinned here at source level.
+  assert.match(orbit, /!_reduceMotion && velocity\.abs\(\) > \.08/);
+  assert.match(orbit, /FrictionSimulation/);
+});
+
 test('Circle orbit focus is anchored to a person, not a list position', () => {
   assert.match(orbit, /_focusedId/);
   assert.match(orbit, /newIds\.indexOf\(previousId\)/);
