@@ -81,7 +81,7 @@ class MyCircleScreen extends StatefulWidget {
 }
 
 class _MyCircleScreenState extends State<MyCircleScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   ConnectionService? _connections;
   CircleMembershipService? _circleMembership;
   ProfileService? _profiles;
@@ -109,9 +109,20 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   bool _sendingCircleInvite = false;
   String? _respondingCircleInviteId;
 
+  /// Same reduced-motion standard as the orbit widgets: the
+  /// platform accessibility signals decide.
+  bool get _reduceMotion {
+    final media = MediaQuery.maybeOf(context);
+
+    return media?.disableAnimations == true ||
+        media?.accessibleNavigation == true;
+  }
+
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
 
     _worldTravel = AnimationController(
       vsync: this,
@@ -124,11 +135,46 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
     _worldTravel
       ..removeListener(_handleWorldTravelFrame)
       ..dispose();
 
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.inactive) {
+      return;
+    }
+
+    if (_pendingWorldId == null) {
+      return;
+    }
+
+    // A world switch interrupted by backgrounding completes
+    // instantly instead of resuming mid-flight on return: the
+    // pending world becomes active now, with no migrating ghosts.
+    _worldTravel.stop();
+
+    setState(() {
+      if (!_worldTravelSwapped) {
+        _activeWorldId = _pendingWorldId!;
+        _focused = null;
+      }
+
+      _pendingWorldId = null;
+      _worldTravelSwapped = false;
+
+      _migratingPeople = const <Map<String, dynamic>>[];
+
+      _migrationStartPositions = const <String, Offset>{};
+    });
+
+    _worldTravel.value = 1;
   }
 
   void _handleWorldTravelFrame() {
@@ -153,6 +199,20 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     List<_CircleWorld> worlds,
   ) async {
     if (target.id == _activeWorldId || _pendingWorldId != null) {
+      return;
+    }
+
+    if (_reduceMotion) {
+      // Reduced motion: changing worlds is an instant, honest
+      // swap — no camera swoop, no members flying across the
+      // screen, no migration layer.
+      setState(() {
+        _activeWorldId = target.id;
+        _focused = null;
+      });
+
+      HapticFeedback.selectionClick();
+
       return;
     }
 
@@ -234,6 +294,75 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
       _migrationStartPositions = const <String, Offset>{};
     });
+  }
+
+  Map<String, dynamic> _selectedIn(_CircleWorld world) {
+    if (_focused != null &&
+        world.people.any(
+          (person) => person['uid'] == _focused?['uid'],
+        )) {
+      return _focused!;
+    }
+
+    return world.people.first;
+  }
+
+  /// Steps focus through the FULL roster of the active world —
+  /// including people outside the orbit's rendered window, whom
+  /// the orbit then slides into view.
+  void _stepFocus(
+    _CircleWorld world,
+    int delta,
+  ) {
+    final people = world.people;
+
+    if (people.length < 2) return;
+
+    final selected = _selectedIn(world);
+
+    final from = people.indexWhere(
+      (person) => person['uid'] == selected['uid'],
+    );
+
+    final count = people.length;
+
+    final next = people[((from + delta) % count + count) % count];
+
+    setState(() {
+      _focused = next;
+    });
+
+    _orbitController.focusItem(
+      _uidOf(next),
+    );
+  }
+
+  Future<void> _openWorldPeople(
+    _CircleWorld world,
+  ) async {
+    final person = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _WorldPeopleSheet(
+        worldName: world.name,
+        people: world.people,
+        focusedUid: _uidOf(
+          _selectedIn(world),
+        ),
+        nameBuilder: _name,
+      ),
+    );
+
+    if (!mounted || person == null) return;
+
+    setState(() {
+      _focused = person;
+    });
+
+    _orbitController.focusItem(
+      _uidOf(person),
+    );
   }
 
   Future<_UniverseModel> _load() async {
@@ -1002,6 +1131,14 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                       ),
                   ],
                 ),
+              ),
+              _OrbitFocusControls(
+                totalCount: active.people.length,
+                canStep: active.people.length > 1 && _pendingWorldId == null,
+                canOpenRoster: _pendingWorldId == null,
+                onPrevious: () => _stepFocus(active, -1),
+                onNext: () => _stepFocus(active, 1),
+                onShowEveryone: () => _openWorldPeople(active),
               ),
               _FocusedPersonGlass(
                 person: selected,
@@ -2948,6 +3085,259 @@ class _FocusedPersonGlass extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Non-orbit paths to every person in the active world: step
+/// through the full roster, or open the searchable roster. The
+/// orbit's render cap must never silently decide who exists.
+class _OrbitFocusControls extends StatelessWidget {
+  const _OrbitFocusControls({
+    required this.totalCount,
+    required this.canStep,
+    required this.canOpenRoster,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onShowEveryone,
+  });
+
+  final int totalCount;
+  final bool canStep;
+  final bool canOpenRoster;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onShowEveryone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Previous person',
+          onPressed: canStep ? onPrevious : null,
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+          ),
+        ),
+        TextButton.icon(
+          onPressed: canOpenRoster ? onShowEveryone : null,
+          icon: const Icon(
+            Icons.people_alt_rounded,
+          ),
+          label: Text(
+            'Everyone · $totalCount',
+          ),
+        ),
+        IconButton(
+          tooltip: 'Next person',
+          onPressed: canStep ? onNext : null,
+          icon: const Icon(
+            Icons.arrow_forward_ios_rounded,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Searchable roster of everyone in the active world. Lists the
+/// FULL roster, not just the orbit's rendered window; choosing a
+/// person focuses them in the orbit.
+class _WorldPeopleSheet extends StatefulWidget {
+  const _WorldPeopleSheet({
+    required this.worldName,
+    required this.people,
+    required this.focusedUid,
+    required this.nameBuilder,
+  });
+
+  final String worldName;
+  final List<Map<String, dynamic>> people;
+  final String focusedUid;
+  final String Function(Map<String, dynamic>) nameBuilder;
+
+  @override
+  State<_WorldPeopleSheet> createState() => _WorldPeopleSheetState();
+}
+
+class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
+  String _query = '';
+
+  String _detail(
+    Map<String, dynamic> person,
+  ) {
+    final relationship = [
+      person['relationshipStructure'],
+      person['relationshipStatus'],
+    ]
+        .whereType<String>()
+        .where(
+          (value) => value.trim().isNotEmpty,
+        )
+        .join(' • ');
+
+    final location = [
+      person['city'],
+      person['region'],
+    ]
+        .whereType<String>()
+        .where(
+          (value) => value.trim().isNotEmpty,
+        )
+        .join(', ');
+
+    return [
+      relationship,
+      location,
+    ]
+        .where(
+          (value) => value.isNotEmpty,
+        )
+        .join('  •  ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final query = _query.trim().toLowerCase();
+
+    final visible = widget.people
+        .where(
+          (person) =>
+              query.isEmpty ||
+              widget.nameBuilder(person).toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+
+    return Material(
+      color: colors.surface,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(32),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .72,
+        minChildSize: .48,
+        maxChildSize: .92,
+        builder: (
+          context,
+          scrollController,
+        ) {
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(
+                    999,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  22,
+                  22,
+                  22,
+                  12,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Everyone in ${widget.worldName}',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'All ${widget.people.length} people in this world. '
+                      'The orbit shows some of them at a time, but nobody '
+                      'is left out — tap anyone to focus them.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                        ),
+                        hintText: 'Search people',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _query = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: visible.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No one matches that search.',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) {
+                          final person = visible[index];
+                          final name = widget.nameBuilder(person);
+                          final detail = _detail(person);
+                          final uid = person['uid']?.toString() ?? '';
+                          final focused =
+                              uid.isNotEmpty && uid == widget.focusedUid;
+
+                          return ListTile(
+                            leading: CircleAvatar(
+                              child: Text(
+                                name.isEmpty
+                                    ? '?'
+                                    : name.substring(0, 1).toUpperCase(),
+                              ),
+                            ),
+                            title: Text(name),
+                            subtitle: detail.isEmpty
+                                ? null
+                                : Text(
+                                    detail,
+                                  ),
+                            trailing: focused
+                                ? const Chip(
+                                    label: Text(
+                                      'Focused',
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                  )
+                                : null,
+                            onTap: () {
+                              Navigator.of(context).pop(person);
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
