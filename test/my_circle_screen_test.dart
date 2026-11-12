@@ -562,9 +562,16 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Person 29');
       await tester.pumpAndSettle();
 
-      expect(find.text('Person 29'), findsOneWidget);
+      // Scoped to the roster tile: the search field's own text
+      // also contains 'Person 29' at this point.
+      final person29Tile = find.widgetWithText(
+        ListTile,
+        'Person 29',
+      );
 
-      await tester.tap(find.text('Person 29'));
+      expect(person29Tile, findsOneWidget);
+
+      await tester.tap(person29Tile);
       await tester.pumpAndSettle();
 
       // Person 30 of 30 — outside the rendered window — is now

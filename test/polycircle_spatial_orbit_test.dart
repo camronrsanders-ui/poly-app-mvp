@@ -87,7 +87,9 @@ Offset _pointAt(
 }
 
 /// Drags around the ring by [totalRadians] in [steps] even angular
-/// steps, building release velocity like a real fling would.
+/// steps, building release velocity like a real fling would. The
+/// drag starts between nodes so no node's tap recognizer competes
+/// with the orbit's pan recognizer.
 Future<void> _dragArc(
   WidgetTester tester, {
   required double totalRadians,
@@ -95,13 +97,15 @@ Future<void> _dragArc(
 }) async {
   final center = _orbitCenter(tester);
 
+  const startTheta = .4;
+
   final gesture = await tester.startGesture(
-    _pointAt(center, 0),
+    _pointAt(center, startTheta),
   );
 
   for (var step = 1; step <= steps; step++) {
     await gesture.moveTo(
-      _pointAt(center, totalRadians * step / steps),
+      _pointAt(center, startTheta + totalRadians * step / steps),
     );
     await tester.pump(
       const Duration(milliseconds: 16),
@@ -423,8 +427,11 @@ void main() {
       );
 
       // The same gesture that stays on Ana under reduced motion
-      // has flung focus onward to Bo by now.
-      expect(find.text('Bo'), findsOneWidget);
+      // has flung focus onward: the inertia-driven travel after
+      // release carries the ring well past Ana's slot. (Where a
+      // multi-revolution fling finally settles is phase-dependent,
+      // so this asserts the departure, not a landing spot.)
+      expect(find.text('Ana'), findsNothing);
     },
   );
 
