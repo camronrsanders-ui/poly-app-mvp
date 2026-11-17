@@ -953,6 +953,16 @@ void main() {
         find.text('Safety center'),
         description: 'Safety center for populated blocked list',
       );
+      // The button sits below the crisis card and the first
+      // explainer section on this fresh route — past the build
+      // horizon at the top — so scroll it into view before tapping
+      // (the S2 visit could tap directly only because the screen
+      // was much shorter before the H-6 fix).
+      await tester.scrollUntilVisible(
+        find.text('Manage blocked members'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('Manage blocked members'));
       await waitForFinder(
         tester,
@@ -1203,6 +1213,15 @@ void main() {
         description: 'Safety Center as moderator',
       );
       // The entry renders only once the moderator claim check resolves.
+      // It also sits below the crisis card and the explainer intro —
+      // past the ListView's build horizon at the top of the screen —
+      // so scroll the headline into view first to build its region,
+      // then wait for the claim check as before.
+      await tester.scrollUntilVisible(
+        find.text('Your boundaries are part of the product'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await waitForFinder(
         tester,
         find.text('Local moderator QA'),
