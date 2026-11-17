@@ -724,9 +724,22 @@ void main() {
       // dialog's Cancel happen before the confirmed block, because after
       // the block the chat route no longer exists.
       //
-      // S1: the Safety Center is already the settled foreground route. Its
-      // explainer sections are the acceptance row's "help entries"; there
-      // is no separate Help button on this screen.
+      // S1: the Safety Center is already the settled foreground route.
+      // Since the H-6 fix it opens with the crisis-help card — the
+      // canonical Learn resources, reachable without scrolling — and
+      // the card carries the screen's 'Get help & learn' entry to
+      // Learn. The explainer sections below the card are the
+      // acceptance row's "help entries".
+      expect(
+        find.text('988 Suicide & Crisis Lifeline'),
+        findsOneWidget,
+      );
+      final safetyScroll = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('Your boundaries are part of the product'),
+        300,
+        scrollable: safetyScroll,
+      );
       expect(
         find.text('Your boundaries are part of the product'),
         findsOneWidget,
@@ -737,7 +750,6 @@ void main() {
       await pumpBounded(tester);
       expect(find.text('Local moderator QA'), findsNothing);
       expect(find.text('Review pending profile photos'), findsNothing);
-      final safetyScroll = find.byType(Scrollable).first;
       for (final heading in <String>[
         'Block at any time',
         'End a connection',
