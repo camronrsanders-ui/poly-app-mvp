@@ -44,6 +44,38 @@ void main() {
   );
 
   testWidgets(
+    'Safety center opens with crisis help and a route to Learn',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: SafetyCenterScreen()),
+      );
+
+      // Crisis help is the first thing on the screen: a member in
+      // danger reaches a crisis line without scrolling past the
+      // explainer cards. The resources are the canonical Learn ones.
+      expect(find.text('You deserve support.'), findsOneWidget);
+      expect(find.text('988 Suicide & Crisis Lifeline'), findsOneWidget);
+
+      final scrollable = find.byType(Scrollable).first;
+      for (final label in ['Call BlackLine', 'Get help & learn']) {
+        await tester.scrollUntilVisible(
+          find.text(label),
+          300,
+          scrollable: scrollable,
+        );
+        expect(find.text(label), findsOneWidget);
+      }
+
+      // The entry opens the same Learn page as the shell's
+      // 'Get help & learn' action.
+      await tester.tap(find.text('Get help & learn'));
+      await tester.pumpAndSettle();
+      expect(find.text('Learn'), findsOneWidget);
+      expect(find.text('You deserve support.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'Blocked-member flow requires explicit confirmation',
     (tester) async {
       var unblockCalls = 0;
