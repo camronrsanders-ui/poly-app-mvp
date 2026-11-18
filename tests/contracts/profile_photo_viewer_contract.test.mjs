@@ -11,7 +11,10 @@ const profileDetail = fs.readFileSync(path.join(root, 'lib/screens/profile/profi
 test('remote profile photo listing reuses trusted profile visibility and block checks', () => {
   assert.match(listing, /canViewOwnerProfile/);
   assert.match(listing, /viewingAnotherProfile && !\(await canViewOwnerProfile\(db, uid, ownerUid\)\)/);
-  assert.match(listing, /doc\.get\('status'\) === 'active'/);
+  // Only active photos may reach another member — enforced inside the
+  // query (photo PR 1), so non-active records can never crowd the
+  // active gallery out of the result window.
+  assert.match(listing, /where\('status', '==', 'active'\)/);
 });
 
 test('remote profile photo listing returns only short-lived signed delivery URLs', () => {
