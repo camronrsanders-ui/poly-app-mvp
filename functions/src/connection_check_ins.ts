@@ -9,13 +9,18 @@ import {
   CheckInDocData,
   CheckInSlotData,
   SharedCheckInNoteData,
-  applyCheckInStateWrite,
-  applyClearCheckInState,
-  applySharedCheckInNoteWrite,
   normalizeCheckInStateInput,
   normalizeSharedCheckInNoteInput,
   projectCheckIn,
 } from './connection_check_in_fields';
+import {
+  CheckInWriteStore,
+  CheckInWriteTransaction,
+  commitCheckInStateWrite,
+  commitClearCheckInState,
+  commitSharedCheckInNoteWrite,
+  commitClearSharedCheckInNote,
+} from './connection_check_in_writes';
 
 // Check-ins are enabled in the lab build so the feature is exercisable
 // end to end. Flipping this to false freezes every check-in write path
@@ -176,6 +181,64 @@ function statesForFirestore(
   return converted;
 }
 
+// Production binding for the transactional write orchestration in
+// connection_check_in_writes.ts. Every document access a write makes
+// goes through the transaction (tx.get / tx.set): the read that feeds
+// the pure computation is the snapshot the commit is checked against,
+// so a concurrent partner write forces a retry-and-recompute instead
+// of being silently overwritten. The payload shape is exactly what
+// the pre-transaction handlers wrote by hand — same fields, same
+// merge semantics, createdAt only on the first write.
+function firestoreCheckInWriteStore(
+  db: FirebaseFirestore.Firestore,
+  participantUids: string[],
+): CheckInWriteStore {
+  return {
+    runTransaction: (updateFunction) =>
+      db.runTransaction(async (tx) => {
+        const boundTx: CheckInWriteTransaction = {
+          get: async (conversationId) => {
+            const snap = await tx.get(
+              db.collection('connection_check_ins').doc(conversationId),
+            );
+            return docDataFromFirestore(snap, participantUids);
+          },
+          set: (conversationId, write) => {
+            const payload: Record<string, unknown> = {
+              updatedAt: FieldValue.serverTimestamp(),
+            };
+            if (write.scaffold) {
+              payload.conversationId = conversationId;
+              payload.participantUids = participantUids;
+            }
+            if (write.stampCreatedAt) {
+              payload.createdAt = FieldValue.serverTimestamp();
+            }
+            if (write.states) {
+              payload.states = statesForFirestore(write.states);
+            }
+            if (write.sharedNote) {
+              payload.sharedNote = {
+                text: write.sharedNote.text,
+                updatedByUid: write.sharedNote.updatedByUid,
+                updatedAt: Timestamp.fromMillis(write.sharedNote.updatedAtMs),
+              };
+            }
+            if (write.deleteSharedNote) {
+              payload.sharedNote = FieldValue.delete();
+            }
+            tx.set(
+              db.collection('connection_check_ins').doc(conversationId),
+              payload,
+              {merge: true},
+            );
+          },
+        };
+        return updateFunction(boundTx);
+      }),
+  };
+}
+
 function requireWritesEnabled(): void {
   if (!CONNECTION_CHECK_INS_ENABLED) {
     throw new HttpsError(
@@ -250,25 +313,13 @@ export const setMyCheckInState = onCall(
       throw new HttpsError('invalid-argument', message);
     }
 
-    const ref = db.collection('connection_check_ins').doc(conversationId);
-    const snap = await ref.get();
-    const nowMs = Date.now();
-    const states = applyCheckInStateWrite(
-      docDataFromFirestore(snap, participantUids),
+    await commitCheckInStateWrite(
+      firestoreCheckInWriteStore(db, participantUids),
+      conversationId,
       participantUids,
       uid,
       input,
-      nowMs,
-    );
-    await ref.set(
-      {
-        conversationId,
-        participantUids,
-        states: statesForFirestore(states),
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(snap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
-      },
-      {merge: true},
+      Date.now(),
     );
     return {updated: true};
   },
@@ -283,20 +334,11 @@ export const clearMyCheckInState = onCall(
       'check_in_state_clear',
       60,
     );
-    const ref = db.collection('connection_check_ins').doc(conversationId);
-    const snap = await ref.get();
-    if (!snap.exists) return {cleared: true};
-    const states = applyClearCheckInState(
-      docDataFromFirestore(snap, participantUids),
+    await commitClearCheckInState(
+      firestoreCheckInWriteStore(db, participantUids),
+      conversationId,
       participantUids,
       uid,
-    );
-    await ref.set(
-      {
-        states: statesForFirestore(states),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      {merge: true},
     );
     return {cleared: true};
   },
@@ -322,27 +364,13 @@ export const setSharedCheckInNote = onCall(
       throw new HttpsError('invalid-argument', message);
     }
 
-    const sharedNote = applySharedCheckInNoteWrite(
+    await commitSharedCheckInNoteWrite(
+      firestoreCheckInWriteStore(db, participantUids),
+      conversationId,
       participantUids,
       uid,
       input.text,
       Date.now(),
-    );
-    const ref = db.collection('connection_check_ins').doc(conversationId);
-    const snap = await ref.get();
-    await ref.set(
-      {
-        conversationId,
-        participantUids,
-        sharedNote: {
-          text: sharedNote.text,
-          updatedByUid: sharedNote.updatedByUid,
-          updatedAt: Timestamp.fromMillis(sharedNote.updatedAtMs),
-        },
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(snap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
-      },
-      {merge: true},
     );
     return {updated: true};
   },
@@ -352,20 +380,14 @@ export const clearSharedCheckInNote = onCall(
   {enforceAppCheck: true, maxInstances: 20},
   async (request) => {
     requireWritesEnabled();
-    const {db, conversationId} = await guardConversation(
+    const {db, conversationId, participantUids} = await guardConversation(
       request,
       'check_in_note_clear',
       60,
     );
-    const ref = db.collection('connection_check_ins').doc(conversationId);
-    const snap = await ref.get();
-    if (!snap.exists) return {cleared: true};
-    await ref.set(
-      {
-        sharedNote: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      {merge: true},
+    await commitClearSharedCheckInNote(
+      firestoreCheckInWriteStore(db, participantUids),
+      conversationId,
     );
     return {cleared: true};
   },

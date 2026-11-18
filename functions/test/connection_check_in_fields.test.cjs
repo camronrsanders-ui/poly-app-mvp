@@ -262,3 +262,140 @@ test('account-deletion cascade dedupes and drops blank conversation ids', () => 
   );
   assert.deepEqual(checkInDocIdsForAccountDeletion([]), []);
 });
+
+// ---------------------------------------------------------------------------
+// Composition: two writers, one document.
+//
+// The tests above prove single-writer slot discipline. The pilot
+// defect (H-3) lived one layer up: the callables fed these pure
+// functions a STALE snapshot and overwrote the partner's committed
+// write with the result. These tests pin the property the
+// transactional orchestration in connection_check_in_writes.ts relies
+// on — fed writer A's committed result, writer B's computation
+// preserves A's effect — across the interleaving matrix, plus the
+// negative control that records what a stale snapshot does.
+
+function docWithSlots(slots) {
+  const states = {};
+  for (const [uid, state] of Object.entries(slots)) {
+    states[uid] = {
+      state,
+      note: '',
+      updatedAtMs: NOW - 60_000,
+      expiresAtMs: NOW - 60_000 + CHECK_IN_STATE_TTL_MS,
+    };
+  }
+  return {participantUids: [...PARTICIPANTS], states, sharedNote: null};
+}
+
+function compose(doc, op) {
+  const states =
+    op.kind === 'set'
+      ? applyCheckInStateWrite(
+          doc,
+          PARTICIPANTS,
+          op.uid,
+          {state: op.state, note: ''},
+          NOW,
+        )
+      : applyClearCheckInState(doc, PARTICIPANTS, op.uid);
+  return {participantUids: [...PARTICIPANTS], states, sharedNote: null};
+}
+
+test('composition: post then post keeps both slots, from empty and populated docs', () => {
+  const fromEmpty = compose(
+    compose(null, {kind: 'set', uid: ALICE, state: 'need_space'}),
+    {kind: 'set', uid: BOB, state: 'doing_well'},
+  );
+  assert.equal(fromEmpty.states[ALICE].state, 'need_space');
+  assert.equal(fromEmpty.states[BOB].state, 'doing_well');
+
+  const fromPopulated = compose(
+    compose(docWithSlots({[ALICE]: 'okay', [BOB]: 'okay'}), {
+      kind: 'set',
+      uid: ALICE,
+      state: 'celebrating',
+    }),
+    {kind: 'set', uid: BOB, state: 'want_to_talk'},
+  );
+  assert.equal(fromPopulated.states[ALICE].state, 'celebrating');
+  assert.equal(fromPopulated.states[BOB].state, 'want_to_talk');
+});
+
+test('composition: post then clear removes only the clearer slot', () => {
+  const result = compose(
+    compose(docWithSlots({[ALICE]: 'okay', [BOB]: 'tender'}), {
+      kind: 'set',
+      uid: ALICE,
+      state: 'need_space',
+    }),
+    {kind: 'clear', uid: BOB},
+  );
+  assert.equal(result.states[ALICE].state, 'need_space');
+  assert.equal(result.states[BOB], undefined);
+});
+
+test('composition: clear then post keeps the post and the clear', () => {
+  const result = compose(
+    compose(docWithSlots({[ALICE]: 'okay', [BOB]: 'tender'}), {
+      kind: 'clear',
+      uid: ALICE,
+    }),
+    {kind: 'set', uid: BOB, state: 'want_to_talk'},
+  );
+  assert.equal(result.states[ALICE], undefined);
+  assert.equal(result.states[BOB].state, 'want_to_talk');
+});
+
+test('composition: clear then clear empties the states map', () => {
+  const result = compose(
+    compose(docWithSlots({[ALICE]: 'okay', [BOB]: 'tender'}), {
+      kind: 'clear',
+      uid: ALICE,
+    }),
+    {kind: 'clear', uid: BOB},
+  );
+  assert.deepEqual(result.states, {});
+});
+
+test('composition: a clear composed after a re-post cannot resurrect the replaced state', () => {
+  // Alice replaces her 'okay' with 'need_space'; Bob's clear, computed
+  // from Alice's committed result, removes only Bob's slot — Alice's
+  // new state survives verbatim, never the stale 'okay'.
+  const result = compose(
+    compose(docWithSlots({[ALICE]: 'okay', [BOB]: 'tender'}), {
+      kind: 'set',
+      uid: ALICE,
+      state: 'need_space',
+    }),
+    {kind: 'clear', uid: BOB},
+  );
+  assert.deepEqual(result.states[ALICE], {
+    state: 'need_space',
+    note: '',
+    updatedAtMs: NOW,
+    expiresAtMs: NOW + CHECK_IN_STATE_TTL_MS,
+  });
+  assert.equal(result.states[BOB], undefined);
+});
+
+test('composition negative control: a write computed from the stale snapshot loses the partner post', () => {
+  // Specification, not regression: this is the H-3 bug shape. Bob's
+  // write computed from the pre-Alice snapshot (null) contains no
+  // Alice slot, so persisting it erases her post. The pure layer
+  // cannot defend against a stale snapshot — connection_check_in_writes
+  // exists to guarantee Bob is always fed Alice's committed result.
+  const aliceCommitted = compose(null, {
+    kind: 'set',
+    uid: ALICE,
+    state: 'need_space',
+  });
+  const bobFromStale = compose(null, {
+    kind: 'set',
+    uid: BOB,
+    state: 'doing_well',
+  });
+  assert.equal(aliceCommitted.states[ALICE].state, 'need_space');
+  assert.equal(bobFromStale.states[ALICE], undefined);
+  assert.equal(bobFromStale.states[BOB].state, 'doing_well');
+});
