@@ -1,6 +1,7 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {assertActiveCompliantMember} from './account_compliance';
+import {circleProfileVisibilityDenial} from './circle_view_visibility';
 
 const db = getFirestore();
 
@@ -103,6 +104,18 @@ export const getCircleForProfile = onCall(
     const matched = isOwner ? true : await hasActiveMatch(requesterUid, ownerUid);
     const mapVisibility = String(profile.get('mapVisibility') ?? 'private');
     if (!isOwner) {
+      // H-11: profileVisibility caps this read exactly as it caps the
+      // profile view (canViewOwnerProfile). A hidden profile yields no
+      // Circle regardless of the map setting, and a connections-only
+      // profile requires an active match even when the map is public.
+      // Co-membership alone confers nothing on this read path.
+      const profileDenial = circleProfileVisibilityDenial(
+        profile.get('profileVisibility'),
+        matched,
+      );
+      if (profileDenial !== null) {
+        throw new HttpsError('permission-denied', profileDenial);
+      }
       if (mapVisibility === 'private') {
         throw new HttpsError('permission-denied', 'Circle is private.');
       }
