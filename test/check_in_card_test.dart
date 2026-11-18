@@ -57,7 +57,11 @@ CheckInActions _actions({
   );
 }
 
-Future<void> _pumpCard(WidgetTester tester, CheckInActions actions) async {
+Future<void> _pumpCard(
+  WidgetTester tester,
+  CheckInActions actions, {
+  Listenable? refreshListenable,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -66,11 +70,19 @@ Future<void> _pumpCard(WidgetTester tester, CheckInActions actions) async {
             actions: actions,
             otherDisplayName: 'Alex',
             otherUid: 'member-2',
+            refreshListenable: refreshListenable,
           ),
         ),
       ),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+/// The card starts collapsed (H-5); tests that exercise the full card
+/// expand it first, exactly as a member would.
+Future<void> _expandCard(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('check-in-toggle')));
   await tester.pumpAndSettle();
 }
 
@@ -87,6 +99,7 @@ void main() {
         ),
       ),
     );
+    await _expandCard(tester);
 
     expect(find.byKey(const Key('check-in-card')), findsOneWidget);
     expect(find.text('How are we doing right now?'), findsOneWidget);
@@ -130,6 +143,7 @@ void main() {
         ),
       ),
     );
+    await _expandCard(tester);
 
     final mine = find.byKey(const Key('check-in-my-state'));
     expect(
@@ -170,6 +184,7 @@ void main() {
         ),
       ),
     );
+    await _expandCard(tester);
 
     final note = find.byKey(const Key('check-in-shared-note'));
     expect(
@@ -205,6 +220,7 @@ void main() {
         ),
       ),
     );
+    await _expandCard(tester);
 
     expect(find.text('Last edited by you · 10m ago'), findsOneWidget);
   });
@@ -228,6 +244,7 @@ void main() {
         },
       ),
     );
+    await _expandCard(tester);
 
     await tester.tap(find.byKey(const Key('check-in-set-state')));
     await tester.pumpAndSettle();
@@ -256,6 +273,7 @@ void main() {
         onSetNote: (text) => savedNote = text,
       ),
     );
+    await _expandCard(tester);
 
     await tester.tap(find.byKey(const Key('check-in-edit-note')));
     await tester.pumpAndSettle();
@@ -295,6 +313,201 @@ void main() {
     await tester.tap(find.byKey(const Key('check-in-retry')));
     await tester.pumpAndSettle();
     expect(find.text('Couldn’t load check-ins.'), findsNothing);
+    await _expandCard(tester);
     expect(find.byKey(const Key('check-in-my-state')), findsOneWidget);
+  });
+
+  testWidgets('card starts collapsed with a one-line summary',
+      (tester) async {
+    await _pumpCard(
+      tester,
+      _actions(
+        snapshot: CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: _currentSlot('doing_well', note: 'Good morning.'),
+          otherState: _currentSlot('tender'),
+          sharedNote: SharedCheckInNote(
+            text: 'Dinner Friday.',
+            updatedByUid: 'member-2',
+            updatedAtMs: _nowMs() - 60_000,
+          ),
+        ),
+      ),
+    );
+
+    // The full card — header, slot rows, note section — is not rendered.
+    expect(find.text('How are we doing right now?'), findsNothing);
+    expect(find.byKey(const Key('check-in-my-state')), findsNothing);
+    expect(find.byKey(const Key('check-in-shared-note')), findsNothing);
+
+    // The summary still carries the information: both current labels,
+    // the shared-note indicator, and the as-of cue.
+    expect(
+      find.text('You: Doing well · Alex: Tender / having a hard day'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.sticky_note_2_outlined), findsOneWidget);
+    expect(find.text('Updated just now'), findsOneWidget);
+  });
+
+  testWidgets('collapsed summary shows an expired state as unset',
+      (tester) async {
+    await _pumpCard(
+      tester,
+      _actions(
+        snapshot: CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: _currentSlot('okay'),
+          otherState: _expiredSlot('need_space'),
+          sharedNote: null,
+        ),
+      ),
+    );
+
+    expect(find.text('You: Okay · Alex: —'), findsOneWidget);
+    expect(find.textContaining('Need space'), findsNothing);
+  });
+
+  testWidgets('collapsed card with nothing current invites a check-in',
+      (tester) async {
+    await _pumpCard(
+      tester,
+      _actions(
+        snapshot: const CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: null,
+          sharedNote: null,
+        ),
+      ),
+    );
+
+    expect(find.text('Check in — how are we doing?'), findsOneWidget);
+  });
+
+  testWidgets('expansion is session-only and collapses back',
+      (tester) async {
+    CheckInActions buildActions() => _actions(
+          snapshot: CheckInSnapshot(
+            otherUid: 'member-2',
+            myState: _currentSlot('doing_well'),
+            otherState: null,
+            sharedNote: null,
+          ),
+        );
+
+    await _pumpCard(tester, buildActions());
+    await _expandCard(tester);
+    expect(find.byKey(const Key('check-in-my-state')), findsOneWidget);
+    // The as-of cue renders under the header when expanded too.
+    expect(find.text('Updated just now'), findsOneWidget);
+
+    // Collapsing returns to the summary.
+    await tester.tap(find.byKey(const Key('check-in-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('check-in-my-state')), findsNothing);
+    expect(find.byKey(const Key('check-in-summary')), findsOneWidget);
+
+    // A fresh card (a new chat-open) starts collapsed again: expansion
+    // is never remembered.
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await _pumpCard(tester, buildActions());
+    expect(find.byKey(const Key('check-in-my-state')), findsNothing);
+    expect(find.byKey(const Key('check-in-summary')), findsOneWidget);
+  });
+
+  testWidgets('bumping the refresh listenable reloads the card',
+      (tester) async {
+    var loads = 0;
+    final notifier = ValueNotifier<int>(0);
+    addTearDown(notifier.dispose);
+    final actions = CheckInActions(
+      load: () async {
+        loads++;
+        return CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: _currentSlot(loads == 1 ? 'okay' : 'need_space'),
+          sharedNote: null,
+        );
+      },
+      setMyState: ({required state, note = ''}) async {},
+      clearMyState: () async {},
+      setSharedNote: (_) async {},
+      clearSharedNote: () async {},
+    );
+
+    await _pumpCard(tester, actions, refreshListenable: notifier);
+    expect(loads, 1);
+    expect(find.text('You: — · Alex: Okay'), findsOneWidget);
+
+    notifier.value++;
+    await tester.pumpAndSettle();
+    expect(loads, 2);
+    expect(find.text('You: — · Alex: Need space'), findsOneWidget);
+
+    // The 30-second relative-time ticker fires without extra loads and
+    // the as-of cue survives it.
+    await tester.pump(const Duration(seconds: 31));
+    expect(loads, 2);
+    expect(find.byKey(const Key('check-in-updated')), findsOneWidget);
+  });
+
+  testWidgets('clearing the shared note asks for confirmation first',
+      (tester) async {
+    var clears = 0;
+    await _pumpCard(
+      tester,
+      _actions(
+        snapshot: CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: null,
+          sharedNote: SharedCheckInNote(
+            text: 'Dinner at 7 on Friday.',
+            updatedByUid: 'member-2',
+            updatedAtMs: _nowMs() - 60_000,
+          ),
+        ),
+        onClearNote: () => clears++,
+      ),
+    );
+    await _expandCard(tester);
+
+    await tester.tap(find.byKey(const Key('check-in-clear-note')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear the shared note?'), findsOneWidget);
+    expect(clears, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear the shared note?'), findsNothing);
+    expect(clears, 0);
+
+    await tester.tap(find.byKey(const Key('check-in-clear-note')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('check-in-clear-note-confirm')));
+    await tester.pumpAndSettle();
+    expect(clears, 1);
+  });
+
+  testWidgets('state dialog says your partner will see this note',
+      (tester) async {
+    await _pumpCard(
+      tester,
+      _actions(
+        snapshot: const CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: null,
+          sharedNote: null,
+        ),
+      ),
+    );
+    await _expandCard(tester);
+
+    await tester.tap(find.byKey(const Key('check-in-set-state')));
+    await tester.pumpAndSettle();
+    expect(find.text('Your partner will see this note'), findsOneWidget);
   });
 }
