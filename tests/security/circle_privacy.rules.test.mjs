@@ -117,7 +117,11 @@ test('Circle create and update reject severe UGC at the Firestore boundary', asy
 test('Circle create and update require server-authoritative timestamps', async () => {
   await seed([['users', 'alice', activeUser('alice')]]);
   const db = env.authenticatedContext('alice').firestore();
-  await assertSucceeds(setDoc(doc(db, 'relationship_cards', 'server-time'), newCard('alice')));
+  // The successful create is unnamed: a named card must be private now
+  // (H-10), and this test is about timestamps, not exposure.
+  await assertSucceeds(setDoc(doc(db, 'relationship_cards', 'server-time'), newCard('alice', {
+    displayNameOptional: '',
+  })));
   await assertFails(setDoc(doc(db, 'relationship_cards', 'forged-time'), newCard('alice', {
     createdAt: new Date('2000-01-01T00:00:00.000Z'),
     updatedAt: new Date('2000-01-01T00:00:00.000Z'),
@@ -143,6 +147,103 @@ test('inactive Circle owner cannot read or mutate a card', async () => {
   await assertFails(getDoc(doc(db, 'relationship_cards', 'card1')));
   await assertFails(updateDoc(doc(db, 'relationship_cards', 'card1'), {
     note: 'should fail',
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test('Circle create rejects a named card at any non-private visibility', async () => {
+  await seed([['users', 'alice', activeUser('alice')]]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  // newCard defaults to a named, public card: a unilateral public
+  // claim about a named person (H-10).
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'named-public'), newCard('alice')));
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'named-matches'), newCard('alice', {
+    visibility: 'matches_only',
+  })));
+  await assertFails(setDoc(doc(db, 'relationship_cards', 'named-unnamed'), newCard('alice', {
+    visibility: 'unnamed_public',
+  })));
+});
+
+test('Circle create accepts a named private card and an unnamed public card', async () => {
+  await seed([['users', 'alice', activeUser('alice')]]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  await assertSucceeds(setDoc(doc(db, 'relationship_cards', 'named-private'), newCard('alice', {
+    visibility: 'private',
+  })));
+  await assertSucceeds(setDoc(doc(db, 'relationship_cards', 'unnamed-public'), newCard('alice', {
+    displayNameOptional: '',
+  })));
+});
+
+test('Circle update cannot newly expose a named card', async () => {
+  await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['relationship_cards', 'named-private', card('alice', 'private')],
+    ['relationship_cards', 'unnamed-public', {...card('alice'), displayNameOptional: ''}],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+
+  // Flipping a named card from private to public is a new exposure.
+  await assertFails(updateDoc(doc(db, 'relationship_cards', 'named-private'), {
+    visibility: 'public',
+    updatedAt: serverTimestamp(),
+  }));
+  // Adding a name to an already-public card is a new exposure.
+  await assertFails(updateDoc(doc(db, 'relationship_cards', 'unnamed-public'), {
+    displayNameOptional: 'New Name',
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test('pre-existing named public cards stay editable without new exposure', async () => {
+  // Grandfathering (H-10): the card fixture is named and public, as
+  // written before the interim rule (seeded here with rules disabled).
+  // Rules validate the full resulting document on every update, so the
+  // write gate is diff-aware: updates that touch neither the name nor
+  // the visibility keep working, and updates that end the exposure
+  // always work.
+  await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['relationship_cards', 'legacy', card('alice')],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  const legacy = doc(db, 'relationship_cards', 'legacy');
+
+  await assertSucceeds(updateDoc(legacy, {
+    sortOrder: 5,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(legacy, {
+    isActive: false,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(legacy, {
+    note: 'Edited safely',
+    updatedAt: serverTimestamp(),
+  }));
+  // Renaming a still-public card publishes a new claim: rejected.
+  await assertFails(updateDoc(legacy, {
+    displayNameOptional: 'Different Name',
+    updatedAt: serverTimestamp(),
+  }));
+  // Ending the exposure is always allowed.
+  await assertSucceeds(updateDoc(legacy, {
+    visibility: 'private',
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test('clearing the name lets a grandfathered card stay public', async () => {
+  await seed([
+    ['users', 'alice', activeUser('alice')],
+    ['relationship_cards', 'legacy', card('alice')],
+  ]);
+  const db = env.authenticatedContext('alice').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'relationship_cards', 'legacy'), {
+    displayNameOptional: '',
     updatedAt: serverTimestamp(),
   }));
 });
