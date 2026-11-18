@@ -48,6 +48,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _busy = false;
   String? _structure;
   final Set<String> _intentions = {};
+  bool _openToConnections = false;
+  String _profileVisibility = 'hidden';
+  String _mapVisibility = 'private';
 
   @override
   void dispose() {
@@ -65,7 +68,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_step < 4) {
+    if (_step < 5) {
       setState(() => _step++);
       _page.nextPage(
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -125,7 +128,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'relationshipStructure': _structure,
       'relationshipStatus': '',
       'partnered': false,
-      'openToConnections': true,
+      'openToConnections': _openToConnections,
       'intentionTags': _intentions.toList(),
       'interests': <String>[],
       'lookingForNote': _lookingFor.text.trim(),
@@ -134,8 +137,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'distanceRadius': defaultDiscoverDistanceMiles,
       'preferredStructures': <String>[],
       'preferredIntentions': <String>[],
-      'profileVisibility': 'public',
-      'mapVisibility': 'matches_only',
+      'profileVisibility': _profileVisibility,
+      'mapVisibility': _mapVisibility,
     };
 
     setState(() => _busy = true);
@@ -262,6 +265,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 title: Text('Relationship cards come next'),
                 subtitle: Text(
                     'After onboarding, Circle lets you represent important relationships with individual privacy controls.')),
+          ]),
+      _OnboardingPage(
+          title: 'Who can see you?',
+          subtitle:
+              'You start private. Open up here only if you want to — you can change any of this later from your profile.',
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _profileVisibility,
+              decoration:
+                  const InputDecoration(labelText: 'Profile visibility'),
+              items: const [
+                DropdownMenuItem(
+                    value: 'public',
+                    child: Text('Public to signed-in members')),
+                DropdownMenuItem(value: 'hidden', child: Text('Hidden')),
+                DropdownMenuItem(
+                    value: 'matches_only', child: Text('Connections only')),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (value) =>
+                      setState(() => _profileVisibility = value ?? 'hidden'),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Hidden — nobody can find or view your profile. Connections only — only people you have connected with can view it. Public — signed-in members can view it.',
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Open to new connections'),
+              subtitle: const Text(
+                  'You appear in Discover only when your profile is Public and this is on.'),
+              value: _openToConnections,
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _openToConnections = value),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _mapVisibility,
+              decoration: const InputDecoration(labelText: 'Circle visibility'),
+              items: const [
+                DropdownMenuItem(value: 'public', child: Text('Public')),
+                DropdownMenuItem(
+                    value: 'matches_only', child: Text('Connections only')),
+                DropdownMenuItem(value: 'private', child: Text('Private')),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (value) =>
+                      setState(() => _mapVisibility = value ?? 'private'),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'This controls who can open your Circle view from your profile.',
+            ),
           ]),
     ];
 
