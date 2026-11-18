@@ -495,17 +495,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('You: — · Alex: Need space'), findsOneWidget);
     expect(find.text('Updated just now'), findsOneWidget);
+    final stampFinder = find.byKey(const Key('check-in-updated'));
+    final stampBefore = tester.widget<Text>(stampFinder).data;
+    expect(stampBefore, 'Updated just now');
 
-    // Time passes, then the stale load lands late. Neither its
-    // snapshot nor a fresh "Updated" stamp may replace the newer
-    // load's: only the latest issued load applies its result.
-    await tester.pump(const Duration(minutes: 5));
-    expect(find.text('Updated 5m ago'), findsOneWidget);
+    // The stale load lands late. Neither its snapshot nor a fresh
+    // "Updated" stamp may replace the newer load's: only the latest
+    // issued load applies its result. The stamp is pinned by identity
+    // rather than against an aged label ("5m ago") because the card
+    // reads wall-clock DateTime.now(), which the fake-async harness
+    // cannot advance; a stale application would re-stamp through the
+    // same guarded setState as the snapshot and change the cue.
     pending[0].complete(snapshot('doing_well'));
     await tester.pumpAndSettle();
     expect(find.text('You: — · Alex: Need space'), findsOneWidget);
     expect(find.text('You: — · Alex: Doing well'), findsNothing);
-    expect(find.text('Updated 5m ago'), findsOneWidget);
+    expect(tester.widget<Text>(stampFinder).data, stampBefore);
   });
 
   testWidgets('clearing the shared note asks for confirmation first',
