@@ -494,4 +494,126 @@ void main() {
       );
     },
   );
+
+  test('partner message arrival is a check-in refresh trigger (H-4)', () {
+    // A new newest message from the other participant is an arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: 'm1',
+        latestLastId: 'm2',
+        latestSenderUid: 'member-2',
+        otherUid: 'member-2',
+      ),
+      isTrue,
+    );
+    // The first snapshot after opening the chat is not an arrival:
+    // everything in it predates the visit.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: false,
+        previousLastId: null,
+        latestLastId: 'm2',
+        latestSenderUid: 'member-2',
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+    // An unchanged newest message is not an arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: 'm2',
+        latestLastId: 'm2',
+        latestSenderUid: 'member-2',
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+    // The member's own new message is not a partner arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: 'm1',
+        latestLastId: 'm2',
+        latestSenderUid: 'member-1',
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+    // No messages at all is not an arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: 'm1',
+        latestLastId: null,
+        latestSenderUid: null,
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+  });
+
+  test('partner arrival after an initially empty snapshot (H-4)', () {
+    // The conversation opened empty: the first snapshot established
+    // an empty baseline, so the previous id is null here too — the
+    // case an id-only check cannot tell apart from the first
+    // snapshot. The partner's first message afterwards IS an arrival
+    // and must refresh the check-in card.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
+        latestLastId: 'm1',
+        latestSenderUid: 'member-2',
+        otherUid: 'member-2',
+      ),
+      isTrue,
+    );
+    // The member's own first message after an empty baseline is not
+    // a partner arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
+        latestLastId: 'm1',
+        latestSenderUid: 'member-1',
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+    // A later snapshot that is still empty is not an arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
+        latestLastId: null,
+        latestSenderUid: null,
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+  });
+
+  test('check-in refresh debouncer bounds partner-message refreshes', () {
+    final debouncer = CheckInRefreshDebouncer();
+    final t0 = DateTime.utc(2026, 11, 18, 12);
+
+    // The first trigger fires.
+    expect(debouncer.tryTrigger(t0), isTrue);
+    // A burst inside the 30-second interval does not fire again.
+    expect(
+      debouncer.tryTrigger(t0.add(const Duration(seconds: 5))),
+      isFalse,
+    );
+    expect(
+      debouncer.tryTrigger(t0.add(const Duration(seconds: 29))),
+      isFalse,
+    );
+    // At the interval boundary it fires again.
+    expect(
+      debouncer.tryTrigger(t0.add(const Duration(seconds: 30))),
+      isTrue,
+    );
+  });
 }
