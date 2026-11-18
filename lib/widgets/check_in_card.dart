@@ -78,6 +78,12 @@ class _CheckInCardState extends State<CheckInCard> {
   /// as-of cue (H-4).
   int? _loadedAtMs;
 
+  /// Monotonic load counter. A refresh signal can start a load while
+  /// an earlier one is still in flight; only the most recently issued
+  /// load may apply its result, so a delayed older response can never
+  /// overwrite a newer snapshot or re-stamp the "Updated" cue.
+  int _loadGeneration = 0;
+
   Timer? _relativeTimeTicker;
 
   @override
@@ -123,9 +129,10 @@ class _CheckInCardState extends State<CheckInCard> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     try {
       final snapshot = await widget.actions.load();
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _snapshot = snapshot;
         _loading = false;
@@ -133,7 +140,7 @@ class _CheckInCardState extends State<CheckInCard> {
         _loadedAtMs = DateTime.now().millisecondsSinceEpoch;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _loading = false;
         _loadError = error;

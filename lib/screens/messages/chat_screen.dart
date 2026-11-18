@@ -139,14 +139,19 @@ bool chatShouldFollowOwnSentMessage({
 /// participant (H-4). The first snapshot after opening the chat is not
 /// an arrival — everything in it predates the visit — and neither is a
 /// snapshot whose newest message is unchanged or the member's own.
+/// [hasPreviousSnapshot] is what tells "first snapshot" apart from
+/// "the previous snapshot was empty": an initially empty conversation
+/// has a null [previousLastId] in both cases, but only after an empty
+/// baseline is the partner's first message an arrival.
 @visibleForTesting
 bool chatPartnerMessageArrived({
+  required bool hasPreviousSnapshot,
   required String? previousLastId,
   required String? latestLastId,
   required String? latestSenderUid,
   required String otherUid,
 }) {
-  return previousLastId != null &&
+  return hasPreviousSnapshot &&
       latestLastId != null &&
       latestLastId != previousLastId &&
       latestSenderUid != null &&
@@ -508,6 +513,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = const [];
 
+  /// Whether any live snapshot has been delivered yet. The arrival
+  /// check needs this beside the newest-message id: before the first
+  /// snapshot and after an empty one the previous newest id is null
+  /// either way, but only the empty baseline makes the partner's next
+  /// message an arrival.
+  bool _hasLiveSnapshot = false;
+
   /// Refresh signal for the check-in card (H-4). Check-in reads stay
   /// behind the backend callables — the Firestore rules deny client
   /// reads of connection_check_ins so the compliance and block guards
@@ -582,6 +594,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _onLiveSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
     if (!mounted) return;
 
+    final hasPreviousSnapshot = _hasLiveSnapshot;
     final previousLastId = _liveDocs.isEmpty ? null : _liveDocs.last.id;
     final wasNearBottom = _scrollController.hasClients &&
         _scrollController.position.maxScrollExtent -
@@ -617,6 +630,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _retainedDocsById[doc.id] = doc;
       }
       _liveDocs = newLiveDocs;
+      _hasLiveSnapshot = true;
       _loadingLiveMessages = false;
       _liveMessagesError = null;
     });
@@ -629,6 +643,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // still waits for the next resume or return — the card's "Updated"
     // cue says how fresh it is either way.
     if (chatPartnerMessageArrived(
+          hasPreviousSnapshot: hasPreviousSnapshot,
           previousLastId: previousLastId,
           latestLastId: latest?.id,
           latestSenderUid: latestSenderUid,

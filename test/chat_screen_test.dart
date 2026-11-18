@@ -499,6 +499,7 @@ void main() {
     // A new newest message from the other participant is an arrival.
     expect(
       chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
         previousLastId: 'm1',
         latestLastId: 'm2',
         latestSenderUid: 'member-2',
@@ -510,6 +511,7 @@ void main() {
     // everything in it predates the visit.
     expect(
       chatPartnerMessageArrived(
+        hasPreviousSnapshot: false,
         previousLastId: null,
         latestLastId: 'm2',
         latestSenderUid: 'member-2',
@@ -520,6 +522,7 @@ void main() {
     // An unchanged newest message is not an arrival.
     expect(
       chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
         previousLastId: 'm2',
         latestLastId: 'm2',
         latestSenderUid: 'member-2',
@@ -530,6 +533,7 @@ void main() {
     // The member's own new message is not a partner arrival.
     expect(
       chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
         previousLastId: 'm1',
         latestLastId: 'm2',
         latestSenderUid: 'member-1',
@@ -540,7 +544,49 @@ void main() {
     // No messages at all is not an arrival.
     expect(
       chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
         previousLastId: 'm1',
+        latestLastId: null,
+        latestSenderUid: null,
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+  });
+
+  test('partner arrival after an initially empty snapshot (H-4)', () {
+    // The conversation opened empty: the first snapshot established
+    // an empty baseline, so the previous id is null here too — the
+    // case an id-only check cannot tell apart from the first
+    // snapshot. The partner's first message afterwards IS an arrival
+    // and must refresh the check-in card.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
+        latestLastId: 'm1',
+        latestSenderUid: 'member-2',
+        otherUid: 'member-2',
+      ),
+      isTrue,
+    );
+    // The member's own first message after an empty baseline is not
+    // a partner arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
+        latestLastId: 'm1',
+        latestSenderUid: 'member-1',
+        otherUid: 'member-2',
+      ),
+      isFalse,
+    );
+    // A later snapshot that is still empty is not an arrival.
+    expect(
+      chatPartnerMessageArrived(
+        hasPreviousSnapshot: true,
+        previousLastId: null,
         latestLastId: null,
         latestSenderUid: null,
         otherUid: 'member-2',

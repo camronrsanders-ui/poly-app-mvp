@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/services/check_in_service.dart';
@@ -449,6 +451,61 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
     expect(loads, 2);
     expect(find.byKey(const Key('check-in-updated')), findsOneWidget);
+  });
+
+  testWidgets('stale loads cannot overwrite newer snapshots', (tester) async {
+    final notifier = ValueNotifier<int>(0);
+    addTearDown(notifier.dispose);
+    final pending = <Completer<CheckInSnapshot>>[];
+    var loads = 0;
+    CheckInSnapshot snapshot(String otherState) => CheckInSnapshot(
+          otherUid: 'member-2',
+          myState: null,
+          otherState: _currentSlot(otherState),
+          sharedNote: null,
+        );
+    final actions = CheckInActions(
+      load: () {
+        loads++;
+        if (loads == 1) return Future.value(snapshot('okay'));
+        final completer = Completer<CheckInSnapshot>();
+        pending.add(completer);
+        return completer.future;
+      },
+      setMyState: ({required state, note = ''}) async {},
+      clearMyState: () async {},
+      setSharedNote: (_) async {},
+      clearSharedNote: () async {},
+    );
+
+    await _pumpCard(tester, actions, refreshListenable: notifier);
+    expect(loads, 1);
+    expect(find.text('You: — · Alex: Okay'), findsOneWidget);
+
+    // Two refreshes overlap: the second supersedes the first.
+    notifier.value++;
+    await tester.pump();
+    notifier.value++;
+    await tester.pump();
+    expect(loads, 3);
+    expect(pending, hasLength(2));
+
+    // The newer load lands first and applies, stamp included.
+    pending[1].complete(snapshot('need_space'));
+    await tester.pumpAndSettle();
+    expect(find.text('You: — · Alex: Need space'), findsOneWidget);
+    expect(find.text('Updated just now'), findsOneWidget);
+
+    // Time passes, then the stale load lands late. Neither its
+    // snapshot nor a fresh "Updated" stamp may replace the newer
+    // load's: only the latest issued load applies its result.
+    await tester.pump(const Duration(minutes: 5));
+    expect(find.text('Updated 5m ago'), findsOneWidget);
+    pending[0].complete(snapshot('doing_well'));
+    await tester.pumpAndSettle();
+    expect(find.text('You: — · Alex: Need space'), findsOneWidget);
+    expect(find.text('You: — · Alex: Doing well'), findsNothing);
+    expect(find.text('Updated 5m ago'), findsOneWidget);
   });
 
   testWidgets('clearing the shared note asks for confirmation first',
