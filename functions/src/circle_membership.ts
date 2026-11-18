@@ -13,6 +13,13 @@ import {
   isActiveCompliantMember,
 } from './account_compliance';
 
+import {
+  evaluateArchiveCircle,
+  evaluateUnarchiveCircle,
+  isOwnerArchivedCircle,
+  shouldExpireInviteOnArchive,
+} from './circle_lifecycle';
+
 function requireUid(
   auth: {uid: string} | undefined,
 ): string {
@@ -862,8 +869,10 @@ export const respondToCircleInvite =
 /**
  * Members can leave without owner approval.
  *
- * The owner cannot leave until a later
- * archive/delete/transfer lifecycle exists.
+ * The owner cannot leave: the owner's exit is
+ * archiving the Circle (see archiveCircle),
+ * which removes it for every member, deletes
+ * nothing, and can be undone.
  */
 export const leaveCircle = onCall(
   {
@@ -939,7 +948,7 @@ export const leaveCircle = onCall(
           ) {
             throw new HttpsError(
               'failed-precondition',
-              'The Circle owner cannot leave. Archive, delete, or transfer the Circle through its lifecycle controls.',
+              'You\'re this Circle\'s owner. To close it, archive it from My Circle; archiving removes it for every member and can be undone.',
             );
           }
 
@@ -988,6 +997,268 @@ export const leaveCircle = onCall(
 
     return {
       left: true,
+      changed,
+    };
+  },
+);
+
+/**
+ * Archive a Circle. Owner-only.
+ *
+ * This is the owner's exit: the Circle leaves
+ * every member's My Circle, pending invitations
+ * expire in the same write, and nothing is
+ * deleted - memberships, cards, and history all
+ * survive, and unarchiveCircle restores the
+ * Circle exactly as it was.
+ */
+export const archiveCircle = onCall(
+  {
+    enforceAppCheck: true,
+    maxInstances: 20,
+  },
+  async (request) => {
+    const db = getFirestore();
+    const uid = requireUid(request.auth);
+
+    const circleIdValue =
+      requireId(
+        request.data?.circleId,
+        'Circle',
+      );
+
+    await Promise.all([
+      assertActiveCompliantMember(
+        db,
+        uid,
+      ),
+
+      consumeCircleRateLimit(
+        uid,
+        'archive',
+        10,
+        60 * 60_000,
+      ),
+    ]);
+
+    const circleRef = db
+      .collection('circles')
+      .doc(circleIdValue);
+
+    const membershipRef = db
+      .collection('circle_memberships')
+      .doc(
+        membershipId(
+          circleIdValue,
+          uid,
+        ),
+      );
+
+    const changed =
+      await db.runTransaction(
+        async (tx) => {
+          const [
+            circle,
+            membership,
+          ] = await Promise.all([
+            tx.get(circleRef),
+            tx.get(membershipRef),
+          ]);
+
+          // The invitation query runs INSIDE the
+          // transaction, so its result is
+          // consistent with the Circle state being
+          // archived: an invitation created
+          // concurrently from another session is
+          // either visible here (and expires with
+          // the rest) or its own creation
+          // transaction conflicts on the Circle
+          // and retries against the archived
+          // state. The query is single-field - no
+          // composite index exists for this
+          // collection, and a Circle's invitations
+          // are bounded by the owner's connections.
+          const circleInvites =
+            await tx.get(
+              db
+                .collection('circle_invites')
+                .where(
+                  'circleId',
+                  '==',
+                  circleIdValue,
+                ),
+            );
+
+          const verdict =
+            evaluateArchiveCircle({
+              circleExists: circle.exists,
+              membershipExists:
+                membership.exists,
+              membershipRole:
+                membership.get('role'),
+              circleOwnerUid:
+                circle.get('ownerUid'),
+              circleStatus:
+                circle.get('status'),
+              uid,
+            });
+
+          if (verdict.action === 'deny') {
+            throw new HttpsError(
+              verdict.code,
+              verdict.message,
+            );
+          }
+
+          if (verdict.action === 'noop') {
+            return false;
+          }
+
+          tx.update(circleRef, {
+            status: 'archived',
+
+            archivedAt:
+              FieldValue.serverTimestamp(),
+
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          });
+
+          for (const invite of circleInvites.docs) {
+            if (
+              !shouldExpireInviteOnArchive(
+                invite.get('status'),
+              )
+            ) {
+              continue;
+            }
+
+            tx.update(invite.ref, {
+              status: 'expired',
+
+              expiredAt:
+                FieldValue.serverTimestamp(),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+            });
+          }
+
+          return true;
+        },
+      );
+
+    return {
+      archived: true,
+      changed,
+    };
+  },
+);
+
+/**
+ * Restore an archived Circle. Owner-only.
+ *
+ * The mirror of archiveCircle: the Circle
+ * returns to every member's My Circle with its
+ * memberships untouched. Invitations that
+ * expired on archive stay expired - restoring
+ * never resurrects an invitation the invitee
+ * can no longer evaluate in context.
+ */
+export const unarchiveCircle = onCall(
+  {
+    enforceAppCheck: true,
+    maxInstances: 20,
+  },
+  async (request) => {
+    const db = getFirestore();
+    const uid = requireUid(request.auth);
+
+    const circleIdValue =
+      requireId(
+        request.data?.circleId,
+        'Circle',
+      );
+
+    await Promise.all([
+      assertActiveCompliantMember(
+        db,
+        uid,
+      ),
+
+      consumeCircleRateLimit(
+        uid,
+        'unarchive',
+        10,
+        60 * 60_000,
+      ),
+    ]);
+
+    const circleRef = db
+      .collection('circles')
+      .doc(circleIdValue);
+
+    const membershipRef = db
+      .collection('circle_memberships')
+      .doc(
+        membershipId(
+          circleIdValue,
+          uid,
+        ),
+      );
+
+    const changed =
+      await db.runTransaction(
+        async (tx) => {
+          const [
+            circle,
+            membership,
+          ] = await Promise.all([
+            tx.get(circleRef),
+            tx.get(membershipRef),
+          ]);
+
+          const verdict =
+            evaluateUnarchiveCircle({
+              circleExists: circle.exists,
+              membershipExists:
+                membership.exists,
+              membershipRole:
+                membership.get('role'),
+              circleOwnerUid:
+                circle.get('ownerUid'),
+              circleStatus:
+                circle.get('status'),
+              uid,
+            });
+
+          if (verdict.action === 'deny') {
+            throw new HttpsError(
+              verdict.code,
+              verdict.message,
+            );
+          }
+
+          if (verdict.action === 'noop') {
+            return false;
+          }
+
+          tx.update(circleRef, {
+            status: 'active',
+
+            archivedAt:
+              FieldValue.delete(),
+
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          });
+
+          return true;
+        },
+      );
+
+    return {
+      unarchived: true,
       changed,
     };
   },
@@ -1124,6 +1395,60 @@ export const listMyCircles = onCall(
         );
       }
     }
+
+    // Archived Circles are visible ONLY to
+    // their owner, in a separate list: members
+    // never learn a Circle was archived, and
+    // the owner keeps the restore surface.
+    // The owner's membership stays active when
+    // a Circle is archived, so the Circle's
+    // document is already among those fetched
+    // above - this projection adds no reads.
+    const archivedOutput =
+      circleDocs
+        .filter(
+          (circle) =>
+            circle.exists &&
+            isOwnerArchivedCircle(
+              circle.get('status'),
+              circle.get('ownerUid'),
+              uid,
+            ),
+        )
+        .map((circle) => {
+          const archivedAt =
+            circle.get('archivedAt');
+
+          return {
+            circleId: circle.id,
+
+            name:
+              String(
+                circle.get(
+                  'name',
+                ) ?? '',
+              ).slice(0, 60),
+
+            memberCount:
+              Math.max(
+                1,
+                Number(
+                  circle.get(
+                    'memberCount',
+                  ) ?? 1,
+                ),
+              ),
+
+            archivedAt:
+              archivedAt &&
+              typeof archivedAt.toDate ===
+                'function'
+                ? archivedAt
+                    .toDate()
+                    .toISOString()
+                : null,
+          };
+        });
 
     const activeCircleIds = [
       ...new Set(
@@ -1465,6 +1790,7 @@ export const listMyCircles = onCall(
     return {
       circles: circleOutput,
       invites: inviteOutput,
+      archivedCircles: archivedOutput,
     };
   },
 );

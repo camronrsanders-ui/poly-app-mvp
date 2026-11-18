@@ -69,3 +69,62 @@ test('sending an invitation does not locally add a Circle member', () => {
     /memberCount\s*\+\+/,
   );
 });
+
+test('populated Circle universe exposes the invite affordance', () => {
+  // The empty-stage invite was the only wiring before Step 2
+  // Item 3; the populated universe's Circle options menu now
+  // carries the same invite through the header actions.
+  assert.match(
+    screen,
+    /Invite to this Circle/,
+  );
+
+  assert.match(
+    screen,
+    /onInviteToCircle/,
+  );
+
+  assert.match(
+    screen,
+    /_circleHeader/,
+  );
+});
+
+test('populated Circle universe wires Leave and Archive actions', () => {
+  assert.match(
+    screen,
+    /Leave this Circle/,
+  );
+
+  assert.match(
+    screen,
+    /Archive this Circle/,
+  );
+
+  // Leave goes through the membership service callable path,
+  // behind the same injection pattern as invite and respond.
+  assert.match(
+    screen,
+    /leaveCircleAction/,
+  );
+
+  assert.match(
+    screen,
+    /\.leaveCircle\(/,
+  );
+
+  assert.match(
+    screen,
+    /archiveCircleAction/,
+  );
+
+  assert.match(
+    screen,
+    /unarchiveCircleAction/,
+  );
+
+  assert.match(
+    screen,
+    /Archived Circles/,
+  );
+});
