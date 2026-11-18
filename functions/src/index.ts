@@ -899,5 +899,7 @@ export {
   inviteCircleMember,
   respondToCircleInvite,
   leaveCircle,
+  archiveCircle,
+  unarchiveCircle,
   listMyCircles,
 } from './circle_membership';
