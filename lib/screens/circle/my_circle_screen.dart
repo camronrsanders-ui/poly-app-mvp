@@ -3129,7 +3129,9 @@ class _SpatialHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.person_add_rounded),
                       SizedBox(width: 10),
-                      Text('Invite to this Circle'),
+                      Expanded(
+                        child: Text('Invite to this Circle'),
+                      ),
                     ],
                   ),
                 ),
@@ -3140,7 +3142,9 @@ class _SpatialHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.logout_rounded),
                       SizedBox(width: 10),
-                      Text('Leave this Circle'),
+                      Expanded(
+                        child: Text('Leave this Circle'),
+                      ),
                     ],
                   ),
                 ),
@@ -3151,7 +3155,9 @@ class _SpatialHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.archive_outlined),
                       SizedBox(width: 10),
-                      Text('Archive this Circle'),
+                      Expanded(
+                        child: Text('Archive this Circle'),
+                      ),
                     ],
                   ),
                 ),
@@ -3162,7 +3168,9 @@ class _SpatialHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.inventory_2_outlined),
                       SizedBox(width: 10),
-                      Text('Archived Circles'),
+                      Expanded(
+                        child: Text('Archived Circles'),
+                      ),
                     ],
                   ),
                 ),
@@ -3172,7 +3180,9 @@ class _SpatialHeader extends StatelessWidget {
                   children: [
                     Icon(Icons.tune_rounded),
                     SizedBox(width: 10),
-                    Text('Manage relationships'),
+                    Expanded(
+                      child: Text('Manage relationships'),
+                    ),
                   ],
                 ),
               ),
