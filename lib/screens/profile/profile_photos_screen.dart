@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,25 @@ import '../../services/profile_media_service.dart';
 typedef ProfilePhotosLoader = Future<List<ProfileMediaStatus>> Function();
 typedef ProfilePhotoAccessLoader = Future<Uri> Function(String photoId);
 typedef ProfilePhotoDeleteAction = Future<void> Function(String photoId);
+
+/// Member-facing copy for a failed photo upload (M-7). Only an
+/// 'invalid-argument' failure is actually about the image itself —
+/// the confirm callable's validation rejection. The daily cap cannot
+/// be helped by trying another image, and a verification failure is
+/// not an image problem; neither may be reported as one.
+@visibleForTesting
+String profilePhotoUploadErrorMessage(String? code) {
+  switch (code) {
+    case 'resource-exhausted':
+      return "You've reached the daily photo limit — you can add more tomorrow.";
+    case 'unauthenticated':
+      return "We couldn't verify the app — check your connection and try again.";
+    case 'invalid-argument':
+      return 'Could not upload that photo. Please try another image.';
+    default:
+      return 'Could not upload that photo. Please try again.';
+  }
+}
 
 class ProfilePhotosScreen extends StatefulWidget {
   const ProfilePhotosScreen({super.key})
@@ -134,12 +154,17 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
           ),
         );
       }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(profilePhotoUploadErrorMessage(error.code))),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Could not upload that photo. Please try another image.')),
+              content: Text('Could not upload that photo. Please try again.')),
         );
       }
     } finally {
@@ -163,6 +188,28 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
         return 'Removed';
       default:
         return 'Status unavailable';
+    }
+  }
+
+  /// Plain-language guidance for a rejected photo, mapped from the
+  /// server-owned reason code (H-9). Machine codes read as file
+  /// problems; review codes name the category. No appeal flow exists
+  /// anywhere in the product, so the copy must not promise one.
+  String _rejectionGuidance(String? reasonCode) {
+    switch (reasonCode) {
+      case 'content_type_mismatch':
+        return "That file's contents didn't match its image type — try exporting it as a JPEG or PNG and upload again.";
+      case 'upload_validation':
+      case 'invalid_processing_state':
+      case 'storage_validation':
+      case 'image_processing':
+        return "That file couldn't be processed — try exporting it as a JPEG or PNG and upload again.";
+      case 'image_quality':
+        return 'That photo was too dark or blurry to approve — try a clearer one.';
+      default:
+        // community_guidelines, other_policy, moderation_policy, and
+        // any unrecognized code: the honest generic policy guidance.
+        return "That photo doesn't meet the community guidelines. You can read the guidelines under Get help & learn.";
     }
   }
 
@@ -341,7 +388,9 @@ class _ProfilePhotosScreenState extends State<ProfilePhotosScreen> {
                       subtitle: Text(
                         photo.status == 'active'
                             ? 'Approved and available through protected delivery.'
-                            : 'Photo ID ${photo.photoId.substring(0, photo.photoId.length.clamp(0, 8))}',
+                            : photo.status == 'rejected'
+                                ? _rejectionGuidance(photo.rejectionReasonCode)
+                                : 'Photo ID ${photo.photoId.substring(0, photo.photoId.length.clamp(0, 8))}',
                       ),
                       onTap: photo.status == 'active'
                           ? () => _viewPhoto(photo)
