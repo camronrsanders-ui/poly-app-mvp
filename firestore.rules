@@ -151,6 +151,34 @@ service cloud.firestore {
         && ugcTextAllowed(data.note);
     }
 
+    // H-10: a card exposes a person when it carries a non-empty display
+    // name at any non-private visibility. Until a bilateral consent path
+    // exists, a named card may only be private. The note is deliberately
+    // not gated here: rules cannot tell an identifying note from a
+    // legitimate one, and the trusted Circle view already withholds
+    // notes from every non-owner.
+    function cardExposesName(data) {
+      let name = data.get('displayNameOptional', '');
+      return name is string && name.size() > 0
+        && data.get('visibility', 'private') != 'private';
+    }
+
+    // Rules validate the full resulting document on every update, so
+    // the named-must-be-private rule has to be diff-aware: an update may
+    // keep a pre-existing named, non-private card only when it touches
+    // neither the name nor the visibility (reorder, deactivate, label
+    // or note edits on a grandfathered card). Any change to either
+    // field must land the card in a non-exposed state - private, or
+    // with the name cleared.
+    function relationshipCardUpdateAllowed(before, after) {
+      return !cardExposesName(after)
+        || (cardExposesName(before)
+          && after.get('displayNameOptional', '')
+            == before.get('displayNameOptional', '')
+          && after.get('visibility', 'private')
+            == before.get('visibility', 'private'));
+    }
+
     match /users/{uid} {
       allow create: if isSelf(uid)
         && validUser(request.resource.data, uid)
@@ -215,6 +243,7 @@ service cloud.firestore {
     match /relationship_cards/{cardId} {
       allow create: if signedIn() && userIsActive(request.auth.uid)
         && validRelationshipCard(request.resource.data, request.auth.uid)
+        && !cardExposesName(request.resource.data)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow read: if signedIn() && userIsActive(request.auth.uid)
@@ -222,6 +251,7 @@ service cloud.firestore {
       allow update: if signedIn() && userIsActive(request.auth.uid)
         && resource.data.ownerUid == request.auth.uid
         && validRelationshipCard(request.resource.data, request.auth.uid)
+        && relationshipCardUpdateAllowed(resource.data, request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && userIsActive(request.auth.uid)

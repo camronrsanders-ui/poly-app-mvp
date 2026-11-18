@@ -1,6 +1,7 @@
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {assertActiveCompliantMember} from './account_compliance';
+import {projectCircleCard} from './circle_card_projection';
 import {circleProfileVisibilityDenial} from './circle_view_visibility';
 
 const db = getFirestore();
@@ -68,21 +69,7 @@ function safeCard(
   card: FirebaseFirestore.QueryDocumentSnapshot,
   redactIdentity: boolean,
 ): FirebaseFirestore.DocumentData {
-  const data = card.data();
-  return {
-    cardId: card.id,
-    label: String(data.label ?? '').slice(0, 100),
-    connectionType: String(data.connectionType ?? '').slice(0, 100),
-    status: String(data.status ?? '').slice(0, 80),
-    visibility: String(data.visibility ?? 'private'),
-    sortOrder: Number(data.sortOrder ?? 0),
-    ...(!redactIdentity && typeof data.displayNameOptional === 'string'
-      ? {displayNameOptional: data.displayNameOptional.slice(0, 100)}
-      : {}),
-    ...(!redactIdentity && typeof data.note === 'string'
-      ? {note: data.note.slice(0, 1000)}
-      : {}),
-  };
+  return projectCircleCard(card.id, card.data(), redactIdentity);
 }
 
 export const getCircleForProfile = onCall(
@@ -145,9 +132,13 @@ export const getCircleForProfile = onCall(
       if (visibility === 'matches_only' && !matched) continue;
       if (visibility !== 'public' && visibility !== 'matches_only' && visibility !== 'unnamed_public') continue;
 
-      // unnamed_public deliberately removes both the optional name and free-text
-      // note because either field could identify a person indirectly.
-      cards.push(safeCard(card, visibility === 'unnamed_public'));
+      // H-10: until the person named on a card can consent, no
+      // non-owner receives the card's name or note at any visibility -
+      // either field can identify someone who has never been asked.
+      // Visibility still decides whether the card itself appears;
+      // identity is withheld unconditionally (render-private: stored
+      // documents are never rewritten).
+      cards.push(safeCard(card, true));
     }
 
     cards.sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
