@@ -206,6 +206,17 @@ test('archived Circles surface only to their owner in listMyCircles', () => {
   );
 });
 
+test('archive reads invitations inside its transaction', () => {
+  // A pre-transaction query would miss an invitation created
+  // concurrently from another session, and that invitation
+  // would survive the archive as pending (Codex P2 on PR #79).
+  // The query must run through the transaction itself.
+  assert.match(
+    membership,
+    /tx\.get\(\s*db\s*\.collection\('circle_invites'\)/,
+  );
+});
+
 test('membership and invitations are not directly client-readable', () => {
   assert.match(
     rules,

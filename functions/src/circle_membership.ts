@@ -1054,25 +1054,6 @@ export const archiveCircle = onCall(
         ),
       );
 
-    // The Circle's invitations are located before
-    // the transaction with a single-field query
-    // (no composite index exists for this
-    // collection, and none is needed: a Circle's
-    // invitations are bounded by the owner's
-    // connections). Inside the transaction each
-    // one is re-read and only those still pending
-    // are expired, so an acceptance racing the
-    // archive is never overwritten.
-    const circleInvites =
-      await db
-        .collection('circle_invites')
-        .where(
-          'circleId',
-          '==',
-          circleIdValue,
-        )
-        .get();
-
     const changed =
       await db.runTransaction(
         async (tx) => {
@@ -1084,11 +1065,28 @@ export const archiveCircle = onCall(
             tx.get(membershipRef),
           ]);
 
-          const inviteSnaps =
-            await Promise.all(
-              circleInvites.docs.map(
-                (doc) => tx.get(doc.ref),
-              ),
+          // The invitation query runs INSIDE the
+          // transaction, so its result is
+          // consistent with the Circle state being
+          // archived: an invitation created
+          // concurrently from another session is
+          // either visible here (and expires with
+          // the rest) or its own creation
+          // transaction conflicts on the Circle
+          // and retries against the archived
+          // state. The query is single-field - no
+          // composite index exists for this
+          // collection, and a Circle's invitations
+          // are bounded by the owner's connections.
+          const circleInvites =
+            await tx.get(
+              db
+                .collection('circle_invites')
+                .where(
+                  'circleId',
+                  '==',
+                  circleIdValue,
+                ),
             );
 
           const verdict =
@@ -1126,7 +1124,7 @@ export const archiveCircle = onCall(
               FieldValue.serverTimestamp(),
           });
 
-          for (const invite of inviteSnaps) {
+          for (const invite of circleInvites.docs) {
             if (
               !shouldExpireInviteOnArchive(
                 invite.get('status'),
