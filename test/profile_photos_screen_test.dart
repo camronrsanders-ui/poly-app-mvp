@@ -189,7 +189,7 @@ void main() {
       // the guidelines guidance.
       final policyCopy = find
           .textContaining("That photo doesn't meet the community guidelines");
-      await scrollTo(tester, policyCopy);
+      await scrollTo(tester, policyCopy.first);
       expect(policyCopy, findsWidgets);
 
       // The truncated photo ID is not member guidance and is gone
