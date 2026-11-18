@@ -44,6 +44,16 @@ test('Circle membership API is backend-owned', () => {
 
   assert.match(
     membership,
+    /export const archiveCircle/,
+  );
+
+  assert.match(
+    membership,
+    /export const unarchiveCircle/,
+  );
+
+  assert.match(
+    membership,
     /export const listMyCircles/,
   );
 });
@@ -54,7 +64,7 @@ test('all Circle membership callables require App Check', () => {
   ) ?? [];
 
   assert.ok(
-    matches.length >= 5,
+    matches.length >= 7,
     'Every Circle membership callable must enforce App Check.',
   );
 });
@@ -141,15 +151,58 @@ test('members can leave a Circle without owner cooperation', () => {
   );
 });
 
-test('owner membership is explicit and permanent until Circle lifecycle exists', () => {
+test('owner exit is the archive lifecycle and leave copy names real controls', () => {
   assert.match(
     membership,
     /role:\s*'owner'/,
   );
 
+  // The lifecycle the old placeholder copy pointed at now exists:
+  // archive and restore are real, owner-gated callables whose
+  // decisions come from the pure lifecycle module.
   assert.match(
     membership,
-    /The Circle owner cannot leave/,
+    /evaluateArchiveCircle/,
+  );
+
+  assert.match(
+    membership,
+    /evaluateUnarchiveCircle/,
+  );
+
+  // Archiving expires pending invitations in the same write.
+  assert.match(
+    membership,
+    /status:\s*'expired'/,
+  );
+
+  // The owner refusal in leaveCircle names the control that
+  // actually exists now, and the false placeholder copy is gone.
+  assert.match(
+    membership,
+    /archive it from My Circle/,
+  );
+
+  assert.doesNotMatch(
+    membership,
+    /through its lifecycle controls/,
+  );
+
+  assert.doesNotMatch(
+    membership,
+    /archive\/delete\/transfer lifecycle exists/,
+  );
+});
+
+test('archived Circles surface only to their owner in listMyCircles', () => {
+  assert.match(
+    membership,
+    /archivedCircles/,
+  );
+
+  assert.match(
+    membership,
+    /isOwnerArchivedCircle/,
   );
 });
 
@@ -194,6 +247,16 @@ test('Circle membership Functions are exported', () => {
   assert.match(
     index,
     /leaveCircle/,
+  );
+
+  assert.match(
+    index,
+    /archiveCircle/,
+  );
+
+  assert.match(
+    index,
+    /unarchiveCircle/,
   );
 
   assert.match(
