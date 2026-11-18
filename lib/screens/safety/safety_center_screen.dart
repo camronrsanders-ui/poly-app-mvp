@@ -1,9 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/feature_flags.dart';
 import '../../config/firebase_runtime.dart';
+import '../../content/learn_content.dart';
 import '../../services/profile_photo_moderation_service.dart';
 import '../../services/safety_service.dart';
+import '../learn/learn_screen.dart';
 import 'profile_photo_moderation_screen.dart';
 
 typedef BlockedUsersLoader = Future<List<Map<String, dynamic>>> Function();
@@ -11,6 +15,122 @@ typedef UnblockMemberAction = Future<void> Function(String uid);
 
 class SafetyCenterScreen extends StatelessWidget {
   const SafetyCenterScreen({super.key});
+
+  /// Opens a tel: or sms: URI outside the app (dialer or the
+  /// member's messaging app). If the device cannot handle it, say so
+  /// plainly — the contact text stays visible on screen either way.
+  /// Mirrors the Learn screen's launcher.
+  Future<void> _launchUri(BuildContext context, String uri) async {
+    var launched = false;
+    try {
+      launched = await launchUrl(
+        Uri.parse(uri),
+        mode: LaunchMode.externalApplication,
+      );
+    } on Exception {
+      launched = false;
+    }
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open that on this device.'),
+        ),
+      );
+    }
+  }
+
+  Widget _crisisRow(BuildContext context, CrisisResource resource) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(resource.name, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 2),
+        SelectableText(
+          resource.contact,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(resource.note, style: theme.textTheme.bodySmall),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final action in resource.actions)
+              FilledButton.tonalIcon(
+                onPressed: () => _launchUri(context, action.uri),
+                icon: Icon(
+                  action.uri.startsWith('sms:')
+                      ? Icons.sms_outlined
+                      : Icons.call_outlined,
+                  size: 18,
+                ),
+                label: Text(action.label),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Crisis help comes first in the Safety Center: a member in
+  /// danger must reach a crisis line without scrolling past the
+  /// explainer cards. The resources are the canonical Learn ones
+  /// ([LearnContent.crisisResources]) — one source of truth, so this
+  /// screen can never drift from Get Help.
+  Widget _crisisHelpCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 18),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.favorite_outline, size: 26),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    LearnContent.helpCardHeading,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(LearnContent.helpCardIntro),
+            const Divider(height: 24),
+            for (var i = 0; i < LearnContent.crisisResources.length; i++) ...[
+              if (i > 0) const SizedBox(height: 12),
+              _crisisRow(context, LearnContent.crisisResources[i]),
+            ],
+            const SizedBox(height: 10),
+            Text(
+              'Tap a button to call or text. You can also tap and hold '
+              'a contact to copy it. In an emergency, call your local '
+              'emergency number.',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (FeatureFlags.learnEnabled) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LearnPage()),
+                ),
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('Get help & learn'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _section(
     BuildContext context, {
@@ -97,6 +217,7 @@ class SafetyCenterScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          _crisisHelpCard(context),
           Text(
             'Your boundaries are part of the product',
             style: Theme.of(context).textTheme.headlineSmall,
@@ -180,7 +301,7 @@ class SafetyCenterScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Polycircle’s block and report tools are product safety controls, not emergency services. If you are in immediate danger, use the emergency resources appropriate to your location.',
+            'Polycircle’s block and report tools are product safety controls, not emergency services. If you are in immediate danger, call your local emergency number — the crisis lines at the top of this screen are free, confidential, and available any time.',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),

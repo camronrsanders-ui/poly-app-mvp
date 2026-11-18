@@ -724,9 +724,22 @@ void main() {
       // dialog's Cancel happen before the confirmed block, because after
       // the block the chat route no longer exists.
       //
-      // S1: the Safety Center is already the settled foreground route. Its
-      // explainer sections are the acceptance row's "help entries"; there
-      // is no separate Help button on this screen.
+      // S1: the Safety Center is already the settled foreground route.
+      // Since the H-6 fix it opens with the crisis-help card — the
+      // canonical Learn resources, reachable without scrolling — and
+      // the card carries the screen's 'Get help & learn' entry to
+      // Learn. The explainer sections below the card are the
+      // acceptance row's "help entries".
+      expect(
+        find.text('988 Suicide & Crisis Lifeline'),
+        findsOneWidget,
+      );
+      final safetyScroll = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('Your boundaries are part of the product'),
+        300,
+        scrollable: safetyScroll,
+      );
       expect(
         find.text('Your boundaries are part of the product'),
         findsOneWidget,
@@ -737,7 +750,6 @@ void main() {
       await pumpBounded(tester);
       expect(find.text('Local moderator QA'), findsNothing);
       expect(find.text('Review pending profile photos'), findsNothing);
-      final safetyScroll = find.byType(Scrollable).first;
       for (final heading in <String>[
         'Block at any time',
         'End a connection',
@@ -940,6 +952,16 @@ void main() {
         tester,
         find.text('Safety center'),
         description: 'Safety center for populated blocked list',
+      );
+      // The button sits below the crisis card and the first
+      // explainer section on this fresh route — past the build
+      // horizon at the top — so scroll it into view before tapping
+      // (the S2 visit could tap directly only because the screen
+      // was much shorter before the H-6 fix).
+      await tester.scrollUntilVisible(
+        find.text('Manage blocked members'),
+        300,
+        scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(find.text('Manage blocked members'));
       await waitForFinder(
@@ -1191,6 +1213,15 @@ void main() {
         description: 'Safety Center as moderator',
       );
       // The entry renders only once the moderator claim check resolves.
+      // It also sits below the crisis card and the explainer intro —
+      // past the ListView's build horizon at the top of the screen —
+      // so scroll the headline into view first to build its region,
+      // then wait for the claim check as before.
+      await tester.scrollUntilVisible(
+        find.text('Your boundaries are part of the product'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await waitForFinder(
         tester,
         find.text('Local moderator QA'),
