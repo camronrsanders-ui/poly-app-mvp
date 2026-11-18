@@ -228,10 +228,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final dropdown = tester.widget<DropdownButtonFormField<String>>(
-        find.byType(DropdownButtonFormField<String>).at(2),
+      // DropdownButtonFormField does not expose items in this
+      // Flutter version; inspect the inner DropdownButton instead.
+      final dropdown = tester.widget<DropdownButton<String>>(
+        find.byType(DropdownButton<String>).at(2),
       );
-      expect(dropdown.initialValue, 'private');
+      expect(dropdown.value, 'private');
       final items = dropdown.items!;
       expect(
         items.firstWhere((item) => item.value == 'private').enabled,

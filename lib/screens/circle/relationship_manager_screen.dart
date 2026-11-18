@@ -381,7 +381,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
     }
     var saving = false;
 
-    bool nameEntered() => displayName.trim().isNotEmpty();
+    bool nameEntered() => displayName.trim().isNotEmpty;
 
     void applyDisplayName(String value) {
       displayName = value;
