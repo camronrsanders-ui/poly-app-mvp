@@ -374,8 +374,7 @@ class _CheckInCardState extends State<CheckInCard> {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final mine = snapshot.currentMine(nowMs);
     final other = snapshot.currentOther(nowMs);
-    final empty =
-        mine == null && other == null && snapshot.sharedNote == null;
+    final empty = mine == null && other == null && snapshot.sharedNote == null;
     return Text(
       key: const Key('check-in-summary'),
       empty

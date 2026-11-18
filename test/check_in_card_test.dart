@@ -317,8 +317,7 @@ void main() {
     expect(find.byKey(const Key('check-in-my-state')), findsOneWidget);
   });
 
-  testWidgets('card starts collapsed with a one-line summary',
-      (tester) async {
+  testWidgets('card starts collapsed with a one-line summary', (tester) async {
     await _pumpCard(
       tester,
       _actions(
@@ -385,8 +384,7 @@ void main() {
     expect(find.text('Check in — how are we doing?'), findsOneWidget);
   });
 
-  testWidgets('expansion is session-only and collapses back',
-      (tester) async {
+  testWidgets('expansion is session-only and collapses back', (tester) async {
     CheckInActions buildActions() => _actions(
           snapshot: CheckInSnapshot(
             otherUid: 'member-2',
