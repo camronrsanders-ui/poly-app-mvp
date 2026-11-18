@@ -1004,9 +1004,9 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     if (circle != null) {
       if (circle.isOwner) {
         invite = () => _inviteToCircle(
-          circle: circle,
-          connections: model.connections,
-        );
+              circle: circle,
+              connections: model.connections,
+            );
         archive = () => _archiveCircle(circle);
       } else {
         leave = () => _leaveCircle(circle);
@@ -1764,9 +1764,8 @@ class _ArchivedCirclesSheet extends StatelessWidget {
   String _subtitle(
     ArchivedCircleSummary circle,
   ) {
-    final members = circle.memberCount == 1
-        ? '1 member'
-        : '${circle.memberCount} members';
+    final members =
+        circle.memberCount == 1 ? '1 member' : '${circle.memberCount} members';
 
     final archivedAt = circle.archivedAt;
 

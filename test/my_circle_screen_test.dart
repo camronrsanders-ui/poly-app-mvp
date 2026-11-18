@@ -24,8 +24,7 @@ Map<String, dynamic> connection(
 CircleMembershipSnapshot snapshot({
   List<CircleSummary> circles = const <CircleSummary>[],
   List<CircleInviteSummary> invites = const <CircleInviteSummary>[],
-  List<ArchivedCircleSummary> archivedCircles =
-      const <ArchivedCircleSummary>[],
+  List<ArchivedCircleSummary> archivedCircles = const <ArchivedCircleSummary>[],
 }) {
   return CircleMembershipSnapshot(
     circles: circles,
