@@ -222,7 +222,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 children: [
                   const Expanded(
                     child: Text(
-                        'Your relationship cards can be public, connection-only, unnamed, or private.'),
+                        'Your relationship cards can be public, connection-only, unnamed, or private. Names and notes on cards are now visible only to you until the other person confirms.'),
                   ),
                   FilledButton.icon(
                     onPressed: () =>
@@ -374,7 +374,31 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
     var status = _safeChoice(existing?['status'], _statuses, 'active');
     var visibility =
         _safeChoice(existing?['visibility'], _visibilities, 'matches_only');
+    if (displayName.trim().isNotEmpty) {
+      // H-10: a card that names someone is held at private until that
+      // person can confirm the connection.
+      visibility = 'private';
+    }
     var saving = false;
+
+    bool nameEntered() => displayName.trim().isNotEmpty;
+
+    void applyDisplayName(String value) {
+      displayName = value;
+      if (nameEntered()) {
+        visibility = 'private';
+      }
+    }
+
+    void applyVisibilityChoice(String? value) {
+      if (nameEntered()) {
+        visibility = 'private';
+      } else if (value != null) {
+        visibility = value;
+      }
+    }
+
+    String effectiveVisibility() => nameEntered() ? 'private' : visibility;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -403,10 +427,16 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 TextFormField(
                   initialValue: displayName,
                   maxLength: 100,
-                  onChanged: (value) => displayName = value,
+                  onChanged: (value) =>
+                      setModalState(() => applyDisplayName(value)),
                   decoration: const InputDecoration(
                       labelText: 'Display name (optional)'),
                 ),
+                if (nameEntered()) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Named cards stay private until the person can confirm the connection. Only you can see this card\'s name and note.'),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
@@ -435,19 +465,26 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  key: ValueKey('card-visibility-$visibility'),
                   isExpanded: true,
                   initialValue: visibility,
                   decoration:
                       const InputDecoration(labelText: 'Who can see this?'),
                   items: _visibilities
                       .map((v) => DropdownMenuItem(
-                          value: v, child: Text(v.replaceAll('_', ' '))))
+                          value: v,
+                          enabled: !nameEntered() || v == 'private',
+                          child: Text(v.replaceAll('_', ' '))))
                       .toList(),
                   onChanged: saving
                       ? null
-                      : (v) =>
-                          setModalState(() => visibility = v ?? visibility),
+                      : (v) => setModalState(() => applyVisibilityChoice(v)),
                 ),
+                if (!nameEntered() && visibility == 'unnamed_public') ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Unnamed public: others see the relationship type, never a name.'),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   initialValue: note,
@@ -480,7 +517,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                                 displayNameOptional: displayName,
                                 status: status,
                                 note: note,
-                                visibility: visibility,
+                                visibility: effectiveVisibility(),
                                 sortOrder: sortOrder,
                               );
                             } else {
@@ -498,7 +535,7 @@ class _RelationshipManagerScreenState extends State<RelationshipManagerScreen> {
                                   'displayNameOptional': displayName.trim(),
                                   'status': status,
                                   'note': note.trim(),
-                                  'visibility': visibility,
+                                  'visibility': effectiveVisibility(),
                                 },
                               );
                             }

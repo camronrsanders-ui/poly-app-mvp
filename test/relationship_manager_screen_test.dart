@@ -156,6 +156,15 @@ void main() {
         ),
         ' Alex ',
       );
+      await tester.pumpAndSettle();
+
+      // H-10: entering a name surfaces the private-until-consent
+      // notice and holds the card at private.
+      expect(
+        find.textContaining('Named cards stay private'),
+        findsOneWidget,
+      );
+
       await tester.tap(find.text('Add to my circle'));
       await tester.pumpAndSettle();
 
@@ -164,8 +173,183 @@ void main() {
       expect(created?['displayNameOptional'], 'Alex');
       expect(created?['connectionType'], 'romantic_partner');
       expect(created?['status'], 'active');
-      expect(created?['visibility'], 'matches_only');
+      expect(created?['visibility'], 'private');
       expect(created?['sortOrder'], 0);
+    },
+  );
+
+  testWidgets(
+    'Entering a name holds the card at private and disables broader visibilities',
+    (tester) async {
+      Map<String, dynamic>? created;
+
+      await pumpManager(
+        tester,
+        watchCards: (uid) => Stream.value(const []),
+        createCard: ({
+          required ownerUid,
+          required label,
+          required connectionType,
+          required status,
+          required note,
+          required visibility,
+          required displayNameOptional,
+          required sortOrder,
+        }) async {
+          created = <String, dynamic>{
+            'ownerUid': ownerUid,
+            'label': label.trim(),
+            'connectionType': connectionType,
+            'status': status,
+            'note': note.trim(),
+            'visibility': visibility,
+            'displayNameOptional': displayNameOptional.trim(),
+            'sortOrder': sortOrder,
+          };
+        },
+      );
+
+      await tester.tap(find.text('Add relationship'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(
+          TextFormField,
+          'Label, e.g. Anchor partner',
+        ),
+        'Partner',
+      );
+      await tester.enterText(
+        find.widgetWithText(
+          TextFormField,
+          'Display name (optional)',
+        ),
+        'Alex',
+      );
+      await tester.pumpAndSettle();
+
+      // DropdownButtonFormField does not expose items in this
+      // Flutter version; inspect the inner DropdownButton instead.
+      final dropdown = tester.widget<DropdownButton<String>>(
+        find.byType(DropdownButton<String>).at(2),
+      );
+      expect(dropdown.value, 'private');
+      final items = dropdown.items!;
+      expect(
+        items.firstWhere((item) => item.value == 'private').enabled,
+        isTrue,
+      );
+      expect(
+        items.firstWhere((item) => item.value == 'public').enabled,
+        isFalse,
+      );
+      expect(
+        items.firstWhere((item) => item.value == 'matches_only').enabled,
+        isFalse,
+      );
+      expect(
+        items.firstWhere((item) => item.value == 'unnamed_public').enabled,
+        isFalse,
+      );
+
+      await tester.tap(find.text('Add to my circle'));
+      await tester.pumpAndSettle();
+
+      expect(created?['displayNameOptional'], 'Alex');
+      expect(created?['visibility'], 'private');
+    },
+  );
+
+  testWidgets(
+    'Label-only card keeps every visibility choice, including unnamed public',
+    (tester) async {
+      Map<String, dynamic>? created;
+
+      await pumpManager(
+        tester,
+        watchCards: (uid) => Stream.value(const []),
+        createCard: ({
+          required ownerUid,
+          required label,
+          required connectionType,
+          required status,
+          required note,
+          required visibility,
+          required displayNameOptional,
+          required sortOrder,
+        }) async {
+          created = <String, dynamic>{
+            'ownerUid': ownerUid,
+            'label': label.trim(),
+            'connectionType': connectionType,
+            'status': status,
+            'note': note.trim(),
+            'visibility': visibility,
+            'displayNameOptional': displayNameOptional.trim(),
+            'sortOrder': sortOrder,
+          };
+        },
+      );
+
+      await tester.tap(find.text('Add relationship'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(
+          TextFormField,
+          'Label, e.g. Anchor partner',
+        ),
+        'Partner',
+      );
+      await tester.pumpAndSettle();
+
+      // No name entered: no private-until-consent notice, and the
+      // broader visibilities stay selectable.
+      expect(
+        find.textContaining('Named cards stay private'),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byType(DropdownButtonFormField<String>).at(2),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('unnamed public').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining(
+          'others see the relationship type, never a name',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Add to my circle'));
+      await tester.pumpAndSettle();
+
+      expect(created?['displayNameOptional'], '');
+      expect(created?['visibility'], 'unnamed_public');
+    },
+  );
+
+  testWidgets(
+    'Manager header tells owners names and notes are visible only to them',
+    (tester) async {
+      await pumpManager(
+        tester,
+        watchCards: (uid) => Stream.value(
+          <Map<String, dynamic>>[
+            card(id: 'card-a', label: 'A'),
+          ],
+        ),
+      );
+
+      expect(
+        find.textContaining(
+          'Names and notes on cards are now visible only to you until the other person confirms.',
+        ),
+        findsOneWidget,
+      );
     },
   );
 

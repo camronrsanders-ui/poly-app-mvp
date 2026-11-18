@@ -23,10 +23,17 @@ test('global Circle visibility is enforced before card visibility', () => {
   assert.match(circle, /mapVisibility === 'matches_only' && !matched/);
 });
 
-test('unnamed public cards redact optional names and free-text notes', () => {
-  assert.match(circle, /safeCard\(card, visibility === 'unnamed_public'\)/);
-  assert.match(circle, /!redactIdentity && typeof data\.displayNameOptional/);
-  assert.match(circle, /!redactIdentity && typeof data\.note/);
+test('non-owner Circle views withhold card names and notes at every visibility', () => {
+  // H-10 supersedes the unnamed_public-only redaction: until a consent
+  // path exists, every non-owner projection redacts identity; only the
+  // owner's own view includes name and note. The field logic lives in
+  // the unit-tested projection module (circle_card_projection.ts).
+  const projection = read('functions/src/circle_card_projection.ts');
+  assert.match(circle, /cards\.push\(safeCard\(card, true\)\);/);
+  assert.doesNotMatch(circle, /visibility === 'unnamed_public'\)/);
+  assert.match(circle, /projectCircleCard\(card\.id, card\.data\(\), redactIdentity\)/);
+  assert.match(projection, /!redactIdentity && typeof data\.displayNameOptional/);
+  assert.match(projection, /!redactIdentity && typeof data\.note/);
 });
 
 test('full relationship-card documents are owner-only and active-account-only in Firestore', () => {

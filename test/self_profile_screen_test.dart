@@ -187,9 +187,14 @@ void main() {
       await tester.tap(find.text('Connection'));
       await tester.pumpAndSettle();
 
-      await scrollTo(tester, find.text('Friend · Alex'));
-      expect(find.text('Friend · Alex'), findsOneWidget);
-      expect(find.text('Partner · Bailey'), findsOneWidget);
+      // H-10: connections are non-owners, so the preview shows cards
+      // by label only - names and notes stay with the owner until the
+      // person named can confirm, at every visibility.
+      await scrollTo(tester, find.text('Friend'));
+      expect(find.text('Friend'), findsOneWidget);
+      expect(find.text('Friend · Alex'), findsNothing);
+      expect(find.text('Partner'), findsOneWidget);
+      expect(find.text('Partner · Bailey'), findsNothing);
       expect(find.text('Private person · Devon'), findsNothing);
       expect(find.text('Roommate'), findsOneWidget);
       expect(find.text('Roommate · Casey'), findsNothing);

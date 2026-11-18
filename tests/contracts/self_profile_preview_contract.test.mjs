@@ -34,9 +34,20 @@ test('owner profile preview has member and connection privacy views for Circle',
   assert.match(selfProfile, /enum _PreviewAudience \{ member, connection \}/);
   assert.match(selfProfile, /mapVisibility == 'private'/);
   assert.match(selfProfile, /visibility == 'matches_only' && !isConnection/);
-  assert.match(selfProfile, /visibility == 'unnamed_public'/);
+  assert.match(selfProfile, /visibility != 'unnamed_public'/);
+  // H-10: both preview audiences are non-owners, so names and notes
+  // are removed from every card - not only unnamed_public ones - to
+  // mirror what the trusted Circle view returns to those audiences.
   assert.match(selfProfile, /card\.remove\('displayNameOptional'\)/);
   assert.match(selfProfile, /card\.remove\('note'\)/);
+  assert.doesNotMatch(
+    selfProfile,
+    /if \(visibility == 'unnamed_public'\) \{\s*card\.remove/,
+  );
+  assert.match(
+    selfProfile,
+    /card names and notes are now visible only to you until the other person confirms/,
+  );
 });
 
 test('owner profile preview includes edit and photo-management paths', () => {
