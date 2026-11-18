@@ -73,6 +73,19 @@ Future<void> reachFinalStep(
   await tapContinue(tester);
 }
 
+Future<void> reachVisibilityStep(
+  WidgetTester tester, {
+  required String name,
+  required String age,
+}) async {
+  await reachFinalStep(
+    tester,
+    name: name,
+    age: age,
+  );
+  await tapContinue(tester);
+}
+
 Future<void> tapEnter(
   WidgetTester tester, {
   bool settle = true,
@@ -133,7 +146,7 @@ void main() {
         },
       );
 
-      for (var index = 0; index < 4; index += 1) {
+      for (var index = 0; index < 5; index += 1) {
         await tapContinue(tester);
       }
       await tapEnter(tester);
@@ -159,7 +172,7 @@ void main() {
         },
       );
 
-      await reachFinalStep(
+      await reachVisibilityStep(
         tester,
         name: 'Cam',
         age: '17',
@@ -187,7 +200,7 @@ void main() {
         },
       );
 
-      await reachFinalStep(
+      await reachVisibilityStep(
         tester,
         name: 'Cam',
         age: '121',
@@ -251,6 +264,17 @@ void main() {
         field('What are you looking for?'),
         'Good connections.',
       );
+      await tapContinue(tester);
+
+      // The visibility step is pass-through: leaving every control
+      // untouched must keep the private defaults.
+      expect(find.text('Who can see you?'), findsOneWidget);
+      expect(find.text('Hidden'), findsOneWidget);
+      expect(find.text('Private'), findsOneWidget);
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      );
+      expect(progress.value, 1.0);
       await tapEnter(tester);
 
       expect(calls, <String>[
@@ -273,7 +297,61 @@ void main() {
       expect(savedValues?['bio'], 'Community-minded.');
       expect(savedValues?['lookingForNote'], 'Good connections.');
       expect(savedValues?['distanceRadius'], 20);
+      expect(savedValues?['openToConnections'], false);
+      expect(savedValues?['profileVisibility'], 'hidden');
+      expect(savedValues?['mapVisibility'], 'private');
+    },
+  );
+
+  testWidgets(
+    'Visibility step opt-in choices are saved',
+    (tester) async {
+      Map<String, dynamic>? savedValues;
+
+      await pumpOnboarding(
+        tester,
+        onComplete: () {},
+        saveProfile: (uid, values) async {
+          savedValues = Map<String, dynamic>.from(values);
+        },
+        completeOnboarding: (uid) async {},
+      );
+
+      await reachVisibilityStep(
+        tester,
+        name: 'Cam',
+        age: '30',
+      );
+
+      expect(find.text('Who can see you?'), findsOneWidget);
+
+      final dropdowns = tester
+          .widgetList<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .toList();
+      expect(dropdowns[0].initialValue, 'hidden');
+      expect(dropdowns[1].initialValue, 'private');
+
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Public to signed-in members').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.widgetWithText(SwitchListTile, 'Open to new connections'),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Connections only').last);
+      await tester.pumpAndSettle();
+
+      await tapEnter(tester);
+
       expect(savedValues?['profileVisibility'], 'public');
+      expect(savedValues?['openToConnections'], true);
       expect(savedValues?['mapVisibility'], 'matches_only');
     },
   );
@@ -304,18 +382,23 @@ void main() {
         age: '30',
       );
       await tester.enterText(field('About me'), 'Keep this answer.');
+      await tapContinue(tester);
       await tapEnter(tester);
 
       expect(
         find.textContaining('Your answers are still here'),
         findsOneWidget,
       );
+      expect(completions, 0);
+
+      await tapBack(tester);
+
       expect(
         tester.widget<TextField>(field('About me')).controller?.text,
         'Keep this answer.',
       );
-      expect(completions, 0);
 
+      await tapContinue(tester);
       await tapEnter(tester);
 
       expect(attempts, 2);
@@ -344,6 +427,7 @@ void main() {
         name: 'Cam',
         age: '30',
       );
+      await tapContinue(tester);
       await tapEnter(
         tester,
         settle: false,
