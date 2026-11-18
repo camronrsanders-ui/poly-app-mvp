@@ -187,8 +187,8 @@ void main() {
 
       // Policy codes — and a rejected row with no code at all — get
       // the guidelines guidance.
-      final policyCopy =
-          find.textContaining("That photo doesn't meet the community guidelines");
+      final policyCopy = find
+          .textContaining("That photo doesn't meet the community guidelines");
       await scrollTo(tester, policyCopy);
       expect(policyCopy, findsWidgets);
 
