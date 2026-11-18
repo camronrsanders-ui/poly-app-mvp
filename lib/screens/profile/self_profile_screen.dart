@@ -376,10 +376,12 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
       }
 
       final card = Map<String, dynamic>.from(raw);
-      if (visibility == 'unnamed_public') {
-        card.remove('displayNameOptional');
-        card.remove('note');
-      }
+      // H-10: both preview audiences are non-owners, and the trusted
+      // Circle view now withholds every card's name and note from
+      // non-owners at any visibility - so the preview removes them
+      // from every card too, not only unnamed_public ones.
+      card.remove('displayNameOptional');
+      card.remove('note');
       output.add(card);
     }
     output.sort((a, b) =>
@@ -664,7 +666,7 @@ class _SelfProfileScreenState extends State<SelfProfileScreen>
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               const Text(
-                'Circle cards below are filtered to the selected audience. Private cards remain hidden, and unnamed-public cards stay redacted.',
+                'Circle cards below are filtered to the selected audience. Private cards remain hidden, and card names and notes are now visible only to you until the other person confirms.',
               ),
               const SizedBox(height: 12),
               if (circleCards.isEmpty)
