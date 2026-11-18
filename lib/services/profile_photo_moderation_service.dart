@@ -1,10 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
-
-import '../config/firebase_runtime.dart';
 
 class ModerationProfilePhoto {
   const ModerationProfilePhoto({
@@ -61,8 +59,14 @@ class ProfilePhotoModerationService {
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
 
-  Future<bool> hasLocalModeratorAccess({bool forceRefresh = false}) async {
-    if (!kDebugMode || !useFirebaseEmulators) return false;
+  /// Whether the signed-in account holds a moderator claim.
+  ///
+  /// Claims are the only client gate, in every build flavor: this
+  /// check is UX (it decides whether the staff surface renders), not
+  /// security — the moderation callables re-check the same claims
+  /// server-side on every call. The local emulator QA path satisfies
+  /// the same check through the seeded moderator's claim.
+  Future<bool> hasModeratorAccess({bool forceRefresh = false}) async {
     final user = _auth.currentUser;
     if (user == null) return false;
     final token = await user.getIdTokenResult(forceRefresh);
@@ -72,14 +76,14 @@ class ProfilePhotoModerationService {
         claims['superadmin'] == true;
   }
 
-  Future<void> _requireLocalModerator() async {
-    if (!await hasLocalModeratorAccess()) {
-      throw StateError('Local moderator QA access is unavailable.');
+  Future<void> _requireModerator() async {
+    if (!await hasModeratorAccess()) {
+      throw StateError('Moderator access is unavailable.');
     }
   }
 
   Future<List<ModerationProfilePhoto>> listPending({int limit = 30}) async {
-    await _requireLocalModerator();
+    await _requireModerator();
     final callable = _functions.httpsCallable('listProfilePhotosForReview');
     final result = await callable.call<Map<String, dynamic>>({'limit': limit});
     final raw = result.data['photos'];
@@ -96,7 +100,7 @@ class ProfilePhotoModerationService {
     required String decision,
     String? reason,
   }) async {
-    await _requireLocalModerator();
+    await _requireModerator();
     if (decision != 'approve' && decision != 'reject') {
       throw ArgumentError.value(
           decision, 'decision', 'Must be approve or reject.');

@@ -744,11 +744,11 @@ void main() {
         find.text('Your boundaries are part of the product'),
         findsOneWidget,
       );
-      // S1b: the local moderator entry renders only for a session holding
-      // a moderator claim; the seeded owner does not (this pre-covers the
-      // non-staff cell of UI-17).
+      // S1b: the photo moderation entry renders only for a session
+      // holding a moderator claim; the seeded owner does not (this
+      // pre-covers the non-staff cell of UI-17).
       await pumpBounded(tester);
-      expect(find.text('Local moderator QA'), findsNothing);
+      expect(find.text('Photo moderation'), findsNothing);
       expect(find.text('Review pending profile photos'), findsNothing);
       for (final heading in <String>[
         'Block at any time',
@@ -1065,10 +1065,10 @@ void main() {
         description: 'Safety Center',
       );
 
-      // UI-17 (non-staff cell): the local moderator entry must stay
+      // UI-17 (non-staff cell): the photo moderation entry must stay
       // hidden for a member session. Cam holds no moderator claim, so
       // the Safety Center card never renders here.
-      expect(find.text('Local moderator QA'), findsNothing);
+      expect(find.text('Photo moderation'), findsNothing);
       expect(find.text('Review pending profile photos'), findsNothing);
       expect(tester.takeException(), isNull);
 
@@ -1224,10 +1224,11 @@ void main() {
       );
       await waitForFinder(
         tester,
-        find.text('Local moderator QA'),
-        description: 'local moderator entry for staff',
+        find.text('Photo moderation'),
+        description: 'photo moderation entry for staff',
         maxPumps: 240,
       );
+
       final reviewEntry = find.widgetWithText(
         FilledButton,
         'Review pending profile photos',
@@ -1236,14 +1237,14 @@ void main() {
       await tester.tap(reviewEntry);
       await waitForFinder(
         tester,
-        find.text('Local photo moderation'),
+        find.text('Photo moderation'),
         description: 'photo moderation queue screen',
         maxPumps: 160,
       );
       await waitForForegroundRouteSettled(
         tester,
-        find.text('Local photo moderation'),
-        description: 'Local photo moderation',
+        find.text('Photo moderation'),
+        description: 'Photo moderation',
       );
 
       // The queue lists the two valid pending fixtures in processedAt

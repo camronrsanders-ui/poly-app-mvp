@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/feature_flags.dart';
-import '../../config/firebase_runtime.dart';
 import '../../content/learn_content.dart';
 import '../../services/profile_photo_moderation_service.dart';
 import '../../services/safety_service.dart';
@@ -12,9 +10,20 @@ import 'profile_photo_moderation_screen.dart';
 
 typedef BlockedUsersLoader = Future<List<Map<String, dynamic>>> Function();
 typedef UnblockMemberAction = Future<void> Function(String uid);
+typedef ModeratorAccessCheck = Future<bool> Function();
 
 class SafetyCenterScreen extends StatelessWidget {
-  const SafetyCenterScreen({super.key});
+  const SafetyCenterScreen({
+    super.key,
+    this.moderatorAccessCheck,
+  });
+
+  /// Overrides the moderator-claim check that gates the photo
+  /// moderation entry. Production leaves this null: the entry asks
+  /// [ProfilePhotoModerationService] and renders only when the
+  /// signed-in account holds a moderator claim.
+  @visibleForTesting
+  final ModeratorAccessCheck? moderatorAccessCheck;
 
   /// Opens a tel: or sms: URI outside the app (dialer or the
   /// member's messaging app). If the device cannot handle it, say so
@@ -163,10 +172,22 @@ class SafetyCenterScreen extends StatelessWidget {
     );
   }
 
-  Widget _localModeratorEntry(BuildContext context) {
-    if (!kDebugMode || !useFirebaseEmulators) return const SizedBox.shrink();
+  /// The staff entry is opportunistic chrome: if the claim check
+  /// cannot even run (for example, Firebase is not ready), the entry
+  /// stays hidden. The moderation callables re-check the claim
+  /// server-side on every call regardless.
+  Future<bool> _moderatorAccess() async {
+    try {
+      return await ProfilePhotoModerationService().hasModeratorAccess();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _moderatorEntry(BuildContext context) {
+    final accessCheck = moderatorAccessCheck;
     return FutureBuilder<bool>(
-      future: ProfilePhotoModerationService().hasLocalModeratorAccess(),
+      future: accessCheck != null ? accessCheck() : _moderatorAccess(),
       builder: (context, snapshot) {
         if (snapshot.data != true) return const SizedBox.shrink();
         return Card(
@@ -182,7 +203,7 @@ class SafetyCenterScreen extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Local moderator QA',
+                        'Photo moderation',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
@@ -190,7 +211,7 @@ class SafetyCenterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Visible only in a debug emulator session with a trusted moderator claim. It is not a production member feature.',
+                  'This entry appears only on accounts with a moderator role. Pending profile photos are reviewed here before they can appear on profiles.',
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
@@ -227,7 +248,7 @@ class SafetyCenterScreen extends StatelessWidget {
             'Polycircle is built for consensual adult connections. A match never means consent to sexual messages, intimate media, meeting in person, or continued contact.',
           ),
           const SizedBox(height: 20),
-          _localModeratorEntry(context),
+          _moderatorEntry(context),
           _section(
             context,
             icon: Icons.block,

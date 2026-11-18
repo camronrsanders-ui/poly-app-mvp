@@ -90,6 +90,62 @@ void main() {
   );
 
   testWidgets(
+    'Photo moderation entry renders for a moderator claim holder',
+    (tester) async {
+      // No emulator routing is involved: the entry is claim-gated in
+      // every build flavor (photo uploads PR 3), so a claim-holding
+      // session sees it in a plain production-shaped configuration.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SafetyCenterScreen(
+            moderatorAccessCheck: () async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollable = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('Photo moderation'),
+        300,
+        scrollable: scrollable,
+      );
+      expect(find.text('Photo moderation'), findsOneWidget);
+      expect(
+        find.text('Review pending profile photos'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Photo moderation entry stays hidden without a moderator claim',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SafetyCenterScreen(
+            moderatorAccessCheck: () async => false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Scroll through the region where the entry would render —
+      // between the intro copy and the first explainer section — and
+      // confirm it never appears for a member session.
+      final scrollable = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('Block at any time'),
+        300,
+        scrollable: scrollable,
+      );
+      expect(find.text('Block at any time'), findsOneWidget);
+      expect(find.text('Photo moderation'), findsNothing);
+      expect(find.text('Review pending profile photos'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Blocked-member flow requires explicit confirmation',
     (tester) async {
       var unblockCalls = 0;

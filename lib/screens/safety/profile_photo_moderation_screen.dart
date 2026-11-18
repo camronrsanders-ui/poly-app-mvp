@@ -23,8 +23,8 @@ class _ProfilePhotoModerationScreenState
   }
 
   Future<List<ModerationProfilePhoto>> _loadSecurely() async {
-    if (!await _service.hasLocalModeratorAccess(forceRefresh: true)) {
-      throw StateError('Local moderator access is unavailable.');
+    if (!await _service.hasModeratorAccess(forceRefresh: true)) {
+      throw StateError('Moderator access is unavailable.');
     }
     return _service.listPending();
   }
@@ -38,35 +38,42 @@ class _ProfilePhotoModerationScreenState
   Future<void> _review(ModerationProfilePhoto photo, String decision) async {
     if (_working.contains(photo.photoId)) return;
     final approving = decision == 'approve';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(approving ? 'Approve this photo?' : 'Reject this photo?'),
-        content: Text(
-          approving
-              ? 'This makes the processed profile photo eligible for protected profile viewing.'
-              : 'This permanently removes the processed photo from member access.',
+    String? reason;
+    if (approving) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Approve this photo?'),
+          content: const Text(
+            'This makes the processed profile photo eligible for protected profile viewing.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Approve'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(approving ? 'Approve' : 'Reject'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+      );
+      if (confirmed != true || !mounted) return;
+    } else {
+      reason = await showDialog<String>(
+        context: context,
+        builder: (context) => const _RejectPhotoDialog(),
+      );
+      if (reason == null || !mounted) return;
+    }
 
     setState(() => _working.add(photo.photoId));
     try {
       final status = await _service.review(
         photoId: photo.photoId,
         decision: decision,
-        reason: approving ? null : 'local_moderation_qa',
+        reason: reason,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +126,7 @@ class _ProfilePhotoModerationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Local photo moderation')),
+      appBar: AppBar(title: const Text('Photo moderation')),
       body: FutureBuilder<List<ModerationProfilePhoto>>(
         future: _future,
         builder: (context, snapshot) {
@@ -137,7 +144,7 @@ class _ProfilePhotoModerationScreenState
                     const Icon(Icons.gpp_bad_outlined, size: 52),
                     const SizedBox(height: 12),
                     const Text(
-                      'Local moderator access is unavailable or the queue could not be loaded.',
+                      'Moderator access is unavailable or the queue could not be loaded.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 14),
@@ -164,7 +171,7 @@ class _ProfilePhotoModerationScreenState
                       textAlign: TextAlign.center),
                   SizedBox(height: 8),
                   Text(
-                    'This emulator-only queue exercises the same App-Check-protected moderation callables used by the backend.',
+                    'Processed profile photos that are waiting for a moderator decision appear here, oldest first.',
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -241,6 +248,91 @@ class _ProfilePhotoModerationScreenState
           );
         },
       ),
+    );
+  }
+}
+
+class _RejectionReason {
+  const _RejectionReason(this.code, this.label);
+
+  final String code;
+  final String label;
+}
+
+/// The fixed moderator rejection taxonomy (photo uploads PR 2,
+/// adopted Decision 5). The review callable stores only these codes;
+/// the member sees plain guidance mapped from the code they were
+/// given — never free text and never the reviewer's identity.
+const _rejectionReasons = <_RejectionReason>[
+  _RejectionReason(
+    'community_guidelines',
+    'Does not meet the community guidelines',
+  ),
+  _RejectionReason(
+    'image_quality',
+    'Too dark or blurry to review fairly',
+  ),
+  _RejectionReason('other_policy', 'Another policy reason'),
+];
+
+/// The rejection confirmation: rejecting is permanent for the
+/// processed photo, and the chosen reason is the one piece of
+/// feedback the member receives, so it is picked deliberately here
+/// rather than filled in by the client.
+class _RejectPhotoDialog extends StatefulWidget {
+  const _RejectPhotoDialog();
+
+  @override
+  State<_RejectPhotoDialog> createState() => _RejectPhotoDialogState();
+}
+
+class _RejectPhotoDialogState extends State<_RejectPhotoDialog> {
+  String _selected = 'community_guidelines';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reject this photo?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently removes the processed photo from member access. Choose the reason that best fits — the member sees guidance based on it.',
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: _selected,
+              onChanged: (value) {
+                if (value != null) setState(() => _selected = value);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final reason in _rejectionReasons)
+                    RadioListTile<String>(
+                      value: reason.code,
+                      title: Text(reason.label),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _selected),
+          child: const Text('Reject'),
+        ),
+      ],
     );
   }
 }
