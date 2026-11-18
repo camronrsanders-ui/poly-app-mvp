@@ -111,8 +111,12 @@ export const listProfilePhotosForReview = onCall(
       ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
       : 30;
 
+    // Oldest-first is enforced by the query itself (processedAt is
+    // stamped with the processed_pending_review transition), so the
+    // limit can never starve an older photo behind newer ones.
     const snapshot = await db.collection('profile_media')
       .where('status', '==', 'processed_pending_review')
+      .orderBy('processedAt', 'asc')
       .limit(limit)
       .get();
     if (snapshot.empty) return {photos: []};
@@ -151,7 +155,7 @@ export const listProfilePhotosForReview = onCall(
       };
     }));
 
-    photos.sort((a, b) => (a.processedAtMs ?? a.createdAtMs ?? 0) - (b.processedAtMs ?? b.createdAtMs ?? 0));
+    // Query order is oldest-first already; no in-memory sort.
     return {photos};
   },
 );

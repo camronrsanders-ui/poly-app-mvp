@@ -92,6 +92,31 @@
         {"fieldPath": "recipientUid", "order": "ASCENDING"},
         {"fieldPath": "active", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "profile_media",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "profile_media",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "profile_media",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "processedAt", "order": "ASCENDING"}
+      ]
     }
   ],
   "fieldOverrides": []

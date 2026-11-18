@@ -72,15 +72,24 @@ export const listMyProfilePhotos = onCall(
       throw new HttpsError('permission-denied', 'Profile photos are unavailable.');
     }
 
-    const snapshot = await db.collection('profile_media')
-      .where('ownerUid', '==', ownerUid)
-      .limit(20)
-      .get();
+    // The query itself carries the ordering and, for another member's
+    // view, the active-only filter — never filter after the limit, or
+    // rejected/pending records crowd approved photos out of the window.
+    const snapshot = viewingAnotherProfile
+      ? await db.collection('profile_media')
+        .where('ownerUid', '==', ownerUid)
+        .where('status', '==', 'active')
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get()
+      : await db.collection('profile_media')
+        .where('ownerUid', '==', ownerUid)
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
 
     if (viewingAnotherProfile) {
-      const activeDocs = snapshot.docs
-        .filter((doc) => doc.get('status') === 'active')
-        .sort((a, b) => (timestampMillis(b.get('createdAt')) ?? 0) - (timestampMillis(a.get('createdAt')) ?? 0));
+      const activeDocs = snapshot.docs;
 
       const bucket = getStorage().bucket();
       const photos = (await Promise.all(activeDocs.map(async (doc) => {
@@ -158,7 +167,7 @@ export const listMyProfilePhotos = onCall(
       reviewedAtMs: timestampMillis(doc.get('reviewedAt')),
     }));
 
-    photos.sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
+    // The query already returns newest-first; no in-memory sort.
     return {photos};
   },
 );
