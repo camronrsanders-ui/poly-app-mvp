@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -132,6 +133,47 @@ bool chatShouldFollowOwnSentMessage({
       latestSenderUid == currentUid &&
       latestLastId != null &&
       latestLastId != previousLastId;
+}
+
+/// Whether a live-snapshot delivery is a NEW message from the other
+/// participant (H-4). The first snapshot after opening the chat is not
+/// an arrival — everything in it predates the visit — and neither is a
+/// snapshot whose newest message is unchanged or the member's own.
+@visibleForTesting
+bool chatPartnerMessageArrived({
+  required String? previousLastId,
+  required String? latestLastId,
+  required String? latestSenderUid,
+  required String otherUid,
+}) {
+  return previousLastId != null &&
+      latestLastId != null &&
+      latestLastId != previousLastId &&
+      latestSenderUid != null &&
+      latestSenderUid == otherUid;
+}
+
+/// Debounces an event-driven refresh trigger (H-4). The check-in read
+/// callable is rate-limited per user, so refresh triggers are bounded
+/// by construction rather than by politeness: a partner who sends three
+/// messages in a row refreshes the check-in card once, not three times.
+@visibleForTesting
+class CheckInRefreshDebouncer {
+  CheckInRefreshDebouncer({this.interval = const Duration(seconds: 30)});
+
+  final Duration interval;
+
+  DateTime? _lastTrigger;
+
+  /// Records a trigger attempt at [now] and returns whether a refresh
+  /// should fire: the first attempt, or at least [interval] after the
+  /// last one that fired.
+  bool tryTrigger(DateTime now) {
+    final last = _lastTrigger;
+    if (last != null && now.difference(last) < interval) return false;
+    _lastTrigger = now;
+    return true;
+  }
 }
 
 /// Tracks the own-sent-message viewport follow across frames.
@@ -431,7 +473,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   static const int _liveWindowSize = 100;
   static const int _historyPageSize = 30;
   static const double _historyLoadThreshold = 200;
@@ -465,6 +507,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = const [];
+
+  /// Refresh signal for the check-in card (H-4). Check-in reads stay
+  /// behind the backend callables — the Firestore rules deny client
+  /// reads of connection_check_ins so the compliance and block guards
+  /// run on every read — so the card cannot listen for changes. The
+  /// screen bumps this signal instead: on app resume, on return from a
+  /// pushed route, and (debounced) when the other participant sends a
+  /// message.
+  final ValueNotifier<int> _checkInRefreshSignal = ValueNotifier<int>(0);
+  final CheckInRefreshDebouncer _partnerMessageCheckInRefresh =
+      CheckInRefreshDebouncer();
   bool _loadingLiveMessages = true;
   Object? _liveMessagesError;
   bool _loadingHistory = false;
@@ -482,6 +535,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     if (_currentUid != null) {
       if (widget.disableMessageStream) {
@@ -495,11 +549,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _checkInRefreshSignal.dispose();
     unawaited(_messageSubscription?.cancel());
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the app is a check-in freshness trigger (H-4):
+    // whatever the other participant posted while the app was away
+    // should be visible without leaving and re-entering the chat.
+    if (state == AppLifecycleState.resumed) _bumpCheckInRefresh();
+  }
+
+  void _bumpCheckInRefresh() {
+    _checkInRefreshSignal.value += 1;
   }
 
   void _listenToMessages() {
@@ -521,12 +589,13 @@ class _ChatScreenState extends State<ChatScreen> {
             80;
     final newLiveDocs = snapshot.docs.toList(growable: false);
     final latest = newLiveDocs.isEmpty ? null : newLiveDocs.last;
+    final latestSenderUid = latest?.data()['senderUid'] as String?;
     final followOwnSend = chatShouldFollowOwnSentMessage(
       awaitingOwnSend: _awaitingOwnSentMessage,
       currentUid: _currentUid,
       previousLastId: previousLastId,
       latestLastId: latest?.id,
-      latestSenderUid: latest?.data()['senderUid'] as String?,
+      latestSenderUid: latestSenderUid,
     );
     if (followOwnSend) _awaitingOwnSentMessage = false;
     final followLatest = followOwnSend ||
@@ -551,6 +620,23 @@ class _ChatScreenState extends State<ChatScreen> {
       _loadingLiveMessages = false;
       _liveMessagesError = null;
     });
+
+    // A new message from the other participant is the strongest
+    // in-session signal that they may also have just checked in (H-4):
+    // "I need space" is very often followed by a message. Refresh the
+    // card, debounced, so the update does not wait for the member to
+    // leave and re-enter the chat. A silent check-in with no message
+    // still waits for the next resume or return — the card's "Updated"
+    // cue says how fresh it is either way.
+    if (chatPartnerMessageArrived(
+          previousLastId: previousLastId,
+          latestLastId: latest?.id,
+          latestSenderUid: latestSenderUid,
+          otherUid: widget.otherUid,
+        ) &&
+        _partnerMessageCheckInRefresh.tryTrigger(DateTime.now())) {
+      _bumpCheckInRefresh();
+    }
 
     if (followOwnSend) {
       _followOwnSentMessageThroughViewportChanges();
@@ -732,8 +818,8 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _openSharedMoments() {
-    Navigator.of(context).push(
+  Future<void> _openSharedMoments() async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SharedMomentsScreen(
           conversationId: widget.conversationId,
@@ -741,10 +827,13 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+    if (!mounted) return;
+    // Returning to the chat is a check-in freshness trigger (H-4).
+    _bumpCheckInRefresh();
   }
 
-  void _openSharedPlans() {
-    Navigator.of(context).push(
+  Future<void> _openSharedPlans() async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SharedPlansScreen(
           conversationId: widget.conversationId,
@@ -752,6 +841,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+    if (!mounted) return;
+    // Returning to the chat is a check-in freshness trigger (H-4).
+    _bumpCheckInRefresh();
   }
 
   Future<void> _saveMessageAsMoment(String messageId) async {
@@ -1277,19 +1369,31 @@ class _ChatScreenState extends State<ChatScreen> {
         top: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // The check-in card and the composer are the column's only
-            // inflexible children; the message list (Expanded) absorbs
-            // whatever height remains. On a short body — the Android
-            // emulator once its software keyboard shrinks the viewport —
-            // the card's natural height plus the composer can exceed the
-            // available height outright, which overflows this column and
-            // squeezes the message list to zero. Reserve the composer's
-            // space plus a usable slice of the list, and let the card
-            // scroll internally only when it would exceed the rest: on
-            // tall viewports the cap sits above the card's natural
-            // height, so the layout there is unchanged.
-            final cardSpace = constraints.maxHeight - 240;
-            final cardMaxHeight = cardSpace < 96 ? 96.0 : cardSpace;
+            // The conversation's floor is guaranteed FIRST (H-5). The
+            // old flat reserve held back one 240 slice for the composer
+            // AND the entire conversation together, so the
+            // always-expanded card took everything else and the list
+            // kept ~170px — about two message bubbles, and fewer with
+            // the keyboard open — against the product rule that the
+            // majority of the viewport belongs to the conversation.
+            // Now the card receives only what remains after the
+            // composer's allowance (76) and a conversation floor of at
+            // least 240px — 40% of the body on tall viewports — are
+            // reserved. The cap never drops below 120: the card
+            // renders collapsed by default, and squeezing its one-line
+            // summary out of reach would hide the feature entirely, so
+            // on very short bodies the floor yields before the card
+            // does. The expanded card scrolls internally past the cap;
+            // on tall viewports the cap sits above its natural height,
+            // so the layout there is unchanged.
+            final conversationFloor = math.max(
+              240.0,
+              constraints.maxHeight * 0.40,
+            );
+            final cardMaxHeight = math.max(
+              120.0,
+              constraints.maxHeight - 76 - conversationFloor,
+            );
             return Column(
               children: [
                 if (FeatureFlags.checkInEnabled)
@@ -1300,6 +1404,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         actions: _checkInActions,
                         otherDisplayName: widget.otherDisplayName,
                         otherUid: widget.otherUid,
+                        refreshListenable: _checkInRefreshSignal,
                       ),
                     ),
                   ),

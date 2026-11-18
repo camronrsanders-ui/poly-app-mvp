@@ -25,12 +25,24 @@ String _relativeTime(int nowMs, int thenMs) {
 /// stale state pinned to a person. There are deliberately no read
 /// receipts, counts, or prompts to respond: posting a state never tells
 /// anyone whether it was seen.
+///
+/// The card renders collapsed to a one-line summary by default (H-5):
+/// the summary still shows both current state labels, so collapsing
+/// hides controls, not information, and the conversation keeps the
+/// viewport. Expansion is session-only and never automatic.
+///
+/// The card is not live (H-4): check-in reads stay behind the backend
+/// callables so the compliance and block guards run on every read,
+/// which rules out a client-side listener. It reloads after the user's
+/// own actions, when [refreshListenable] fires, and stamps each load
+/// with an "Updated …" cue so stale data never presents as current.
 class CheckInCard extends StatefulWidget {
   const CheckInCard({
     super.key,
     required this.actions,
     required this.otherDisplayName,
     this.otherUid = '',
+    this.refreshListenable,
   });
 
   final CheckInActions actions;
@@ -40,6 +52,13 @@ class CheckInCard extends StatefulWidget {
   /// only to attribute the shared note. Falls back to the snapshot's
   /// `otherUid` from the backend.
   final String otherUid;
+
+  /// Optional external refresh signal (H-4). When it notifies, the card
+  /// reloads. The chat screen bumps it on app resume, on return from a
+  /// pushed route, and (debounced) when the other participant sends a
+  /// message — the event-driven substitute for the listener this data
+  /// deliberately cannot have.
+  final Listenable? refreshListenable;
 
   @override
   State<CheckInCard> createState() => _CheckInCardState();
@@ -51,10 +70,56 @@ class _CheckInCardState extends State<CheckInCard> {
   bool _busy = false;
   Object? _loadError;
 
+  /// Session-only expansion (H-5). Starts collapsed on every chat-open;
+  /// nothing persists it, and the card never expands itself.
+  bool _expanded = false;
+
+  /// When the last successful load completed; drives the "Updated …"
+  /// as-of cue (H-4).
+  int? _loadedAtMs;
+
+  Timer? _relativeTimeTicker;
+
   @override
   void initState() {
     super.initState();
+    widget.refreshListenable?.addListener(_onRefreshSignal);
+    // Relative labels ("Posted 2h ago", "Updated 4m ago") are computed
+    // at build time from stored timestamps; without a periodic rebuild
+    // they would freeze at whatever they said when the card last
+    // loaded. Thirty seconds keeps them honest at minute granularity.
+    _relativeTimeTicker = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (mounted) setState(() {});
+      },
+    );
     unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(CheckInCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshListenable != widget.refreshListenable) {
+      oldWidget.refreshListenable?.removeListener(_onRefreshSignal);
+      widget.refreshListenable?.addListener(_onRefreshSignal);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.refreshListenable?.removeListener(_onRefreshSignal);
+    _relativeTimeTicker?.cancel();
+    super.dispose();
+  }
+
+  void _onRefreshSignal() {
+    if (!mounted) return;
+    unawaited(_load());
+  }
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
   }
 
   Future<void> _load() async {
@@ -65,6 +130,7 @@ class _CheckInCardState extends State<CheckInCard> {
         _snapshot = snapshot;
         _loading = false;
         _loadError = null;
+        _loadedAtMs = DateTime.now().millisecondsSinceEpoch;
       });
     } catch (error) {
       if (!mounted) return;
@@ -127,9 +193,36 @@ class _CheckInCardState extends State<CheckInCard> {
     await _run(() => widget.actions.setSharedNote(text));
   }
 
+  /// Clearing the shared note erases it for both participants with no
+  /// trace (M-14), so it asks first — unlike clearing your own state,
+  /// which affects only you and stays one tap.
+  Future<void> _confirmClearSharedNote() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear the shared note?'),
+        content: const Text(
+          'This clears the note for both of you, and it cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('check-in-clear-note-confirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Clear note'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _run(widget.actions.clearSharedNote);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final semantic = PolycircleColors.of(context);
     return Card(
       key: const Key('check-in-card'),
       margin: const EdgeInsets.fromLTRB(
@@ -140,67 +233,206 @@ class _CheckInCardState extends State<CheckInCard> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.favorite_border_rounded,
-                  size: 20,
-                  color: semantic.textSecondary,
+        child: _expanded ? _buildExpanded(context) : _buildCollapsed(context),
+      ),
+    );
+  }
+
+  /// The expanded card: the header, the as-of cue under it, then the
+  /// full slot rows and shared note — the original layout, unchanged
+  /// inside.
+  Widget _buildExpanded(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          key: const Key('check-in-toggle'),
+          onTap: _toggleExpanded,
+          child: Row(
+            children: [
+              Icon(
+                Icons.favorite_border_rounded,
+                size: 20,
+                color: semantic.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'How are we doing right now?',
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    'How are we doing right now?',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+              ),
+              Icon(
+                Icons.expand_less_rounded,
+                size: 20,
+                color: semantic.textSecondary,
+              ),
+            ],
+          ),
+        ),
+        if (_loadedAtMs != null && _loadError == null && !_loading) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            key: const Key('check-in-updated'),
+            'Updated ${_relativeTime(
+              DateTime.now().millisecondsSinceEpoch,
+              _loadedAtMs!,
+            )}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: semantic.textMuted,
                 ),
-              ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        _buildBody(context),
+      ],
+    );
+  }
+
+  /// The collapsed card (H-5): a single tappable row — both current
+  /// state labels, a shared-note indicator when a note exists, the
+  /// as-of cue, and the expand chevron. Loading and error states keep
+  /// their honest one-line forms here too.
+  Widget _buildCollapsed(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    return InkWell(
+      key: const Key('check-in-toggle'),
+      onTap: _toggleExpanded,
+      child: Row(
+        children: [
+          Icon(
+            Icons.favorite_border_rounded,
+            size: 20,
+            color: semantic.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          if (_loading) ...[
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                child: Row(
-                  children: [
-                    SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+            const SizedBox(width: AppSpacing.xs),
+            const Expanded(child: Text('Loading check-ins…')),
+          ] else if (_loadError != null || _snapshot == null) ...[
+            Icon(
+              Icons.error_outline_rounded,
+              size: 18,
+              color: semantic.textSecondary,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            const Expanded(child: Text('Couldn’t load check-ins.')),
+            TextButton(
+              key: const Key('check-in-retry'),
+              onPressed: _busy
+                  ? null
+                  : () {
+                      setState(() => _loading = true);
+                      unawaited(_load());
+                    },
+              child: const Text('Retry'),
+            ),
+          ] else ...[
+            Expanded(child: _buildSummaryText(context, _snapshot!)),
+            if (_snapshot!.sharedNote != null) ...[
+              Icon(
+                Icons.sticky_note_2_outlined,
+                size: 16,
+                color: semantic.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
+            if (_loadedAtMs != null) ...[
+              Text(
+                key: const Key('check-in-updated'),
+                'Updated ${_relativeTime(
+                  DateTime.now().millisecondsSinceEpoch,
+                  _loadedAtMs!,
+                )}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: semantic.textMuted,
                     ),
-                    SizedBox(width: AppSpacing.xs),
-                    Text('Loading check-ins…'),
-                  ],
-                ),
-              )
-            else if (_loadError != null || _snapshot == null)
-              Row(
-                children: [
-                  Icon(
-                    Icons.error_outline_rounded,
-                    size: 18,
-                    color: semantic.textSecondary,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  const Expanded(child: Text('Couldn’t load check-ins.')),
-                  TextButton(
-                    key: const Key('check-in-retry'),
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            setState(() => _loading = true);
-                            unawaited(_load());
-                          },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              )
-            else
-              ..._buildLoaded(context, _snapshot!),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
+          ],
+          Icon(
+            Icons.expand_more_rounded,
+            size: 20,
+            color: semantic.textSecondary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The one-line collapsed summary. An expired slot reads as "—",
+  /// never as its stale label; with nothing current and no note, the
+  /// line is an invitation instead of two dashes.
+  Widget _buildSummaryText(BuildContext context, CheckInSnapshot snapshot) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final mine = snapshot.currentMine(nowMs);
+    final other = snapshot.currentOther(nowMs);
+    final empty =
+        mine == null && other == null && snapshot.sharedNote == null;
+    return Text(
+      key: const Key('check-in-summary'),
+      empty
+          ? 'Check in — how are we doing?'
+          : 'You: ${mine == null ? '—' : checkInStateLabel(mine.state)}'
+              ' · ${widget.otherDisplayName}: '
+              '${other == null ? '—' : checkInStateLabel(other.state)}',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodyMedium,
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final semantic = PolycircleColors.of(context);
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: AppSpacing.xs),
+            Text('Loading check-ins…'),
           ],
         ),
-      ),
+      );
+    }
+    if (_loadError != null || _snapshot == null) {
+      return Row(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: semantic.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const Expanded(child: Text('Couldn’t load check-ins.')),
+          TextButton(
+            key: const Key('check-in-retry'),
+            onPressed: _busy
+                ? null
+                : () {
+                    setState(() => _loading = true);
+                    unawaited(_load());
+                  },
+            child: const Text('Retry'),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: _buildLoaded(context, _snapshot!),
     );
   }
 
@@ -290,8 +522,7 @@ class _CheckInCardState extends State<CheckInCard> {
             if (note != null)
               TextButton(
                 key: const Key('check-in-clear-note'),
-                onPressed:
-                    _busy ? null : () => _run(widget.actions.clearSharedNote),
+                onPressed: _busy ? null : _confirmClearSharedNote,
                 child: const Text('Clear'),
               ),
           ],
@@ -431,6 +662,7 @@ class _StatePickerDialogState extends State<_StatePickerDialog> {
                 labelText: 'Add a note (optional)',
               ),
             ),
+            const Text('Your partner will see this note'),
             const Text(
               'Your check-in shows for 24 hours, then clears itself.',
             ),
