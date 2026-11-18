@@ -5,11 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:polycircle/screens/profile/profile_photos_screen.dart';
 import 'package:polycircle/services/profile_media_service.dart';
 
-ProfileMediaStatus photoStatus(String photoId, String status) {
+ProfileMediaStatus photoStatus(
+  String photoId,
+  String status, {
+  String? rejectionReasonCode,
+}) {
   return ProfileMediaStatus(
     photoId: photoId,
     status: status,
     contentType: 'image/jpeg',
+    rejectionReasonCode: rejectionReasonCode,
   );
 }
 
@@ -139,6 +144,80 @@ void main() {
         final finder = find.text(label);
         await scrollTo(tester, finder);
         expect(finder, findsOneWidget);
+      }
+    },
+  );
+
+  testWidgets(
+    'Rejected photos show mapped guidance instead of a truncated photo ID',
+    (tester) async {
+      final photos = <ProfileMediaStatus>[
+        photoStatus(
+          'photo-machine-001',
+          'rejected',
+          rejectionReasonCode: 'image_processing',
+        ),
+        photoStatus(
+          'photo-quality-001',
+          'rejected',
+          rejectionReasonCode: 'image_quality',
+        ),
+        photoStatus(
+          'photo-policy-001',
+          'rejected',
+          rejectionReasonCode: 'community_guidelines',
+        ),
+        photoStatus('photo-legacy-001', 'rejected'),
+      ];
+
+      await pumpPhotos(
+        tester,
+        loadPhotos: () async => photos,
+      );
+
+      // Machine rejections read as file problems.
+      final fileCopy = find.textContaining("That file couldn't be processed");
+      await scrollTo(tester, fileCopy);
+      expect(fileCopy, findsOneWidget);
+
+      // The quality code invites a clearer re-upload.
+      final qualityCopy = find.textContaining('too dark or blurry to approve');
+      await scrollTo(tester, qualityCopy);
+      expect(qualityCopy, findsOneWidget);
+
+      // Policy codes — and a rejected row with no code at all — get
+      // the guidelines guidance.
+      final policyCopy =
+          find.textContaining("That photo doesn't meet the community guidelines");
+      await scrollTo(tester, policyCopy);
+      expect(policyCopy, findsWidgets);
+
+      // The truncated photo ID is not member guidance and is gone
+      // from every rejected row.
+      expect(find.textContaining('Photo ID'), findsNothing);
+    },
+  );
+
+  test(
+    'Upload error copy splits by failure kind instead of blaming the image',
+    () {
+      expect(
+        profilePhotoUploadErrorMessage('resource-exhausted'),
+        "You've reached the daily photo limit — you can add more tomorrow.",
+      );
+      expect(
+        profilePhotoUploadErrorMessage('unauthenticated'),
+        "We couldn't verify the app — check your connection and try again.",
+      );
+      // Only the validation rejection is actually about the image.
+      expect(
+        profilePhotoUploadErrorMessage('invalid-argument'),
+        'Could not upload that photo. Please try another image.',
+      );
+      for (final code in <String?>['internal', 'unavailable', null]) {
+        final message = profilePhotoUploadErrorMessage(code);
+        expect(message, 'Could not upload that photo. Please try again.');
+        expect(message.contains('another image'), isFalse);
       }
     },
   );

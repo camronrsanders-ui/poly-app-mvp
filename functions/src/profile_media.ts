@@ -5,6 +5,7 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {onObjectFinalized} from 'firebase-functions/v2/storage';
 import sharp from 'sharp';
 import {assertActiveCompliantMember} from './account_compliance';
+import {moderatorRejectionReasonToStore} from './profile_media_rejection';
 
 const db = getFirestore();
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -391,7 +392,11 @@ export const reviewProfilePhoto = onCall(
       await getStorage().bucket().file(storagePath).delete({ignoreNotFound: true});
       await ref.set({
         status: 'rejected',
-        rejectionReason: String(request.data?.reason ?? 'moderation').slice(0, 160),
+        // H-9: only adopted moderator codes are stored (Decision 5);
+        // anything else becomes the generic policy code, so every
+        // stored reason is display-safe by construction and no
+        // free-text moderator note can reach a member's listing.
+        rejectionReason: moderatorRejectionReasonToStore(request.data?.reason),
         reviewedAt: FieldValue.serverTimestamp(),
         reviewedByUid: reviewerUid,
         updatedAt: FieldValue.serverTimestamp(),

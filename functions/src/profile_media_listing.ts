@@ -4,6 +4,7 @@ import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {assertActiveCompliantMember} from './account_compliance';
 import {canViewOwnerProfile} from './profile_access';
+import {rejectionReasonCodeForDisplay} from './profile_media_rejection';
 
 const db = getFirestore();
 
@@ -158,14 +159,27 @@ export const listMyProfilePhotos = onCall(
       return {photos};
     }
 
-    const photos = snapshot.docs.map((doc) => ({
-      photoId: doc.id,
-      status: String(doc.get('status') ?? 'unknown'),
-      contentType: String(doc.get('contentType') ?? ''),
-      createdAtMs: timestampMillis(doc.get('createdAt')),
-      processedAtMs: timestampMillis(doc.get('processedAt')),
-      reviewedAtMs: timestampMillis(doc.get('reviewedAt')),
-    }));
+    const photos = snapshot.docs.map((doc) => {
+      const status = String(doc.get('status') ?? 'unknown');
+      return {
+        photoId: doc.id,
+        status,
+        contentType: String(doc.get('contentType') ?? ''),
+        createdAtMs: timestampMillis(doc.get('createdAt')),
+        processedAtMs: timestampMillis(doc.get('processedAt')),
+        reviewedAtMs: timestampMillis(doc.get('reviewedAt')),
+        // H-9: a rejected photo carries a display-safe reason CODE,
+        // mapped from the stored value by profile_media_rejection.
+        // The raw stored reason (legacy free text, QA strings) never
+        // leaves the server; non-rejected photos carry no code.
+        ...(status === 'rejected'
+          ? {
+            rejectionReasonCode:
+                rejectionReasonCodeForDisplay(doc.get('rejectionReason')),
+          }
+          : {}),
+      };
+    });
 
     // The query already returns newest-first; no in-memory sort.
     return {photos};
