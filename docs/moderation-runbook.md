@@ -103,7 +103,27 @@ On rejection:
 - ensure rejected media is not available through member-facing signed URL flows;
 - remove the processed object according to the approved retention policy.
 
-The queue/list and review callables are implemented, but staging validation, moderator UI/workstation controls, reason taxonomy, staffing procedures, and final retention rules remain release blockers.
+The queue/list and review callables are implemented, and the moderator UI (Safety Center -> Photo moderation) and the fixed rejection reason taxonomy (`community_guidelines`, `image_quality`, `other_policy`) have shipped. Staging validation, staffing procedures, and final retention rules remain release blockers.
+
+### Moderator claim operations
+
+Access to profile-photo moderation — the in-app queue and the `listProfilePhotosForReview` / `reviewProfilePhoto` callables — is gated by the `moderator` custom claim (the callables also accept `admin` / `superadmin`). The callables re-check the claim server-side on every call; the app entry is only chrome. Claims are granted and revoked with the guarded ops script, never by hand-editing tokens:
+
+```sh
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
+  node functions/scripts/set_moderator_claim.cjs \
+    --project <firebase-project-id> --uid <auth-uid> --grant
+# The script is a dry run unless --confirm is added; it prints the
+# account's claims before and after either way. Use --revoke to
+# remove the claim.
+```
+
+- Grant the claim to a dedicated staff account, not to anyone's member account (see the two-identity rule below). Staging is `polycircle-staging-82204f`; production is `poly-circle-j5v6dy`.
+- Claims take effect on the account's next ID-token refresh (sign-in, or the forced refresh when the moderation queue opens).
+- Revocation is the kill switch for the moderation surface: revoke the claim and, on the account's next token refresh, the Safety Center entry disappears and the callables deny access. There is no separate feature flag to flip.
+- Exercise grant **and** revoke on staging before the pilot (release-gates checklist item).
+
+**Two-identity rule (founder self-review).** The founder moderates through a dedicated staff account whose UID differs from the founder's member account. `reviewProfilePhoto` bans self-review by UID server-side, but a staff account could in form approve the founder's own member photos — that would defeat the ban in substance. The founder's own member photos therefore wait for a second human reviewer; until one exists, the founder profile launches without photos. Appointing the second reviewer is a claim grant (run the script for their account), never a code change.
 
 ## Private Vault moderation
 
