@@ -48,6 +48,10 @@ typedef MyCircleRespondAction = Future<bool> Function({
   required bool accept,
 });
 
+typedef MyCircleCircleAction = Future<void> Function(
+  String circleId,
+);
+
 class MyCircleScreen extends StatefulWidget {
   const MyCircleScreen({
     super.key,
@@ -62,6 +66,9 @@ class MyCircleScreen extends StatefulWidget {
     this.createCircleAction,
     this.inviteMemberAction,
     this.respondToInviteAction,
+    this.leaveCircleAction,
+    this.archiveCircleAction,
+    this.unarchiveCircleAction,
   });
 
   final MyCircleUidProvider? uidProvider;
@@ -75,6 +82,9 @@ class MyCircleScreen extends StatefulWidget {
   final MyCircleCreateAction? createCircleAction;
   final MyCircleInviteAction? inviteMemberAction;
   final MyCircleRespondAction? respondToInviteAction;
+  final MyCircleCircleAction? leaveCircleAction;
+  final MyCircleCircleAction? archiveCircleAction;
+  final MyCircleCircleAction? unarchiveCircleAction;
 
   @override
   State<MyCircleScreen> createState() => _MyCircleScreenState();
@@ -107,6 +117,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
   bool _worldTravelSwapped = false;
   bool _creatingCircle = false;
   bool _sendingCircleInvite = false;
+  bool _circleActionInFlight = false;
   String? _respondingCircleInviteId;
 
   /// Same reduced-motion standard as the orbit widgets: the
@@ -417,6 +428,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
       connections: results[0] as List<Map<String, dynamic>>,
       circles: circleSnapshot.circles,
       invites: circleSnapshot.invites,
+      archivedCircles: circleSnapshot.archivedCircles,
     );
   }
 
@@ -692,6 +704,327 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         ),
       );
     }
+  }
+
+  Future<bool> _confirmCircleAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<void> _leaveCircle(
+    CircleSummary circle,
+  ) async {
+    if (_circleActionInFlight) return;
+
+    final confirmed = await _confirmCircleAction(
+      title: 'Leave ${circle.name}?',
+      message: 'You will lose access to this Circle. '
+          'The owner can invite you again. '
+          'Your own profile and relationship cards are not affected.',
+      confirmLabel: 'Leave Circle',
+    );
+
+    if (!mounted || !confirmed) return;
+
+    setState(() {
+      _circleActionInFlight = true;
+    });
+
+    try {
+      final injectedLeave = widget.leaveCircleAction;
+      if (injectedLeave != null) {
+        await injectedLeave(circle.circleId);
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        await _circleMembership!.leaveCircle(
+          circle.circleId,
+        );
+      }
+
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _circleActionInFlight = false;
+        _activeWorldId = 'mine';
+        _focused = null;
+        _photoFutures.clear();
+        _future = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You left ${circle.name}.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle leave failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _circleActionInFlight = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not leave that Circle. '
+            'Please try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _archiveCircle(
+    CircleSummary circle,
+  ) async {
+    if (_circleActionInFlight) return;
+
+    final confirmed = await _confirmCircleAction(
+      title: 'Archive ${circle.name}?',
+      message: 'Members will no longer see this Circle, '
+          'and pending invitations will stop working. '
+          'Nothing is deleted — you can restore this Circle '
+          'anytime from Archived Circles.',
+      confirmLabel: 'Archive Circle',
+    );
+
+    if (!mounted || !confirmed) return;
+
+    setState(() {
+      _circleActionInFlight = true;
+    });
+
+    try {
+      final injectedArchive = widget.archiveCircleAction;
+      if (injectedArchive != null) {
+        await injectedArchive(circle.circleId);
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        await _circleMembership!.archiveCircle(
+          circle.circleId,
+        );
+      }
+
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _circleActionInFlight = false;
+        _activeWorldId = 'mine';
+        _focused = null;
+        _photoFutures.clear();
+        _future = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${circle.name} is archived. '
+            'Restore it anytime from Archived Circles.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle archive failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _circleActionInFlight = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not archive that Circle. '
+            'Please try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _unarchiveCircle(
+    ArchivedCircleSummary circle,
+  ) async {
+    if (_circleActionInFlight) return false;
+
+    setState(() {
+      _circleActionInFlight = true;
+    });
+
+    try {
+      final injectedUnarchive = widget.unarchiveCircleAction;
+      if (injectedUnarchive != null) {
+        await injectedUnarchive(circle.circleId);
+      } else {
+        _circleMembership ??= CircleMembershipService();
+        await _circleMembership!.unarchiveCircle(
+          circle.circleId,
+        );
+      }
+
+      if (!mounted) return false;
+
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _circleActionInFlight = false;
+        _focused = null;
+        _photoFutures.clear();
+        _future = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${circle.name} is back in your worlds.',
+          ),
+        ),
+      );
+
+      return true;
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Circle restore failed: $error',
+        );
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return false;
+
+      setState(() {
+        _circleActionInFlight = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not restore that Circle. '
+            'Please try again.',
+          ),
+        ),
+      );
+
+      return false;
+    }
+  }
+
+  Future<void> _openArchivedCircles(
+    _UniverseModel model,
+  ) async {
+    if (model.archivedCircles.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _ArchivedCirclesSheet(
+        archivedCircles: model.archivedCircles,
+        onRestore: (circle) async {
+          final restored = await _unarchiveCircle(circle);
+
+          if (restored && sheetContext.mounted) {
+            Navigator.of(sheetContext).pop();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _circleHeader({
+    required _UniverseModel model,
+    required _CircleWorld active,
+  }) {
+    CircleSummary? activeCircle;
+
+    if (active.id.startsWith('circle:')) {
+      final circleId = active.id.substring('circle:'.length);
+
+      for (final candidate in model.circles) {
+        if (candidate.circleId == circleId) {
+          activeCircle = candidate;
+          break;
+        }
+      }
+    }
+
+    final circle = activeCircle;
+
+    VoidCallback? invite;
+    VoidCallback? leave;
+    VoidCallback? archive;
+
+    if (circle != null) {
+      if (circle.isOwner) {
+        invite = () => _inviteToCircle(
+          circle: circle,
+          connections: model.connections,
+        );
+        archive = () => _archiveCircle(circle);
+      } else {
+        leave = () => _leaveCircle(circle);
+      }
+    }
+
+    return _SpatialHeader(
+      world: active,
+      count: active.memberCount ?? active.people.length,
+      onSafety: _openSafety,
+      onManage: _openManager,
+      onInviteToCircle: invite,
+      onLeaveCircle: leave,
+      onArchiveCircle: archive,
+      onShowArchivedCircles: model.archivedCircles.isNotEmpty
+          ? () => _openArchivedCircles(model)
+          : null,
+    );
   }
 
   Future<void> _openCircleInvitations(
@@ -1010,6 +1343,9 @@ class _MyCircleScreenState extends State<MyCircleScreen>
           photoFuture: _photosFor(model.uid),
           onManage: _openManager,
           onSafety: _openSafety,
+          onShowArchivedCircles: model.archivedCircles.isNotEmpty
+              ? () => _openArchivedCircles(model)
+              : null,
         );
       }
 
@@ -1047,11 +1383,9 @@ class _MyCircleScreenState extends State<MyCircleScreen>
           bottom: false,
           child: Column(
             children: [
-              _SpatialHeader(
-                world: active,
-                count: active.memberCount ?? active.people.length,
-                onSafety: _openSafety,
-                onManage: _openManager,
+              _circleHeader(
+                model: model,
+                active: active,
               ),
               _WorldDock(
                 worlds: worlds,
@@ -1178,11 +1512,9 @@ class _MyCircleScreenState extends State<MyCircleScreen>
           bottom: false,
           child: Column(
             children: [
-              _SpatialHeader(
-                world: active,
-                count: active.memberCount ?? active.people.length,
-                onSafety: _openSafety,
-                onManage: _openManager,
+              _circleHeader(
+                model: model,
+                active: active,
               ),
               _WorldDock(
                 worlds: worlds,
@@ -1410,6 +1742,119 @@ class _CreateCircleSheetState extends State<_CreateCircleSheet> {
                 ),
                 label: const Text(
                   'Create Circle',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchivedCirclesSheet extends StatelessWidget {
+  const _ArchivedCirclesSheet({
+    required this.archivedCircles,
+    required this.onRestore,
+  });
+
+  final List<ArchivedCircleSummary> archivedCircles;
+  final Future<void> Function(ArchivedCircleSummary circle) onRestore;
+
+  String _subtitle(
+    ArchivedCircleSummary circle,
+  ) {
+    final members = circle.memberCount == 1
+        ? '1 member'
+        : '${circle.memberCount} members';
+
+    final archivedAt = circle.archivedAt;
+
+    if (archivedAt == null) {
+      return members;
+    }
+
+    final date = archivedAt.toLocal().toString().split(' ').first;
+
+    return '$members • Archived $date';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(32),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          24,
+          12,
+          24,
+          24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colors.outlineVariant,
+                  borderRadius: BorderRadius.circular(
+                    999,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'Archived Circles',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Archived Circles are hidden from every member. '
+              'Nothing was deleted — restoring brings a Circle '
+              'back with its members exactly as they were.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+            ),
+            const SizedBox(height: 18),
+            ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxHeight: 300,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final circle in archivedCircles)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.archive_outlined,
+                        ),
+                        title: Text(circle.name),
+                        subtitle: Text(
+                          _subtitle(circle),
+                        ),
+                        trailing: FilledButton.tonal(
+                          onPressed: () => onRestore(circle),
+                          child: const Text('Restore'),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -2139,6 +2584,7 @@ class _UniverseModel {
     required this.connections,
     required this.circles,
     required this.invites,
+    required this.archivedCircles,
   });
 
   final String uid;
@@ -2146,6 +2592,7 @@ class _UniverseModel {
   final List<Map<String, dynamic>> connections;
   final List<CircleSummary> circles;
   final List<CircleInviteSummary> invites;
+  final List<ArchivedCircleSummary> archivedCircles;
 }
 
 class _CircleWorld {
@@ -2584,12 +3031,20 @@ class _SpatialHeader extends StatelessWidget {
     required this.count,
     required this.onSafety,
     required this.onManage,
+    this.onInviteToCircle,
+    this.onLeaveCircle,
+    this.onArchiveCircle,
+    this.onShowArchivedCircles,
   });
 
   final _CircleWorld world;
   final int count;
   final VoidCallback onSafety;
   final VoidCallback onManage;
+  final VoidCallback? onInviteToCircle;
+  final VoidCallback? onLeaveCircle;
+  final VoidCallback? onArchiveCircle;
+  final VoidCallback? onShowArchivedCircles;
 
   @override
   Widget build(BuildContext context) {
@@ -2647,12 +3102,72 @@ class _SpatialHeader extends StatelessWidget {
           PopupMenuButton<String>(
             tooltip: 'Circle options',
             onSelected: (value) {
+              if (value == 'invite') {
+                onInviteToCircle?.call();
+              }
+
+              if (value == 'leave') {
+                onLeaveCircle?.call();
+              }
+
+              if (value == 'archive') {
+                onArchiveCircle?.call();
+              }
+
+              if (value == 'archived') {
+                onShowArchivedCircles?.call();
+              }
+
               if (value == 'manage') {
                 onManage();
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              if (onInviteToCircle != null)
+                const PopupMenuItem(
+                  value: 'invite',
+                  child: Row(
+                    children: [
+                      Icon(Icons.person_add_rounded),
+                      SizedBox(width: 10),
+                      Text('Invite to this Circle'),
+                    ],
+                  ),
+                ),
+              if (onLeaveCircle != null)
+                const PopupMenuItem(
+                  value: 'leave',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout_rounded),
+                      SizedBox(width: 10),
+                      Text('Leave this Circle'),
+                    ],
+                  ),
+                ),
+              if (onArchiveCircle != null)
+                const PopupMenuItem(
+                  value: 'archive',
+                  child: Row(
+                    children: [
+                      Icon(Icons.archive_outlined),
+                      SizedBox(width: 10),
+                      Text('Archive this Circle'),
+                    ],
+                  ),
+                ),
+              if (onShowArchivedCircles != null)
+                const PopupMenuItem(
+                  value: 'archived',
+                  child: Row(
+                    children: [
+                      Icon(Icons.inventory_2_outlined),
+                      SizedBox(width: 10),
+                      Text('Archived Circles'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
                 value: 'manage',
                 child: Row(
                   children: [
@@ -3457,12 +3972,14 @@ class _EmptyUniverse extends StatelessWidget {
     required this.photoFuture,
     required this.onManage,
     required this.onSafety,
+    this.onShowArchivedCircles,
   });
 
   final String displayName;
   final Future<List<VisibleProfilePhoto>> photoFuture;
   final VoidCallback onManage;
   final VoidCallback onSafety;
+  final VoidCallback? onShowArchivedCircles;
 
   @override
   Widget build(BuildContext context) {
@@ -3519,6 +4036,18 @@ class _EmptyUniverse extends StatelessWidget {
                           'Manage relationships',
                         ),
                       ),
+                      if (onShowArchivedCircles != null) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: onShowArchivedCircles,
+                          icon: const Icon(
+                            Icons.inventory_2_outlined,
+                          ),
+                          label: const Text(
+                            'Archived Circles',
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
