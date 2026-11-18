@@ -34,6 +34,7 @@ class ProfileMediaStatus {
     required this.photoId,
     required this.status,
     required this.contentType,
+    this.rejectionReasonCode,
     this.createdAt,
     this.processedAt,
     this.reviewedAt,
@@ -42,6 +43,12 @@ class ProfileMediaStatus {
   final String photoId;
   final String status;
   final String contentType;
+
+  /// Display-safe rejection reason code from the server taxonomy
+  /// (for example 'community_guidelines' or 'image_processing');
+  /// null unless the photo is rejected. The raw stored reason never
+  /// crosses the API, so this code is all the UI may render.
+  final String? rejectionReasonCode;
   final DateTime? createdAt;
   final DateTime? processedAt;
   final DateTime? reviewedAt;
@@ -55,6 +62,7 @@ class ProfileMediaStatus {
       photoId: photoId,
       status: data['status'] as String? ?? 'unknown',
       contentType: data['contentType'] as String? ?? '',
+      rejectionReasonCode: data['rejectionReasonCode'] as String?,
       createdAt: _trustedDateFromMillis(data['createdAtMs']),
       processedAt: _trustedDateFromMillis(data['processedAtMs']),
       reviewedAt: _trustedDateFromMillis(data['reviewedAtMs']),
