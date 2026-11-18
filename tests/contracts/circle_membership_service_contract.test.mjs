@@ -62,3 +62,25 @@ test('Circle membership and invitations remain separate models', () => {
     /class CircleMembershipSnapshot/,
   );
 });
+
+test('Circle client wraps the archive lifecycle callables', () => {
+  assert.match(
+    service,
+    /httpsCallable\('archiveCircle'\)/,
+  );
+
+  assert.match(
+    service,
+    /httpsCallable\('unarchiveCircle'\)/,
+  );
+
+  assert.match(
+    service,
+    /class ArchivedCircleSummary/,
+  );
+
+  assert.match(
+    service,
+    /archivedCircles/,
+  );
+});

@@ -24,10 +24,12 @@ Map<String, dynamic> connection(
 CircleMembershipSnapshot snapshot({
   List<CircleSummary> circles = const <CircleSummary>[],
   List<CircleInviteSummary> invites = const <CircleInviteSummary>[],
+  List<ArchivedCircleSummary> archivedCircles = const <ArchivedCircleSummary>[],
 }) {
   return CircleMembershipSnapshot(
     circles: circles,
     invites: invites,
+    archivedCircles: archivedCircles,
   );
 }
 
@@ -59,6 +61,9 @@ Future<void> pumpCircle(
   MyCircleCreateAction? createCircleAction,
   MyCircleInviteAction? inviteMemberAction,
   MyCircleRespondAction? respondToInviteAction,
+  MyCircleCircleAction? leaveCircleAction,
+  MyCircleCircleAction? archiveCircleAction,
+  MyCircleCircleAction? unarchiveCircleAction,
   bool reduceMotion = false,
 }) async {
   tester.view.physicalSize = const Size(1100, 1800);
@@ -91,6 +96,9 @@ Future<void> pumpCircle(
           createCircleAction: createCircleAction,
           inviteMemberAction: inviteMemberAction,
           respondToInviteAction: respondToInviteAction,
+          leaveCircleAction: leaveCircleAction,
+          archiveCircleAction: archiveCircleAction,
+          unarchiveCircleAction: unarchiveCircleAction,
         ),
       ),
     ),
@@ -615,6 +623,213 @@ void main() {
       // One frame, no 620ms camera travel: the world has swapped.
       expect(find.text('FRIENDS'), findsOneWidget);
       expect(find.text('Alex, 30'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Populated owner Circle exposes Invite and Archive in Circle options',
+    (tester) async {
+      String? invitedCircleId;
+      String? invitedUid;
+      final alex = connection('alex', 'Alex');
+      final circle = const CircleSummary(
+        circleId: 'friends-1',
+        name: 'Friends',
+        ownerUid: 'owner-1',
+        role: 'owner',
+        memberCount: 2,
+        members: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'uid': 'alex',
+            'displayName': 'Alex',
+          },
+        ],
+      );
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[alex],
+        loadSnapshot: () async => snapshot(
+          circles: <CircleSummary>[circle],
+        ),
+        inviteMemberAction: ({
+          required circleId,
+          required inviteeUid,
+        }) async {
+          invitedCircleId = circleId;
+          invitedUid = inviteeUid;
+        },
+      );
+
+      await tester.tap(find.text('Friends'));
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Circle options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Invite to this Circle'), findsOneWidget);
+      expect(find.text('Archive this Circle'), findsOneWidget);
+      expect(find.text('Leave this Circle'), findsNothing);
+
+      await tester.tap(find.text('Invite to this Circle'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Invite into Friends'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ListTile, 'Alex'));
+      await tester.pumpAndSettle();
+
+      expect(invitedCircleId, 'friends-1');
+      expect(invitedUid, 'alex');
+      expect(find.textContaining('Invitation sent to Alex'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Member leaves a populated Circle only after confirming',
+    (tester) async {
+      final leftCircleIds = <String>[];
+      final alex = connection('alex', 'Alex');
+      final circle = const CircleSummary(
+        circleId: 'book-club-1',
+        name: 'Book Club',
+        ownerUid: 'alex',
+        role: 'member',
+        memberCount: 2,
+        members: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'uid': 'alex',
+            'displayName': 'Alex',
+          },
+        ],
+      );
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[alex],
+        loadSnapshot: () async => snapshot(
+          circles: <CircleSummary>[circle],
+        ),
+        leaveCircleAction: (circleId) async {
+          leftCircleIds.add(circleId);
+        },
+      );
+
+      await tester.tap(find.text('Book Club'));
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Circle options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave this Circle'), findsOneWidget);
+      expect(find.text('Invite to this Circle'), findsNothing);
+      expect(find.text('Archive this Circle'), findsNothing);
+
+      await tester.tap(find.text('Leave this Circle'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave Book Club?'), findsOneWidget);
+      expect(leftCircleIds, isEmpty);
+
+      await tester.tap(find.text('Leave Circle'));
+      await tester.pumpAndSettle();
+
+      expect(leftCircleIds, <String>['book-club-1']);
+      expect(find.text('You left Book Club.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Owner archives a populated Circle only after confirming',
+    (tester) async {
+      final archivedCircleIds = <String>[];
+      final alex = connection('alex', 'Alex');
+      final circle = const CircleSummary(
+        circleId: 'friends-1',
+        name: 'Friends',
+        ownerUid: 'owner-1',
+        role: 'owner',
+        memberCount: 2,
+        members: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'uid': 'alex',
+            'displayName': 'Alex',
+          },
+        ],
+      );
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[alex],
+        loadSnapshot: () async => snapshot(
+          circles: <CircleSummary>[circle],
+        ),
+        archiveCircleAction: (circleId) async {
+          archivedCircleIds.add(circleId);
+        },
+      );
+
+      await tester.tap(find.text('Friends'));
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Circle options'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Archive this Circle'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archive Friends?'), findsOneWidget);
+      expect(archivedCircleIds, isEmpty);
+
+      await tester.tap(find.text('Archive Circle'));
+      await tester.pumpAndSettle();
+
+      expect(archivedCircleIds, <String>['friends-1']);
+      expect(find.textContaining('is archived'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Archived Circles restore from Circle options',
+    (tester) async {
+      final restoredCircleIds = <String>[];
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => <Map<String, dynamic>>[
+          connection('alex', 'Alex'),
+        ],
+        loadSnapshot: () async => snapshot(
+          archivedCircles: const <ArchivedCircleSummary>[
+            ArchivedCircleSummary(
+              circleId: 'old-crew-1',
+              name: 'Old Crew',
+              memberCount: 3,
+            ),
+          ],
+        ),
+        unarchiveCircleAction: (circleId) async {
+          restoredCircleIds.add(circleId);
+        },
+      );
+
+      await tester.tap(find.byTooltip('Circle options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archived Circles'), findsOneWidget);
+
+      await tester.tap(find.text('Archived Circles'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Old Crew'), findsOneWidget);
+
+      await tester.tap(find.text('Restore'));
+      await tester.pumpAndSettle();
+
+      expect(restoredCircleIds, <String>['old-crew-1']);
     },
   );
 }

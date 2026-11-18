@@ -80,14 +80,57 @@ class CircleInviteSummary {
   }
 }
 
+class ArchivedCircleSummary {
+  const ArchivedCircleSummary({
+    required this.circleId,
+    required this.name,
+    required this.memberCount,
+    this.archivedAt,
+  });
+
+  final String circleId;
+  final String name;
+  final int memberCount;
+  final DateTime? archivedAt;
+
+  factory ArchivedCircleSummary.fromMap(
+    Map<String, dynamic> data,
+  ) {
+    final rawArchivedAt = data['archivedAt'];
+
+    final DateTime? archivedAt;
+    if (rawArchivedAt is String) {
+      archivedAt = DateTime.tryParse(rawArchivedAt);
+    } else if (rawArchivedAt is num) {
+      archivedAt = DateTime.fromMillisecondsSinceEpoch(
+        rawArchivedAt.toInt(),
+      );
+    } else {
+      archivedAt = null;
+    }
+
+    return ArchivedCircleSummary(
+      circleId: data['circleId']?.toString() ?? '',
+      name: data['name']?.toString() ?? '',
+      memberCount: int.tryParse(
+            data['memberCount']?.toString() ?? '',
+          ) ??
+          1,
+      archivedAt: archivedAt,
+    );
+  }
+}
+
 class CircleMembershipSnapshot {
   const CircleMembershipSnapshot({
     required this.circles,
     required this.invites,
+    this.archivedCircles = const <ArchivedCircleSummary>[],
   });
 
   final List<CircleSummary> circles;
   final List<CircleInviteSummary> invites;
+  final List<ArchivedCircleSummary> archivedCircles;
 }
 
 class CircleMembershipService {
@@ -152,6 +195,7 @@ class CircleMembershipService {
 
     final rawCircles = result.data['circles'];
     final rawInvites = result.data['invites'];
+    final rawArchived = result.data['archivedCircles'];
 
     final circles = rawCircles is List
         ? rawCircles
@@ -181,9 +225,24 @@ class CircleMembershipService {
             .toList(growable: false)
         : const <CircleInviteSummary>[];
 
+    final archivedCircles = rawArchived is List
+        ? rawArchived
+            .whereType<Map>()
+            .map(
+              (item) => ArchivedCircleSummary.fromMap(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .where(
+              (circle) => circle.circleId.isNotEmpty,
+            )
+            .toList(growable: false)
+        : const <ArchivedCircleSummary>[];
+
     return CircleMembershipSnapshot(
       circles: circles,
       invites: invites,
+      archivedCircles: archivedCircles,
     );
   }
 
@@ -243,6 +302,42 @@ class CircleMembershipService {
     if (result.data['left'] != true) {
       throw StateError(
         'Circle was not left.',
+      );
+    }
+  }
+
+  Future<void> archiveCircle(
+    String circleId,
+  ) async {
+    _requireSignedIn();
+
+    final callable = _functions.httpsCallable('archiveCircle');
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'circleId': circleId,
+    });
+
+    if (result.data['archived'] != true) {
+      throw StateError(
+        'Circle was not archived.',
+      );
+    }
+  }
+
+  Future<void> unarchiveCircle(
+    String circleId,
+  ) async {
+    _requireSignedIn();
+
+    final callable = _functions.httpsCallable('unarchiveCircle');
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'circleId': circleId,
+    });
+
+    if (result.data['unarchived'] != true) {
+      throw StateError(
+        'Circle was not restored.',
       );
     }
   }
