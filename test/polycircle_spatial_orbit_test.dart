@@ -46,11 +46,13 @@ PolycircleSpatialOrbit<_Person> _orbit({
   required List<_Person> people,
   required List<String> focusedLog,
   PolycircleSpatialOrbitController? controller,
+  String Function(_Person person)? semanticsLabelBuilder,
 }) {
   return PolycircleSpatialOrbit<_Person>(
     items: people,
     itemId: (person) => person.id,
     labelBuilder: (person) => person.name,
+    semanticsLabelBuilder: semanticsLabelBuilder,
     avatarBuilder: (context, person, focused) => SizedBox.expand(
       key: ValueKey<String>('avatar-${person.id}'),
       child: const ColoredBox(
@@ -404,6 +406,78 @@ void main() {
         findsOneWidget,
       );
       expect(renderedAvatars, findsNWidgets(12));
+    },
+  );
+
+  testWidgets(
+    'node semantics use the semantics builder while the pill keeps the plain name',
+    (tester) async {
+      final log = <String>[];
+
+      await tester.pumpWidget(
+        _testApp(
+          _orbit(
+            people: const [_bo, _ana],
+            focusedLog: log,
+            semanticsLabelBuilder: (person) => person.id == 'ana'
+                ? 'Ana, connected to you'
+                : '${person.name}, in Friends with you, not connected to you',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ana is unfocused: her semantics carry the builder's richer
+      // statement, not her plain name.
+      expect(
+        find.bySemanticsLabel('Ana, connected to you'),
+        findsOneWidget,
+      );
+
+      // Focus Ana; Bo becomes unfocused and his semantics carry
+      // his builder statement too.
+      await tester.tap(
+        find.byKey(
+          const ValueKey('avatar-ana'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsLabel(
+          'Bo, in Friends with you, not connected to you',
+        ),
+        findsOneWidget,
+      );
+
+      // The visible pill still shows the plain name only.
+      expect(find.text('Ana'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'without a semantics builder, node semantics stay name-only',
+    (tester) async {
+      final log = <String>[];
+
+      await tester.pumpWidget(
+        _testApp(
+          _orbit(
+            people: const [_ana, _bo],
+            focusedLog: log,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The migration layer and other transient surfaces pass no
+      // builder: labels remain exactly the names, with no richer
+      // statement invented.
+      expect(find.bySemanticsLabel('Ana'), findsWidgets);
+      expect(
+        find.bySemanticsLabel(RegExp('connected to you')),
+        findsNothing,
+      );
     },
   );
 
