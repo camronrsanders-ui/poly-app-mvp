@@ -103,3 +103,55 @@ test('Circle invite action remains owner-only', () => {
     /activeCircleIsOwner[\s\S]*\?\s*\(\)/,
   );
 });
+
+test('basis is computed at render time and never stored on a person map', () => {
+  // Cycle 2 privacy ruling, condition C1: no basis key may ever be
+  // written onto a person map. The map leaves the orbit screen
+  // through the profile handoff, and basis is an owner-private
+  // orbit fact (§2D) — it is composed at render time only.
+  assert.doesNotMatch(
+    screen,
+    /['"]basis['"]\s*:/,
+  );
+
+  assert.doesNotMatch(
+    screen,
+    /\[\s*['"]basis['"]\s*\]\s*=/,
+  );
+
+  // The _worlds() merge spreads only the member record and the
+  // connection payload — nothing else enters the map there.
+  const start = screen.indexOf(
+    'List<_CircleWorld> _worlds(',
+  );
+  const end = screen.indexOf(
+    'List<PolycircleTopologyLink> _visibleTopologyFor',
+    start,
+  );
+  const worlds = screen.slice(start, end);
+
+  assert.match(worlds, /\.\.\.member/);
+  assert.match(worlds, /\.\.\.connection/);
+  assert.doesNotMatch(worlds, /basis/i);
+});
+
+test('basis derivation reads the topology set, never person-map richness', () => {
+  // Cycle 2 privacy ruling, condition C4: the basis helper's only
+  // person input is the uid, checked against the topology /
+  // connected-uid set. Reading the map's rich fields would
+  // resurrect the field-presence shortcut the ruling forbids — a
+  // sparse connection map is indistinguishable from a member
+  // record, so presence of fields is not a connection signal.
+  const start = screen.indexOf('String _basisLine(');
+
+  assert.ok(start >= 0, 'basis helper missing');
+
+  const end = screen.indexOf('\n  }', start);
+  const helper = screen.slice(start, end);
+
+  assert.match(helper, /connectedUids/);
+  assert.doesNotMatch(
+    helper,
+    /person\[\s*['"](age|headline|relationshipStructure|relationshipStatus|displayName)['"]\s*\]/,
+  );
+});

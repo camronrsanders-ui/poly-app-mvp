@@ -21,6 +21,52 @@ Map<String, dynamic> connection(
       'headline': 'Community-minded',
     };
 
+/// A connection whose self-described status is deliberately
+/// distinct from the basis vocabulary, so text finders can never
+/// confuse the basis line ("Connected to you") with the status
+/// line ("… • Open to connections").
+Map<String, dynamic> openConnection(
+  String uid,
+  String name,
+) =>
+    <String, dynamic>{
+      'uid': uid,
+      'displayName': name,
+      'age': 30,
+      'city': 'Somerville',
+      'region': 'MA',
+      'relationshipStructure': 'Polyamorous',
+      'relationshipStatus': 'Open to connections',
+      'headline': 'Community-minded',
+    };
+
+/// A Circle owned by someone else — a shared Circle — with member
+/// records exactly as listMyCircles serves them: {uid,
+/// displayName?} and nothing else.
+CircleSummary sharedCircle({
+  required String name,
+  required List<Map<String, dynamic>> members,
+  String circleId = 'circle-1',
+}) {
+  return CircleSummary(
+    circleId: circleId,
+    name: name,
+    ownerUid: 'jordan',
+    role: 'member',
+    memberCount: members.length + 1,
+    members: members,
+  );
+}
+
+Future<void> openWorld(
+  WidgetTester tester,
+  String worldName,
+) async {
+  await tester.tap(find.text(worldName));
+  await tester.pump(const Duration(milliseconds: 700));
+  await tester.pumpAndSettle();
+}
+
 CircleMembershipSnapshot snapshot({
   List<CircleSummary> circles = const <CircleSummary>[],
   List<CircleInviteSummary> invites = const <CircleInviteSummary>[],
@@ -931,4 +977,433 @@ void main() {
       expect(restoredCircleIds, <String>['old-crew-1']);
     },
   );
+
+  group('Cycle 2 — connection basis surfaces', () {
+    // The Friends fixture: Jordan is the viewer's confirmed
+    // connection AND a member of the shared Circle; Alex is a
+    // member only. Ground truth the surfaces must state.
+    Future<void> pumpFriends(
+      WidgetTester tester, {
+      bool reduceMotion = false,
+      MyCircleProfileOpenAction? openProfileAction,
+    }) async {
+      await pumpCircle(
+        tester,
+        reduceMotion: reduceMotion,
+        loadConnections: () async => <Map<String, dynamic>>[
+          openConnection('jordan', 'Jordan'),
+        ],
+        loadSnapshot: () async => snapshot(
+          circles: <CircleSummary>[
+            sharedCircle(
+              name: 'Friends',
+              members: <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'uid': 'jordan',
+                  'displayName': 'Jordan',
+                },
+                <String, dynamic>{
+                  'uid': 'alex',
+                  'displayName': 'Alex',
+                },
+              ],
+            ),
+          ],
+        ),
+        openProfileAction: openProfileAction,
+      );
+    }
+
+    testWidgets(
+      'Circle glass states connection basis and attributes the style',
+      (tester) async {
+        await pumpFriends(tester);
+        await openWorld(tester, 'Friends');
+
+        // Jordan is focused by default (first in roster order).
+        expect(find.text('Jordan, 30'), findsOneWidget);
+        expect(find.text('Connected to you'), findsOneWidget);
+        expect(
+          find.text(
+            'Their relationship style: Polyamorous • Open to connections',
+          ),
+          findsOneWidget,
+        );
+
+        // The bare join never appears as a standalone text.
+        expect(
+          find.text('Polyamorous • Open to connections'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'Circle glass states co-member basis with the Circle named',
+      (tester) async {
+        await pumpFriends(tester);
+        await openWorld(tester, 'Friends');
+
+        await tester.tap(find.byTooltip('Next person'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('In Friends with you · Not connected to you'),
+          findsOneWidget,
+        );
+        expect(find.text('Connected to you'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Mine world glass states connection basis',
+      (tester) async {
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            openConnection('jordan', 'Jordan'),
+          ],
+        );
+
+        expect(find.text('Jordan, 30'), findsOneWidget);
+        expect(find.text('Connected to you'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'orbit node semantics announce basis for both kinds of people',
+      (tester) async {
+        await pumpFriends(tester);
+        await openWorld(tester, 'Friends');
+
+        // Alex is unfocused: his semantics label is exactly the
+        // basis statement, with his name.
+        expect(
+          find.bySemanticsLabel(
+            RegExp('Alex, in Friends with you, not connected to you'),
+          ),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byTooltip('Next person'));
+        await tester.pumpAndSettle();
+
+        // Now Jordan is unfocused and Alex focused; Jordan's label
+        // states the connection basis.
+        expect(
+          find.bySemanticsLabel(RegExp('Jordan, connected to you')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'sparse connection still reads Connected to you (privacy C3)',
+      (tester) async {
+        // A confirmed connection whose profile carries nothing but
+        // uid + displayName: the merged map is identical in
+        // richness to a member record. Basis must come from the
+        // topology set, never from field presence.
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            <String, dynamic>{
+              'uid': 'jordan',
+              'displayName': 'Jordan',
+            },
+          ],
+          loadSnapshot: () async => snapshot(
+            circles: <CircleSummary>[
+              sharedCircle(
+                name: 'Friends',
+                members: <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'uid': 'jordan',
+                    'displayName': 'Jordan',
+                  },
+                  <String, dynamic>{
+                    'uid': 'alex',
+                    'displayName': 'Alex',
+                  },
+                ],
+              ),
+            ],
+          ),
+        );
+        await openWorld(tester, 'Friends');
+
+        expect(find.text('Connected to you'), findsOneWidget);
+        expect(find.textContaining('Not connected to you'), findsNothing);
+
+        await tester.tap(find.text('Everyone · 2'));
+        await tester.pumpAndSettle();
+
+        final jordanTile = find.widgetWithText(ListTile, 'Jordan');
+        expect(jordanTile, findsOneWidget);
+        final subtitle = tester.widget<ListTile>(jordanTile).subtitle;
+        expect((subtitle as Text).data, 'Connected to you');
+      },
+    );
+
+    testWidgets(
+      'Everyone roster leads with basis and attributes the style',
+      (tester) async {
+        await pumpFriends(tester);
+        await openWorld(tester, 'Friends');
+
+        await tester.tap(find.text('Everyone · 2'));
+        await tester.pumpAndSettle();
+
+        // A member-only row previously had no subtitle at all; it
+        // now carries exactly the basis segment.
+        final alexTile = find.widgetWithText(ListTile, 'Alex');
+        expect(alexTile, findsOneWidget);
+        expect(
+          (tester.widget<ListTile>(alexTile).subtitle as Text).data,
+          'In Friends with you · Not connected to you',
+        );
+
+        final jordanTile = find.widgetWithText(ListTile, 'Jordan');
+        expect(jordanTile, findsOneWidget);
+        expect(
+          (tester.widget<ListTile>(jordanTile).subtitle as Text).data,
+          'Connected to you  •  '
+          'Their relationship style: Polyamorous • Open to connections  •  '
+          'Somerville, MA',
+        );
+      },
+    );
+
+    testWidgets(
+      'nameless co-member is labelled Circle member, never Connection',
+      (tester) async {
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            openConnection('jordan', 'Jordan'),
+          ],
+          loadSnapshot: () async => snapshot(
+            circles: <CircleSummary>[
+              sharedCircle(
+                name: 'Friends',
+                members: <Map<String, dynamic>>[
+                  <String, dynamic>{'uid': 'alex'},
+                ],
+              ),
+            ],
+          ),
+        );
+        await openWorld(tester, 'Friends');
+
+        expect(find.text('Circle member'), findsWidgets);
+        expect(
+          find.text('In Friends with you · Not connected to you'),
+          findsOneWidget,
+        );
+        expect(find.text('Connection'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'nameless connection keeps the Connection fallback',
+      (tester) async {
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            <String, dynamic>{'uid': 'jordan'},
+          ],
+        );
+
+        expect(find.text('Connection'), findsWidgets);
+        expect(find.text('Connected to you'), findsOneWidget);
+        expect(find.text('Circle member'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a long Circle name renders the full basis line, uncut',
+      (tester) async {
+        const longCircleName =
+            'The Extraordinarily Long-Named Circle of Friends and Neighbors';
+
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            openConnection('jordan', 'Jordan'),
+          ],
+          loadSnapshot: () async => snapshot(
+            circles: <CircleSummary>[
+              sharedCircle(
+                name: longCircleName,
+                members: <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'uid': 'alex',
+                    'displayName': 'Alex',
+                  },
+                ],
+              ),
+            ],
+          ),
+        );
+        await openWorld(tester, longCircleName);
+
+        final basis = find.text(
+          'In $longCircleName with you · Not connected to you',
+        );
+        expect(basis, findsOneWidget);
+
+        // Never truncated: no line cap, no ellipsis.
+        final basisText = tester.widget<Text>(basis);
+        expect(basisText.maxLines, isNull);
+        expect(basisText.overflow, isNull);
+      },
+    );
+
+    testWidgets(
+      'long names wrap in full in the roster and stay searchable',
+      (tester) async {
+        const longName = 'Alexandra Constantina Reyes-Hernandez '
+            'De La Vega Montenegro Salazar Fernandez Jr';
+
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            openConnection('jordan', 'Jordan'),
+          ],
+          loadSnapshot: () async => snapshot(
+            circles: <CircleSummary>[
+              sharedCircle(
+                name: 'Friends',
+                members: <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'uid': 'alex',
+                    'displayName': longName,
+                  },
+                  <String, dynamic>{
+                    'uid': 'jordan',
+                    'displayName': 'Jordan',
+                  },
+                ],
+              ),
+            ],
+          ),
+        );
+        await openWorld(tester, 'Friends');
+
+        await tester.tap(find.text('Everyone · 2'));
+        await tester.pumpAndSettle();
+
+        final tile = find.widgetWithText(ListTile, longName);
+        expect(tile, findsOneWidget);
+
+        final title = tester.widget<ListTile>(tile).title as Text;
+        expect(title.data, longName);
+        expect(title.maxLines, isNull);
+
+        await tester.enterText(find.byType(TextField), 'Constantina');
+        await tester.pumpAndSettle();
+
+        expect(find.widgetWithText(ListTile, longName), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'the person map that leaves the screen carries no basis (privacy C2)',
+      (tester) async {
+        final captured = <Map<String, dynamic>>[];
+
+        await pumpCircle(
+          tester,
+          loadConnections: () async => <Map<String, dynamic>>[
+            openConnection('jordan', 'Jordan'),
+          ],
+          loadSnapshot: () async => snapshot(
+            circles: <CircleSummary>[
+              sharedCircle(
+                name: 'Friends',
+                members: <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'uid': 'alex',
+                    'displayName': 'Alex',
+                  },
+                  <String, dynamic>{
+                    'uid': 'jordan',
+                    'displayName': 'Jordan',
+                  },
+                ],
+              ),
+            ],
+          ),
+          openProfileAction: (person) async {
+            captured.add(Map<String, dynamic>.from(person));
+            return null;
+          },
+        );
+        await openWorld(tester, 'Friends');
+
+        // Open both people's profiles, one step apart. (Which of
+        // the two holds the initial focus is the orbit's business;
+        // the containment claim is about both maps.)
+        await tester.tap(find.text('View'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('Next person'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('View'));
+        await tester.pumpAndSettle();
+
+        expect(captured, hasLength(2));
+
+        final bySize = [...captured]
+          ..sort((a, b) => a.length.compareTo(b.length));
+
+        // The member-only map is exactly the served member record…
+        expect(
+          bySize[0].keys,
+          unorderedEquals(<String>['uid', 'displayName']),
+        );
+
+        // …and the connection map is exactly the connection
+        // payload. Neither carries a basis key.
+        expect(bySize[1].containsKey('basis'), isFalse);
+        expect(
+          bySize[1].keys,
+          unorderedEquals(<String>[
+            'uid',
+            'displayName',
+            'age',
+            'city',
+            'region',
+            'relationshipStructure',
+            'relationshipStatus',
+            'headline',
+          ]),
+        );
+        expect(bySize[0].containsKey('basis'), isFalse);
+      },
+    );
+
+    testWidgets(
+      'reduced motion keeps the basis statements',
+      (tester) async {
+        await pumpFriends(tester, reduceMotion: true);
+
+        await tester.tap(find.text('Friends'));
+        await tester.pump();
+
+        // One frame, no camera travel — and the basis is stated.
+        expect(find.text('FRIENDS'), findsOneWidget);
+        expect(find.text('Connected to you'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Next person'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('In Friends with you · Not connected to you'),
+          findsOneWidget,
+        );
+      },
+    );
+  });
 }

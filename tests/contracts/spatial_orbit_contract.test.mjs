@@ -79,3 +79,13 @@ test('distance controls visual prominence', () => {
   assert.match(orbit, /visualScale/);
   assert.match(orbit, /opacity/);
 });
+
+test('orbit node semantics can carry more than the visible pill label', () => {
+  // The name pill always shows the plain label; an optional builder
+  // may give the node's semantics a richer statement (My Circle
+  // passes connection basis). Surfaces that pass no builder — the
+  // shared-member migration layer — keep name-only semantics.
+  assert.match(orbit, /semanticsLabelBuilder/);
+  assert.match(orbit, /widget\.semanticsLabelBuilder\?\./);
+  assert.match(orbit, /label:\s*semanticsLabel/);
+});

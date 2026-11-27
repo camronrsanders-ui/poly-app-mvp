@@ -352,6 +352,7 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
   Future<void> _openWorldPeople(
     _CircleWorld world,
+    Set<String> connectedUids,
   ) async {
     final person = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -363,7 +364,8 @@ class _MyCircleScreenState extends State<MyCircleScreen>
         focusedUid: _uidOf(
           _selectedIn(world),
         ),
-        nameBuilder: _name,
+        nameBuilder: (person) => _displayName(person, connectedUids),
+        basisBuilder: (person) => _basisLine(person, world, connectedUids),
       ),
     );
 
@@ -1252,6 +1254,88 @@ class _MyCircleScreenState extends State<MyCircleScreen>
     ].whereType<String>().where((value) => value.trim().isNotEmpty).join(', ');
   }
 
+  /// Connection basis for [person] in [world], as a member-facing
+  /// statement. Read ONLY from the topology link set: a person is a
+  /// confirmed connection iff their uid is a link target. Never
+  /// derived from the person map's own fields — a connection who
+  /// never filled in optional profile fields produces a map
+  /// identical in richness to a member record, so field presence
+  /// cannot tell the two apart. Never written onto the person map
+  /// either: the map leaves this screen through _openProfile, and
+  /// basis is an owner-private orbit fact (§2D).
+  String _basisLine(
+    Map<String, dynamic> person,
+    _CircleWorld world,
+    Set<String> connectedUids,
+  ) {
+    if (connectedUids.contains(_uidOf(person))) {
+      return 'Connected to you';
+    }
+
+    final circleName = world.name.trim();
+
+    return circleName.isEmpty
+        ? 'In this Circle with you · Not connected to you'
+        : 'In $circleName with you · Not connected to you';
+  }
+
+  /// Display name with a basis-aware fallback: a nameless
+  /// connection is a "Connection"; a nameless person who only
+  /// shares a Circle with you is a "Circle member". (Before this
+  /// split, every nameless person was labelled "Connection" —
+  /// including people the viewer is not connected to.)
+  String _displayName(
+    Map<String, dynamic> person,
+    Set<String> connectedUids,
+  ) {
+    final value = person['displayName']?.toString().trim() ?? '';
+
+    if (value.isNotEmpty) {
+      return value;
+    }
+
+    return connectedUids.contains(_uidOf(person))
+        ? 'Connection'
+        : 'Circle member';
+  }
+
+  /// Screen-reader label for an orbit node: the display name plus
+  /// the basis, in the same words as _basisLine with sentence
+  /// punctuation. The visible name pill keeps the plain name.
+  String _semanticsLabel(
+    Map<String, dynamic> person,
+    _CircleWorld world,
+    Set<String> connectedUids,
+  ) {
+    final name = _displayName(person, connectedUids);
+
+    if (connectedUids.contains(_uidOf(person))) {
+      return '$name, connected to you';
+    }
+
+    final circleName = world.name.trim();
+
+    return circleName.isEmpty
+        ? '$name, in this Circle with you, not connected to you'
+        : '$name, in $circleName with you, not connected to you';
+  }
+
+  /// The person's self-described relationship structure • status,
+  /// attributed to them. Their full profile presents the same
+  /// content under the title "Relationship style", and the
+  /// topology builder's own warning is that this text does not
+  /// establish a relationship with the viewer — so it is never
+  /// shown bare.
+  String _relationshipStyle(
+    Map<String, dynamic> person,
+  ) {
+    final relationship = _relationship(person);
+
+    return relationship.isEmpty
+        ? ''
+        : 'Their relationship style: $relationship';
+  }
+
   Widget _personPhoto(
     Map<String, dynamic> person,
   ) {
@@ -1374,6 +1458,16 @@ class _MyCircleScreenState extends State<MyCircleScreen>
 
     final topologyLinks = _visibleTopologyFor(active, model);
 
+    // The basis truth for every surface below: a person is a
+    // confirmed connection iff their uid is a topology link target.
+    // The same set that draws the lines composes the words, so the
+    // two can never disagree.
+    final connectedUids = topologyLinks
+        .map(
+          (link) => link.toId,
+        )
+        .toSet();
+
     final migratingIds = _pendingWorldId == null
         ? const <String>{}
         : _migratingPeople
@@ -1430,7 +1524,15 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                           topologyLinks: topologyLinks,
                           items: active.people,
                           itemId: _uidOf,
-                          labelBuilder: _name,
+                          labelBuilder: (person) => _displayName(
+                            person,
+                            connectedUids,
+                          ),
+                          semanticsLabelBuilder: (person) => _semanticsLabel(
+                            person,
+                            active,
+                            connectedUids,
+                          ),
                           avatarBuilder: (
                             context,
                             person,
@@ -1481,11 +1583,13 @@ class _MyCircleScreenState extends State<MyCircleScreen>
                 canOpenRoster: _pendingWorldId == null,
                 onPrevious: () => _stepFocus(active, -1),
                 onNext: () => _stepFocus(active, 1),
-                onShowEveryone: () => _openWorldPeople(active),
+                onShowEveryone: () => _openWorldPeople(active, connectedUids),
               ),
               _FocusedPersonGlass(
                 person: selected,
-                relationship: _relationship(selected),
+                name: _displayName(selected, connectedUids),
+                basis: _basisLine(selected, active, connectedUids),
+                relationship: _relationshipStyle(selected),
                 location: _location(selected),
                 onOpen: () => _openProfile(selected),
               ),
@@ -3523,12 +3627,16 @@ class _OwnerWorld extends StatelessWidget {
 class _FocusedPersonGlass extends StatelessWidget {
   const _FocusedPersonGlass({
     required this.person,
+    required this.name,
+    required this.basis,
     required this.relationship,
     required this.location,
     required this.onOpen,
   });
 
   final Map<String, dynamic> person;
+  final String name;
+  final String basis;
   final String relationship;
   final String location;
   final VoidCallback onOpen;
@@ -3536,8 +3644,6 @@ class _FocusedPersonGlass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
-    final name = person['displayName']?.toString() ?? 'Connection';
 
     final age = person['age'];
 
@@ -3577,6 +3683,12 @@ class _FocusedPersonGlass extends StatelessWidget {
                         '${age != null ? ', $age' : ''}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      Text(
+                        basis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: colors.onSurfaceVariant,
                             ),
                       ),
                       if (relationship.isNotEmpty)
@@ -3685,12 +3797,14 @@ class _WorldPeopleSheet extends StatefulWidget {
     required this.people,
     required this.focusedUid,
     required this.nameBuilder,
+    required this.basisBuilder,
   });
 
   final String worldName;
   final List<Map<String, dynamic>> people;
   final String focusedUid;
   final String Function(Map<String, dynamic>) nameBuilder;
+  final String Function(Map<String, dynamic>) basisBuilder;
 
   @override
   State<_WorldPeopleSheet> createState() => _WorldPeopleSheetState();
@@ -3722,8 +3836,12 @@ class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
         )
         .join(', ');
 
+    // Basis first: how this person is in your orbit, before how
+    // they describe themselves (attributed to them, exactly as in
+    // the focus panel) and where they are.
     return [
-      relationship,
+      widget.basisBuilder(person),
+      relationship.isEmpty ? '' : 'Their relationship style: $relationship',
       location,
     ]
         .where(

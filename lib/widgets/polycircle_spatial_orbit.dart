@@ -79,6 +79,7 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
     required this.itemId,
     required this.avatarBuilder,
     required this.labelBuilder,
+    this.semanticsLabelBuilder,
     required this.onFocused,
     required this.onOpen,
     this.centerBuilder,
@@ -100,6 +101,14 @@ class PolycircleSpatialOrbit<T> extends StatefulWidget {
   ) avatarBuilder;
 
   final String Function(T item) labelBuilder;
+
+  /// Optional richer label used ONLY for the node's semantics —
+  /// what a screen reader announces. The visible name pill always
+  /// shows [labelBuilder]'s output. When null, semantics fall back
+  /// to the plain label: the right behaviour for transient surfaces
+  /// (such as the shared-member migration layer) that have no basis
+  /// to state and must not guess at one.
+  final String Function(T item)? semanticsLabelBuilder;
 
   final ValueChanged<T> onFocused;
   final ValueChanged<T> onOpen;
@@ -926,6 +935,11 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
       item,
     );
 
+    final semanticsLabel = widget.semanticsLabelBuilder?.call(
+          item,
+        ) ??
+        label;
+
     if (widget.hiddenItemIds.contains(
       widget.itemId(item),
     )) {
@@ -974,7 +988,7 @@ class _PolycircleSpatialOrbitState<T> extends State<PolycircleSpatialOrbit<T>>
       child: Semantics(
         button: true,
         selected: focused,
-        label: label,
+        label: semanticsLabel,
         hint: focused ? 'Tap to open' : 'Tap to bring into focus',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
