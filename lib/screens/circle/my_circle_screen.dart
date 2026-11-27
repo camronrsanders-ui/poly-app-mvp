@@ -3832,9 +3832,7 @@ class _WorldPeopleSheetState extends State<_WorldPeopleSheet> {
     // the focus panel) and where they are.
     return [
       widget.basisBuilder(person),
-      relationship.isEmpty
-          ? ''
-          : 'Their relationship style: $relationship',
+      relationship.isEmpty ? '' : 'Their relationship style: $relationship',
       location,
     ]
         .where(
