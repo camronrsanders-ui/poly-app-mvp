@@ -69,6 +69,7 @@ class MyCircleScreen extends StatefulWidget {
     this.leaveCircleAction,
     this.archiveCircleAction,
     this.unarchiveCircleAction,
+    this.onFindPeople,
   });
 
   final MyCircleUidProvider? uidProvider;
@@ -85,6 +86,7 @@ class MyCircleScreen extends StatefulWidget {
   final MyCircleCircleAction? leaveCircleAction;
   final MyCircleCircleAction? archiveCircleAction;
   final MyCircleCircleAction? unarchiveCircleAction;
+  final VoidCallback? onFindPeople;
 
   @override
   State<MyCircleScreen> createState() => _MyCircleScreenState();
@@ -1343,6 +1345,13 @@ class _MyCircleScreenState extends State<MyCircleScreen>
           photoFuture: _photosFor(model.uid),
           onManage: _openManager,
           onSafety: _openSafety,
+          onFindPeople: widget.onFindPeople,
+          invitationCount: model.invites.length,
+          onOpenInvitations: model.invites.isNotEmpty
+              ? () => _openCircleInvitations(
+                    model,
+                  )
+              : null,
           onShowArchivedCircles: model.archivedCircles.isNotEmpty
               ? () => _openArchivedCircles(model)
               : null,
@@ -3981,6 +3990,9 @@ class _EmptyUniverse extends StatelessWidget {
     required this.photoFuture,
     required this.onManage,
     required this.onSafety,
+    this.onFindPeople,
+    this.invitationCount = 0,
+    this.onOpenInvitations,
     this.onShowArchivedCircles,
   });
 
@@ -3988,10 +4000,16 @@ class _EmptyUniverse extends StatelessWidget {
   final Future<List<VisibleProfilePhoto>> photoFuture;
   final VoidCallback onManage;
   final VoidCallback onSafety;
+  final VoidCallback? onFindPeople;
+  final int invitationCount;
+  final VoidCallback? onOpenInvitations;
   final VoidCallback? onShowArchivedCircles;
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Stack(
       children: [
         const Positioned.fill(
@@ -4004,61 +4022,103 @@ class _EmptyUniverse extends StatelessWidget {
                 alignment: Alignment.topRight,
                 child: IconButton(
                   onPressed: onSafety,
+                  tooltip: 'Safety center',
                   icon: const Icon(
                     Icons.shield_outlined,
                   ),
                 ),
               ),
+              if (invitationCount > 0 && onOpenInvitations != null)
+                _CircleInvitationNotice(
+                  count: invitationCount,
+                  onTap: onOpenInvitations!,
+                ),
               Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 125,
-                        height: 125,
-                        child: _OwnerWorld(
-                          displayName: displayName,
-                          photoFuture: photoFuture,
-                          worldName: 'My Circle',
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Your universe is waiting',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 125,
+                                height: 125,
+                                child: _OwnerWorld(
+                                  displayName: displayName,
+                                  photoFuture: photoFuture,
+                                  worldName: 'My Circle',
                                 ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Your connections will appear here '
-                        'as your Circle grows.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 18),
-                      FilledButton.icon(
-                        onPressed: onManage,
-                        icon: const Icon(Icons.tune),
-                        label: const Text(
-                          'Manage relationships',
+                              ),
+                              const SizedBox(height: 24),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 34,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Your universe is waiting',
+                                      textAlign: TextAlign.center,
+                                      style: textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Your connections will appear here. '
+                                      'Find people in Discover to start '
+                                      'building your Circle.',
+                                      textAlign: TextAlign.center,
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    FilledButton.icon(
+                                      onPressed: onFindPeople,
+                                      icon: const Icon(
+                                        Icons.explore_outlined,
+                                      ),
+                                      label: const Text(
+                                        'Find people',
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: onManage,
+                                      icon: const Icon(Icons.tune),
+                                      label: const Text(
+                                        'Manage relationships',
+                                      ),
+                                    ),
+                                    if (onShowArchivedCircles != null) ...[
+                                      const SizedBox(height: 12),
+                                      TextButton.icon(
+                                        onPressed: onShowArchivedCircles,
+                                        icon: const Icon(
+                                          Icons.inventory_2_outlined,
+                                        ),
+                                        label: const Text(
+                                          'Archived Circles',
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      if (onShowArchivedCircles != null) ...[
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: onShowArchivedCircles,
-                          icon: const Icon(
-                            Icons.inventory_2_outlined,
-                          ),
-                          label: const Text(
-                            'Archived Circles',
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],

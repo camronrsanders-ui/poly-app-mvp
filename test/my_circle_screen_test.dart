@@ -64,6 +64,7 @@ Future<void> pumpCircle(
   MyCircleCircleAction? leaveCircleAction,
   MyCircleCircleAction? archiveCircleAction,
   MyCircleCircleAction? unarchiveCircleAction,
+  VoidCallback? onFindPeople,
   bool reduceMotion = false,
 }) async {
   tester.view.physicalSize = const Size(1100, 1800);
@@ -99,6 +100,7 @@ Future<void> pumpCircle(
           leaveCircleAction: leaveCircleAction,
           archiveCircleAction: archiveCircleAction,
           unarchiveCircleAction: unarchiveCircleAction,
+          onFindPeople: onFindPeople,
         ),
       ),
     ),
@@ -157,6 +159,103 @@ void main() {
       await tester.tap(find.text('Manage relationships'));
       await tester.pumpAndSettle();
       expect(manageCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'Empty universe Find people is the only filled button and fires once',
+    (tester) async {
+      var findPeopleCalls = 0;
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => const <Map<String, dynamic>>[],
+        onFindPeople: () {
+          findPeopleCalls += 1;
+        },
+      );
+
+      expect(find.text('Your universe is waiting'), findsOneWidget);
+      expect(
+        find.text(
+          'Your connections will appear here. '
+          'Find people in Discover to start building your Circle.',
+        ),
+        findsOneWidget,
+      );
+
+      // Exactly one filled button on the screen, and it is Find people.
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('Find people'),
+          matching: find.byType(FilledButton),
+        ),
+        findsOneWidget,
+      );
+
+      // Manage relationships stays on this screen as the outlined action.
+      expect(
+        find.ancestor(
+          of: find.text('Manage relationships'),
+          matching: find.byType(OutlinedButton),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Find people'));
+      await tester.pumpAndSettle();
+      expect(findPeopleCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'Empty universe Find people is disabled without the shell callback',
+    (tester) async {
+      await pumpCircle(
+        tester,
+        loadConnections: () async => const <Map<String, dynamic>>[],
+      );
+
+      final button = tester.widget<FilledButton>(
+        find.byType(FilledButton),
+      );
+      expect(button.onPressed, isNull);
+    },
+  );
+
+  testWidgets(
+    'Empty universe shows pending Circle invitations',
+    (tester) async {
+      final invite = const CircleInviteSummary(
+        inviteId: 'invite-empty-1',
+        circleId: 'circle-empty-1',
+        circleName: 'Boston Crew',
+        inviterUid: 'alex',
+      );
+
+      await pumpCircle(
+        tester,
+        loadConnections: () async => const <Map<String, dynamic>>[],
+        loadSnapshot: () async => snapshot(
+          invites: <CircleInviteSummary>[invite],
+        ),
+        respondToInviteAction: ({
+          required String inviteId,
+          required bool accept,
+        }) async {
+          return accept;
+        },
+      );
+
+      expect(find.text('Your universe is waiting'), findsOneWidget);
+      expect(find.text('1 Circle invitation'), findsOneWidget);
+
+      await tester.tap(find.text('1 Circle invitation'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Circle invitations'), findsOneWidget);
+      expect(find.text('Boston Crew'), findsOneWidget);
     },
   );
 

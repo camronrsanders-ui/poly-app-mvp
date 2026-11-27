@@ -44,6 +44,9 @@ test('My Circle uses protected profile photos', () => {
 });
 
 test('MainShell gives Circle the full canvas', () => {
-  assert.match(shell, /2\s*=>\s*const MyCircleScreen/);
+  assert.match(
+    shell,
+    /2\s*=>\s*MyCircleScreen\(onFindPeople: \(\) => _selectTab\(0\)\)/,
+  );
   assert.match(shell, /_index\s*==\s*2[\s\S]*\?\s*null/);
 });

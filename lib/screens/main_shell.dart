@@ -61,7 +61,7 @@ class _MainShellState extends State<MainShell> {
     return switch (index) {
       0 => const DiscoverScreen(),
       1 => ConnectionsScreen(onFindPeople: () => _selectTab(0)),
-      2 => const MyCircleScreen(),
+      2 => MyCircleScreen(onFindPeople: () => _selectTab(0)),
       3 => const MessagesScreen(),
       4 => const SelfProfileScreen(),
       _ => const SizedBox.shrink(),
