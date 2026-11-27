@@ -413,12 +413,14 @@ void main() {
     'node semantics use the semantics builder while the pill keeps the plain name',
     (tester) async {
       final log = <String>[];
+      final controller = PolycircleSpatialOrbitController();
 
       await tester.pumpWidget(
         _testApp(
           _orbit(
             people: const [_bo, _ana],
             focusedLog: log,
+            controller: controller,
             semanticsLabelBuilder: (person) => person.id == 'ana'
                 ? 'Ana, connected to you'
                 : '${person.name}, in Friends with you, not connected to you',
@@ -428,24 +430,22 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ana is unfocused: her semantics carry the builder's richer
-      // statement, not her plain name.
+      // statement, not her plain name. (RegExp matching: a focused
+      // node's label merges with its name-pill text, so semantics
+      // assertions use contains-matching throughout.)
       expect(
-        find.bySemanticsLabel('Ana, connected to you'),
+        find.bySemanticsLabel(RegExp('Ana, connected to you')),
         findsOneWidget,
       );
 
-      // Focus Ana; Bo becomes unfocused and his semantics carry
-      // his builder statement too.
-      await tester.tap(
-        find.byKey(
-          const ValueKey('avatar-ana'),
-        ),
-      );
+      // Focus Ana through the controller; Bo becomes unfocused and
+      // his semantics carry his builder statement too.
+      controller.focusItem('ana');
       await tester.pumpAndSettle();
 
       expect(
         find.bySemanticsLabel(
-          'Bo, in Friends with you, not connected to you',
+          RegExp('Bo, in Friends with you, not connected to you'),
         ),
         findsOneWidget,
       );
@@ -471,9 +471,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // The migration layer and other transient surfaces pass no
-      // builder: labels remain exactly the names, with no richer
-      // statement invented.
-      expect(find.bySemanticsLabel('Ana'), findsWidgets);
+      // builder: an unfocused node's label is exactly the plain
+      // name (no pill is rendered for it, so nothing merges), and
+      // no richer statement exists anywhere in the tree.
+      expect(find.bySemanticsLabel('Bo'), findsOneWidget);
       expect(
         find.bySemanticsLabel(RegExp('connected to you')),
         findsNothing,
